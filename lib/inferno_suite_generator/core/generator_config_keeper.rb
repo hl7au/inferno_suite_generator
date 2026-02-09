@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "deep_merge"
 require_relative "config/getters"
 require_relative "config/extractors"
 require_relative "config/generators"
@@ -20,10 +21,10 @@ module InfernoSuiteGenerator
       include Constants
       include Utils
 
-      attr_reader :config, :version, :config_file_path
+      attr_reader :config, :version, :config_file_paths
 
-      def initialize(config_file_path)
-        @config_file_path = config_file_path
+      def initialize(config_file_paths)
+        @config_file_paths = config_file_paths
         @cache = {}
         load_config
         validate_config
@@ -71,14 +72,23 @@ module InfernoSuiteGenerator
       private
 
       def load_config
-        raise ArgumentError, "Configuration file not found: #{@config_file_path}" unless File.exist?(@config_file_path)
+        all_configs_exists = @config_file_paths.map { |path_str| File.exist?(path_str) }.all?
+        raise ArgumentError, "Configuration file not found: #{@config_file_paths.join(", ")}" unless all_configs_exists
 
         begin
-          @config = JSON.parse(File.read(@config_file_path))
+          prepare_config_hash
           @version = get("ig.version", [])
         rescue JSON::ParserError => e
           raise ArgumentError, "Invalid JSON in configuration file: #{e.message}"
         end
+      end
+
+      def prepare_config_hash
+        config_hash = {}
+        @config_file_paths.each do |config_file_path|
+          config_hash.deep_merge!(JSON.parse(File.read(config_file_path)))
+        end
+        @config = config_hash
       end
 
       def validate_config
