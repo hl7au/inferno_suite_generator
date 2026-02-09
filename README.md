@@ -16,6 +16,7 @@ The generator creates various types of tests:
 - Include search tests (testing _include parameters)
 - Create tests (creating resources for testing when applicable)
 - Update tests (updating resources to validate server behavior)
+- Patch tests
 
 ## Project Structure
 
@@ -59,7 +60,11 @@ gem install inferno_suite_generator
 ```ruby
 require "inferno_suite_generator"
 
-InfernoSuiteGenerator::Generator.generate("path/to/config.json")
+# One config
+InfernoSuiteGenerator::Generator.generate(["path/to/config.json"])
+
+# Or two configs (base + overrides), merged in order
+InfernoSuiteGenerator::Generator.generate(["path/to/base.json", "path/to/overrides.json"])
 ```
 
 This will:
@@ -85,13 +90,14 @@ The generator follows these steps:
    - Reference resolution tests
    - Create tests
    - Update tests
+   - Patch tests
 4. **Generate Groups**: Organizes tests into groups by resource type
 5. **Generate Suites**: Creates a test suite that includes all the groups
 6. **Integrate with Inferno**: Adds the generated suite to the main Inferno application
 
 ## Configuration
 
-The configuration file (`config.json`) controls how the generator works. See the example configurations at the project root: `config.example.json` and `config.example2.json`. Here's an example configuration with explanations:
+The configuration file (`config.json`) controls how the generator works. Pass an **array of config file paths** (at least one) to `generate`; multiple configs are deep-merged in order, so later configs override earlier ones (e.g. a base config plus a local overrides file). See the example configurations at the project root: `config.example.json` and `config.example2.json`. Here's an example configuration with explanations:
 
 ```json
 {
@@ -238,6 +244,7 @@ Note: Module names and paths are derived from `suite.title`; you do not need to 
 #### Constants Section
 - `default_fhir_server`: Default FHIR server URL used for inputs
 - `read_ids.<resource>`: Default IDs for first-class read/search tests (e.g., `read_ids.patient`)
+- `patch_ids.<resource>`: Default IDs for patch tests (e.g., `patch_ids.patient`)
 - `search_default_values.*`: Named sets of default values used in search tests
 - `search.comparators`: Allowed comparators for date/datetime searches
 
