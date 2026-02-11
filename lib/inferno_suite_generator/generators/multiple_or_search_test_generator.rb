@@ -18,21 +18,21 @@ module InfernoSuiteGenerator
       include GenericUtils
       include GeneratorUtils
 
+      # Holds base_output_dir and ig_metadata to avoid passing the same pair to multiple methods.
+      GenerationContext = Struct.new(:base_output_dir, :ig_metadata, keyword_init: true)
+
       class << self
         def generate(ig_metadata, base_output_dir)
-          filtered_groups(ig_metadata).each { |group| generate_test(group, base_output_dir, ig_metadata) }
+          ctx = GenerationContext.new(base_output_dir: base_output_dir, ig_metadata: ig_metadata)
+          ig_metadata.search_groups.each { |group| generate_test(group, ctx) }
         end
 
-        def filtered_groups(ig_metadata)
-          ig_metadata.groups.select { |group| group.searches.present? }
-        end
-
-        def generate_test(group, base_output_dir, ig_metadata)
+        def generate_test(group, ctx)
           search_definitions = group.search_definitions
           search_definitions.each_key do |search_key|
             next unless multiple_or_test?(group, search_key)
 
-            new(search_key.to_s, group, search_definitions[search_key], base_output_dir, ig_metadata).generate
+            new(search_key.to_s, group, search_definitions[search_key], ctx).generate
           end
         end
 
@@ -45,8 +45,8 @@ module InfernoSuiteGenerator
 
       self.template_type = TEMPLATE_TYPES[:MULTIPLE_OR_SEARCH]
 
-      def initialize(search_name, group_metadata, search_metadata, base_output_dir, ig_metadata)
-        super(group_metadata, search_metadata, base_output_dir, ig_metadata)
+      def initialize(search_name, group_metadata, search_metadata, ctx)
+        super(group_metadata, search_metadata, ctx.base_output_dir, ctx.ig_metadata)
         self.search_name = search_name
       end
 

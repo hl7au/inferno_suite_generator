@@ -1,3 +1,7 @@
+class Hash[unchecked out K, unchecked out V]
+  def deep_merge!: (Hash[K, V]) -> Hash[K, V]
+end
+
 module GenericUtils
     def test_input_builder: (String id, String title, String description, String default_value) -> Hash[String, String]
 end
@@ -32,6 +36,7 @@ module InfernoSuiteGenerator
       def related_result_folder: () -> String
       def ig_deps_path: () -> String
       def main_file_path: () -> String
+      def prepare_config_hash: () -> void
 
       module Utils
         def get: (String path, ?untyped default) -> untyped

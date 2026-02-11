@@ -54,6 +54,10 @@ module InfernoSuiteGenerator
           groups: groups.map(&:to_hash)
         }
       end
+      
+      def search_groups
+        groups.select { |group| group.searches.present? }
+      end
     end
   end
 end
