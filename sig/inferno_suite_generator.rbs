@@ -119,6 +119,7 @@ module InfernoSuiteGenerator
       module Constants
         EMPTY_ARRAY: Array[untyped]
         EMPTY_HASH: Hash[untyped, untyped]
+        EMPTY_MUTABLE_HASH: Hash[untyped, untyped]
       end
     end
   end

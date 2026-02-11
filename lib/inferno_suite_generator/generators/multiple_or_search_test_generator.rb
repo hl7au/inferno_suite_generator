@@ -23,7 +23,7 @@ module InfernoSuiteGenerator
 
       class << self
         def generate(ig_metadata, base_output_dir)
-          ctx = GenerationContext.new(base_output_dir: base_output_dir, ig_metadata: ig_metadata)
+          ctx = GenerationContext.new(base_output_dir:, ig_metadata:)
           ig_metadata.search_groups.each { |group| generate_test(group, ctx) }
         end
 
