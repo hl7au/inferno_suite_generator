@@ -80,6 +80,12 @@ module InfernoSuiteGenerator
     end
 
     def resource_body_by_resource_type(resource_type)
+      # NOTE: This method should be more complex. We should try to read CapabilityStatement of the server
+      # to identify the ability to search resources.
+      # 1. Check if there is any supported references for this resource type/profile;
+      # 2. If there is any supported references, then we need to check CapabilityStatement to ability to search these references resources;
+      # 3. If the search is available, then we need to get references of the available resources on server;
+      # 4. Then we need to add references to the resource body for each resource in the list.
       resources_by_resource_type = resource_body_list[resource_type] || []
       if resources_by_resource_type.empty?
         warning "No #{resource_type} resources appear to be available."

@@ -283,11 +283,19 @@ module InfernoSuiteGenerator
           profile_elements
           .select { |element| element.type&.first&.code == "Reference" }
           .map do |reference_definition|
+            target_profiles = reference_definition.type.first.targetProfile
             {
               path: reference_definition.path,
-              profiles: reference_definition.type.first.targetProfile
+              profiles: target_profiles,
+              resource_types: resource_types_for_target_profiles(target_profiles)
             }
           end
+      end
+
+      def resource_types_for_target_profiles(target_profiles)
+        target_profiles.map do |target_profile|
+          ig_resources.resource_for_profile(target_profile)
+        end.uniq
       end
 
       def custom_extractors_by_type(extractor_type)
