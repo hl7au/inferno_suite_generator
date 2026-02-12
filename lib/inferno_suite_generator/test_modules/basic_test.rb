@@ -147,7 +147,7 @@ module InfernoSuiteGenerator
         } 
         reference_metadata[:resource_types].each do |resource_type|
           fhir_search(resource_type)
-          if response.status != 200
+          if response[:status] != 200
             info "Can't search for #{resource_type} resources. Skipping this resource type..."
             next
           end 
