@@ -294,7 +294,7 @@ module InfernoSuiteGenerator
 
       def resource_types_for_target_profiles(target_profiles)
         target_profiles.map do |target_profile|
-          ig_resources.resource_for_profile(target_profile)
+          ig_resources.resource_for_profile(target_profile.split("|").first)
         end.uniq
       end
 
