@@ -81,6 +81,8 @@ module InfernoSuiteGenerator
     end
 
     def resource_body_by_resource_type(resource_type)
+      # NOTE: Just for the testing purposes.
+      modify_bodies_for_references({})
       # NOTE: This method should be more complex. We should try to read CapabilityStatement of the server
       # to identify the ability to search resources.
       # 1. Check if there is any supported references for this resource type/profile;
