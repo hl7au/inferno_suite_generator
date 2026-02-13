@@ -17,7 +17,7 @@ module InfernoSuiteGenerator
       return hash_data if hash_data.nil?
       raise ArgumentError, "path_string cannot be nil or empty" if path_string.nil? || path_string.to_s.strip.empty?
 
-      data = BasicTestHelpers.deep_copy_hash(hash_data)
+      data = deep_copy_hash(hash_data)
       path = path_string.to_s.strip
       path = path.sub(/\A[A-Z][a-zA-Z]+\./, "") if path.match?(/\A[A-Z][a-zA-Z]+\./) # optional ResourceType. prefix
       segments = path.split(".")
