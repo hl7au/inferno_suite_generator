@@ -10,9 +10,9 @@ module InfernoSuiteGenerator
       @entities ||= []
     end
 
-    def initialize(url, references)
+    def initialize(url, references = {})
       @url = url
-      @references = references || {}
+      @references = references
       self.class.entities << self
     end
 
@@ -33,7 +33,7 @@ module InfernoSuiteGenerator
     end
 
     def self.get_instance(url)
-      entities.find { |entity| entity.url == url }
+      entities.find { |entity| entity.url == url } || new(url)
     end
   end
 end
