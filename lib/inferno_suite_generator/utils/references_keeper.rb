@@ -1,25 +1,19 @@
 # frozen_string_literal: true
 
-require "singleton"
-
 module InfernoSuiteGenerator
-  # This class is used to keep track of the references that need to be set for the resources.
-  # Pay attention that this class is keeping value for the reference like Patient/test_patient.
+  # Tracks resource references (e.g. Patient/test_patient) per URL. One instance per URL;
+  # use .get_instance(url) to find the keeper for a given URL.
   class ReferencesKeeper
-    include Singleton
+    attr_reader :references, :url
 
-    attr_reader :references
-
-    class << self
-      def instance(references = nil)
-        super().tap do |keeper|
-          keeper.send(:refs, references) if references
-        end
-      end
+    def self.entities
+      @entities ||= []
     end
 
-    def initialize
-      @references = {}
+    def initialize(url, references)
+      @url = url
+      @references = references || {}
+      self.class.entities << self
     end
 
     def add_reference(reference)
@@ -38,10 +32,8 @@ module InfernoSuiteGenerator
       @references[resource_type] || []
     end
 
-    private
-
-    def refs(references)
-      @references = references
+    def self.get_instance(url)
+      entities.find { |entity| entity.url == url }
     end
   end
 end
