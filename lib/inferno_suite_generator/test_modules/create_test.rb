@@ -41,9 +41,10 @@ module InfernoSuiteGenerator
         next if current_reference[:resource_types].empty?
 
         resource_id = references_keeper.references_for_resource_type(current_reference[:resource_types].first).first
-        [path, "#{current_reference[:resource_types].first}/#{resource_id}"]
+        [path, { "reference" => "#{current_reference[:resource_types].first}/#{resource_id}" }]
       end
       resource_data = SetByPath.multi_set_by_path(resource_data, paths_and_values_to_set)
+      info "References keeper: #{references_keeper.inspect}"
       info "Resource data with references (JSON): #{resource_data.to_json}"
       FHIR.from_contents(resource_data.to_json)
     end
