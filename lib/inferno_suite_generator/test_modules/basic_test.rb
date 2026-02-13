@@ -140,12 +140,7 @@ module InfernoSuiteGenerator
       #   - Observation
       references_metadata_arr = metadata.references
       references_to_set_for_paths = references_metadata_arr.map do |reference_metadata|
-        is_found = false
-        reference_to_set_for_path = {
-          reference: nil,
-          path: reference_metadata[:path]
-        } 
-        reference_metadata[:resource_types].each do |resource_type|
+        target_references_arr = reference_metadata[:resource_types].map do |resource_type|
           fhir_search(resource_type)
           if response[:status] != 200
             info "Can't search for #{resource_type} resources. Skipping this resource type..."
@@ -164,17 +159,16 @@ module InfernoSuiteGenerator
             info "No #{resource_type} resources found. Skipping this resource type..."
             next
           end
-          bundle.entry[0...ATTEMPTS_TO_GET_ENTRIES].each do |entry|
-            resource = entry.resource
-            if resource.resourceType == resource_type && any_profile_matches_with_target_profiles(resource, reference_metadata[:profiles])
-              reference_to_set_for_path[:reference] = "#{resource.resourceType}/#{resource.id}"
-              is_found = true
-              break
-            end
-          end
-          break if is_found
-        end
-        reference_to_set_for_path
+          bundle_resources = bundle.entry.map(&:resource)
+          bundle_resources.select do |resource|
+            any_profile_matches_with_target_profiles(resource, reference_metadata[:profiles])
+          end.map { |resource| "#{resource.resourceType}/#{resource.id}" }
+        end.flatten.compact
+        
+        {
+          path: reference_metadata[:path],
+          references: target_references_arr
+        }
       end
       info "References to set for paths: #{references_to_set_for_paths.inspect}"
       body
