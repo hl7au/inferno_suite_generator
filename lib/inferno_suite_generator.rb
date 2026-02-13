@@ -3,6 +3,7 @@
 require "fhir_models"
 require "inferno/ext/fhir_models"
 
+require_relative "inferno_suite_generator/utils/set_by_path"
 require_relative "inferno_suite_generator/core/ig_loader"
 require_relative "inferno_suite_generator/extractors/ig_metadata_extractor"
 require_relative "inferno_suite_generator/extractors/ig_demodata_extractor"
