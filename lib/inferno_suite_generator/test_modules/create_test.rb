@@ -2,6 +2,7 @@
 
 require_relative "basic_test"
 require_relative "../utils/set_by_path"
+require_relative "../utils/basic_test_helpers"
 
 module InfernoSuiteGenerator
   # Module handles sending FHIR resource instances
@@ -13,6 +14,7 @@ module InfernoSuiteGenerator
   # - Verifying server-assigned resource IDs
   module CreateTest
     include BasicTest
+    include BasicTestHelpers
     include SetByPath
 
     EXPECTED_CREATE_STATUS = 201
@@ -32,7 +34,7 @@ module InfernoSuiteGenerator
     private
 
     def update_resource_by_references(resource)
-      resource_data = resource.to_hash.deep_copy
+      resource_data = BasicTestHelpers.deep_copy_hash(resource.to_hash)
       references_ig_config = metadata.references
       paths_to_set = references_ig_config.map { |reference_metadata| reference_metadata[:path] }.uniq
       paths_and_values_to_set = paths_to_set.map do |path|

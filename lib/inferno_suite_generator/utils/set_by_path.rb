@@ -1,10 +1,14 @@
 # frozen_string_literal: true
 
+require_relative "../utils/basic_test_helpers"
+
 module InfernoSuiteGenerator
   # Utility to set a value in a FHIR resource hash at a path defined by a FHIRPath-like expression.
   # Supports dot-separated segments, bracket indices (e.g. +name[0].family+), and choice-type [x]
   # (e.g. +note.author[x]+, +medication[x]+). ResourceType prefix is optional (e.g. +Patient.name+).
   module SetByPath
+    include BasicTestHelpers
+
     # @param hash_data [Hash] FHIR resource as a hash (string or symbol keys)
     # @param path_string [String] FHIRPath-style path (e.g. "name[0].family", "meta.profile[0]", "resourceType")
     # @param data_to_set [Object] Value to set (any type)
@@ -13,7 +17,7 @@ module InfernoSuiteGenerator
       return hash_data if hash_data.nil?
       raise ArgumentError, "path_string cannot be nil or empty" if path_string.nil? || path_string.to_s.strip.empty?
 
-      data = deep_copy_hash(hash_data)
+      data = BasicTestHelpers.deep_copy_hash(hash_data)
       path = path_string.to_s.strip
       path = path.sub(/\A[A-Z][a-zA-Z]+\./, "") if path.match?(/\A[A-Z][a-zA-Z]+\./) # optional ResourceType. prefix
       segments = path.split(".")
@@ -34,7 +38,7 @@ module InfernoSuiteGenerator
     end
 
     def self.multi_set_by_path(hash_data, path_string_and_data_array)
-      deep_copy_hash = hash_data.deep_copy
+      deep_copy_hash = BasicTestHelpers.deep_copy_hash(hash_data)
       path_string_and_data_array.each do |path_string, data|
         deep_copy_hash = set_by_path(deep_copy_hash, path_string, data)
       end
