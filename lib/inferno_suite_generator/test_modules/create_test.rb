@@ -22,7 +22,7 @@ module InfernoSuiteGenerator
       info "Default resource payload: #{resource_payload_for_input.to_json}"
       resource = update_resource_by_references(resource_payload_for_input)
       info "Resource with references: #{resource.to_json}"
-      fhir_create(resource_payload_for_input)
+      fhir_create(resource)
       assert_create_success
       ensure_id_present(resource_type)
       register_teardown_candidate
