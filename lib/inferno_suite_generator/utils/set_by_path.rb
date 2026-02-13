@@ -38,11 +38,11 @@ module InfernoSuiteGenerator
     end
 
     def self.multi_set_by_path(hash_data, path_string_and_data_array)
-      deep_copy_hash = BasicTestHelpers.deep_copy_hash(hash_data)
+      result = deep_copy_hash(hash_data)
       path_string_and_data_array.each do |path_string, data|
-        deep_copy_hash = set_by_path(deep_copy_hash, path_string, data)
+        result = set_by_path(result, path_string, data)
       end
-      deep_copy_hash
+      result
     end
 
     # Parses a path segment like "name", "name[0]", "author[x]" into [key, index].
