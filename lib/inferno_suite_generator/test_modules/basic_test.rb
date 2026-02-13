@@ -171,6 +171,7 @@ module InfernoSuiteGenerator
         }
       end
       info "References to set for paths: #{references_to_set_for_paths.inspect}"
+      info "References keeper url: #{references_keeper.url} "
       info "References keeper: #{references_keeper.references.inspect}"
       body
     end
