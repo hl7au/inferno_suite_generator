@@ -145,5 +145,175 @@ module InfernoSuiteGenerator
       result = SetByPath.set_by_path(result, "code.coding[0].display", "Glucose")
       assert_equal "Glucose", result["code"]["coding"][0]["display"]
     end
+
+    # --- AllergyIntolerance resource tests (SHC profile metadata) ---
+
+    def allergy_intolerance_resource
+      {
+        "clinicalStatus" => {
+          "coding" => [
+            {
+              "code" => "active",
+              "system" => "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical"
+            }
+          ]
+        },
+        "code" => {
+          "coding" => [
+            {
+              "code" => "412583005",
+              "display" => "Bee pollen",
+              "system" => "http://snomed.info/sct"
+            }
+          ],
+          "text" => "Bee pollen"
+        },
+        "meta" => {
+          "profile" => [
+            "https://smartforms.csiro.au/ig/StructureDefinition/SHCAllergyIntolerance"
+          ]
+        },
+        "note" => [
+          { "text" => "comment" }
+        ],
+        "patient" => {
+          "reference" => "Patient/pat-sf"
+        },
+        "reaction" => [
+          {
+            "manifestation" => [
+              {
+                "coding" => [
+                  {
+                    "code" => "271807003",
+                    "display" => "Rash",
+                    "system" => "http://snomed.info/sct"
+                  }
+                ],
+                "text" => "Rash"
+              }
+            ]
+          }
+        ],
+        "resourceType" => "AllergyIntolerance"
+      }
+    end
+
+    def test_allergy_intolerance_set_resource_type_and_id
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "resourceType", "AllergyIntolerance")
+      assert_equal "AllergyIntolerance", result["resourceType"]
+
+      result = SetByPath.set_by_path(resource, "id", "all-1")
+      assert_equal "all-1", result["id"]
+      refute resource.key?("id"), "original unchanged"
+    end
+
+    def test_allergy_intolerance_set_clinical_status_and_verification
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "clinicalStatus",
+                                     { "coding" => [{ "code" => "inactive", "system" => "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical" }] })
+      assert_equal "inactive", result["clinicalStatus"]["coding"][0]["code"]
+
+      result = SetByPath.set_by_path(resource, "verificationStatus",
+                                     { "coding" => [{ "code" => "confirmed", "system" => "http://hl7.org/fhir/ValueSet/allergyintolerance-verification" }] })
+      assert_equal "confirmed", result["verificationStatus"]["coding"][0]["code"]
+    end
+
+    def test_allergy_intolerance_set_code_and_code_text
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "code.text", "Peanut")
+      assert_equal "Peanut", result["code"]["text"]
+      assert_equal "Bee pollen", resource["code"]["text"], "original unchanged"
+
+      result = SetByPath.set_by_path(resource, "code.coding[0].display", "Peanut")
+      assert_equal "Peanut", result["code"]["coding"][0]["display"]
+    end
+
+    def test_allergy_intolerance_set_patient_reference
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "patient.reference", "Patient/new-id")
+      assert_equal "Patient/new-id", result["patient"]["reference"]
+
+      result = SetByPath.set_by_path(resource, "AllergyIntolerance.patient", { "reference" => "Patient/au-core" })
+      assert_equal "Patient/au-core", result["patient"]["reference"]
+    end
+
+    def test_allergy_intolerance_set_onset_datetime_choice_type
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "onsetDateTime", "2024-01-15T10:00:00Z")
+      assert_equal "2024-01-15T10:00:00Z", result["onsetDateTime"]
+
+      result = SetByPath.set_by_path(resource, "onset[x]", "2024-01-01")
+      assert_equal "2024-01-01", result["onset[x]"]
+    end
+
+    def test_allergy_intolerance_set_note_and_note_text
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "note[0].text", "updated comment")
+      assert_equal "updated comment", result["note"][0]["text"]
+
+      result = SetByPath.set_by_path(resource, "AllergyIntolerance.note.text", "mandatory note text")
+      assert_equal "mandatory note text", result["note"]["text"]
+    end
+
+    def test_allergy_intolerance_set_note_author_x_choice_type
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "note[0].author[x]", { "reference" => "Practitioner/1" })
+      assert_equal({ "reference" => "Practitioner/1" }, result["note"][0]["author[x]"])
+
+      result = SetByPath.set_by_path(resource, "AllergyIntolerance.note.author[x]", { "reference" => "Patient/1" })
+      assert_equal({ "reference" => "Patient/1" }, result["note"]["author[x]"])
+    end
+
+    def test_allergy_intolerance_set_reaction_manifestation_and_severity
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "reaction[0].manifestation[0].text", "Hives")
+      assert_equal "Hives", result["reaction"][0]["manifestation"][0]["text"]
+
+      result = SetByPath.set_by_path(resource, "reaction[0].severity", "moderate")
+      assert_equal "moderate", result["reaction"][0]["severity"]
+    end
+
+    def test_allergy_intolerance_set_meta_profile
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "meta.profile[0]", "https://example.org/StructureDefinition/CustomAllergy")
+      assert_equal "https://example.org/StructureDefinition/CustomAllergy", result["meta"]["profile"][0]
+    end
+
+    def test_allergy_intolerance_multi_set_by_path
+      resource = allergy_intolerance_resource
+      updates = [
+        ["id", "all-multi-1"],
+        ["AllergyIntolerance.patient.reference", "Patient/pat-multi"],
+        ["note[0].text", "multi-set note"],
+        ["reaction[0].manifestation[0].text", "Multi manifestation"],
+        ["reaction[0].severity", "severe"]
+      ]
+      result = SetByPath.multi_set_by_path(resource, updates)
+      assert_equal "all-multi-1", result["id"]
+      assert_equal "Patient/pat-multi", result["patient"]["reference"]
+      assert_equal "multi-set note", result["note"][0]["text"]
+      assert_equal "Multi manifestation", result["reaction"][0]["manifestation"][0]["text"]
+      assert_equal "severe", result["reaction"][0]["severity"]
+      assert_equal "comment", resource["note"][0]["text"], "original unchanged"
+    end
+
+    def test_allergy_intolerance_creates_new_nested_arrays
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "reaction[1].manifestation[0].text", "Second reaction")
+      assert_equal 2, result["reaction"].length
+      assert_equal "Rash", result["reaction"][0]["manifestation"][0]["text"]
+      assert_equal "Second reaction", result["reaction"][1]["manifestation"][0]["text"]
+    end
+
+    def test_allergy_intolerance_full_path_with_resource_type_prefix
+      resource = allergy_intolerance_resource
+      result = SetByPath.set_by_path(resource, "AllergyIntolerance.code.text", "Full path code text")
+      assert_equal "Full path code text", result["code"]["text"]
+      result = SetByPath.set_by_path(resource, "AllergyIntolerance.reaction[0].manifestation[0].coding[0].display",
+                                     "Full path display")
+      assert_equal "Full path display", result["reaction"][0]["manifestation"][0]["coding"][0]["display"]
+    end
   end
 end

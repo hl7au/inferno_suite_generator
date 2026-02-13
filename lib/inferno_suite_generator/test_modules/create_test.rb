@@ -44,6 +44,7 @@ module InfernoSuiteGenerator
         [path, "#{current_reference[:resource_types].first}/#{resource_id}"]
       end
       resource_data = SetByPath.multi_set_by_path(resource_data, paths_and_values_to_set)
+      info "Resource data with references (JSON): #{resource_data.to_json}"
       FHIR.from_contents(resource_data.to_json)
     end
 
