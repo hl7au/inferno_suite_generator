@@ -1,4 +1,5 @@
 require 'inferno_suite_generator/test_modules/create_test'
+require 'inferno_suite_generator/utils/references_keeper'
 
 module <%= suite_module_name %>
   module <%= module_name %>
@@ -24,6 +25,10 @@ module <%= suite_module_name %>
 
       def resource_type
         '<%= resource_type %>'
+      end
+
+      def references_keeper
+        @references_keeper ||= InfernoSuiteGenerator::ReferencesKeeper.instance
       end
 
       run do

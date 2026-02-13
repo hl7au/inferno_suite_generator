@@ -164,13 +164,14 @@ module InfernoSuiteGenerator
             any_profile_matches_with_target_profiles(resource, reference_metadata[:profiles])
           end.map { |resource| "#{resource.resourceType}/#{resource.id}" }
         end.flatten.compact
-        
+        references_keeper.add_references(target_references_arr)
         {
           path: reference_metadata[:path],
           references: target_references_arr
         }
       end
       info "References to set for paths: #{references_to_set_for_paths.inspect}"
+      info "References keeper: #{references_keeper.references.inspect}"
       body
     end
 
