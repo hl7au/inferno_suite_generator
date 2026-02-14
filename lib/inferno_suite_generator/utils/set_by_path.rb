@@ -97,7 +97,7 @@ module InfernoSuiteGenerator
     end
 
     def self.fetch_or_init_array(parent, key)
-      slot = parent.fetch(key, :_missing)
+      slot = parent.fetch(key) { :_missing } # rubocop:disable Style/RedundantFetchBlock
       if slot == :_missing || !slot.is_a?(Array)
         slot = []
         parent[key] = slot
@@ -115,7 +115,7 @@ module InfernoSuiteGenerator
     end
 
     def self.navigate_to_hash_at(parent, key)
-      slot = parent.fetch(key, :_missing)
+      slot = parent.fetch(key) { :_missing } # rubocop:disable Style/RedundantFetchBlock
       if slot == :_missing || !slot.is_a?(Hash)
         slot = {}
         parent[key] = slot

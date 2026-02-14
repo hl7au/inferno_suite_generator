@@ -18,16 +18,24 @@ module InfernoSuiteGenerator
     EXPECTED_CREATE_STATUS = 201
 
     def perform_create_test
+      resource = prepare_resource_for_create
+      send_create_and_register(resource)
+    end
+
+    private
+
+    def prepare_resource_for_create
       initiate_references_keeper
-      resource = update_resource_by_references(resource_payload_for_input)
+      update_resource_by_references(resource_payload_for_input)
+    end
+
+    def send_create_and_register(resource)
       fhir_create(resource)
       assert_create_success
       ensure_id_present(resource_type)
       register_teardown_candidate
       register_resource_id
     end
-
-    private
 
     def update_resource_by_references(resource)
       resource_data = deep_copy_hash(resource.to_hash)
@@ -43,11 +51,15 @@ module InfernoSuiteGenerator
 
     def reference_pair_for_path(path, references_ig_config)
       current_reference = references_ig_config.find { |ref| ref[:path] == path }
-      return if current_reference.nil? || current_reference[:resource_types].empty?
+      return unless current_reference && current_reference[:resource_types]&.any?
 
-      resource_type = current_reference[:resource_types].first
+      pair_from_reference(current_reference, path)
+    end
+
+    def pair_from_reference(ref, path)
+      resource_type = ref[:resource_types].first
       resource_id = references_keeper.references_for_resource_type(resource_type).first
-      return if resource_id.nil?
+      return unless resource_id
 
       [path, { "reference" => "#{resource_type}/#{resource_id}" }]
     end
@@ -62,15 +74,19 @@ module InfernoSuiteGenerator
     end
 
     def fetch_valid_bundle_for_resource_type(resource_type)
+      bundle = search_bundle_for_resource_type(resource_type)
+      return nil unless valid_bundle_for_references?(bundle, resource_type)
+
+      bundle
+    end
+
+    def search_bundle_for_resource_type(resource_type)
       fhir_search(resource_type)
       unless search_successful?
         info "Can't search for #{resource_type} resources. Skipping this resource type..."
         return nil
       end
-      bundle = resource
-      return nil unless valid_bundle_for_references?(bundle, resource_type)
-
-      bundle
+      resource
     end
 
     def search_successful?
@@ -78,9 +94,11 @@ module InfernoSuiteGenerator
     end
 
     def valid_bundle_for_references?(bundle, resource_type)
-      return log_skip("Can't get bundle for #{resource_type} resources. Skipping this resource type...") if bundle.nil?
-      return log_skip("Bundle entry is nil. Skipping this resource type...") if bundle.entry.nil?
-      return log_skip("No #{resource_type} resources found. Skipping this resource type...") if bundle.entry.empty?
+      return log_skip("Can't get bundle for #{resource_type} resources. Skipping this resource type...") unless bundle
+
+      entries = bundle.entry
+      return log_skip("Bundle entry is nil. Skipping this resource type...") unless entries
+      return log_skip("No #{resource_type} resources found. Skipping this resource type...") if entries.empty?
 
       true
     end
