@@ -31,46 +31,63 @@ module InfernoSuiteGenerator
 
     def update_resource_by_references(resource)
       resource_data = deep_copy_hash(resource.to_hash)
-      references_ig_config = metadata.references
-      paths_to_set = references_ig_config.map { |reference_metadata| reference_metadata[:path] }.uniq
-      paths_and_values_to_set = paths_to_set.map do |path|
-        current_reference = references_ig_config.find { |reference_metadata| reference_metadata[:path] == path }
-        next if current_reference.nil?
-        next if current_reference[:resource_types].empty?
-
-        resource_id = references_keeper.references_for_resource_type(current_reference[:resource_types].first).first
-        next if resource_id.nil?
-
-        [path, { "reference" => "#{current_reference[:resource_types].first}/#{resource_id}" }]
-      end
-      resource_data = SetByPath.multi_set_by_path(resource_data, paths_and_values_to_set.compact)
+      paths_and_values = build_reference_paths_and_values(metadata.references)
+      resource_data = SetByPath.multi_set_by_path(resource_data, paths_and_values)
       FHIR.from_contents(resource_data.to_json)
+    end
+
+    def build_reference_paths_and_values(references_ig_config)
+      paths_to_set = references_ig_config.map { |ref| ref[:path] }.uniq
+      paths_to_set.filter_map { |path| reference_pair_for_path(path, references_ig_config) }
+    end
+
+    def reference_pair_for_path(path, references_ig_config)
+      current_reference = references_ig_config.find { |ref| ref[:path] == path }
+      return if current_reference.nil? || current_reference[:resource_types].empty?
+
+      resource_type = current_reference[:resource_types].first
+      resource_id = references_keeper.references_for_resource_type(resource_type).first
+      return if resource_id.nil?
+
+      [path, { "reference" => "#{resource_type}/#{resource_id}" }]
     end
 
     def initiate_references_keeper
       return if references_keeper.references.keys.any?
 
       demodata.resource_types_to_search.each do |resource_type|
-        fhir_search(resource_type)
-        if response[:status] != 200
-          info "Can't search for #{resource_type} resources. Skipping this resource type..."
-          next
-        end
-        bundle = resource
-        if bundle.nil?
-          info "Can't get bundle for #{resource_type} resources. Skipping this resource type..."
-          next
-        end
-        if bundle.entry.nil?
-          info "Bundle entry is nil. Skipping this resource type..."
-          next
-        end
-        if bundle.entry.empty?
-          info "No #{resource_type} resources found. Skipping this resource type..."
-          next
-        end
-        references_keeper.add_references_from_bundle(bundle)
+        bundle = fetch_valid_bundle_for_resource_type(resource_type)
+        references_keeper.add_references_from_bundle(bundle) if bundle
       end
+    end
+
+    def fetch_valid_bundle_for_resource_type(resource_type)
+      fhir_search(resource_type)
+      unless search_successful?
+        info "Can't search for #{resource_type} resources. Skipping this resource type..."
+        return nil
+      end
+      bundle = resource
+      return nil unless valid_bundle_for_references?(bundle, resource_type)
+
+      bundle
+    end
+
+    def search_successful?
+      response[:status] == 200
+    end
+
+    def valid_bundle_for_references?(bundle, resource_type)
+      return log_skip("Can't get bundle for #{resource_type} resources. Skipping this resource type...") if bundle.nil?
+      return log_skip("Bundle entry is nil. Skipping this resource type...") if bundle.entry.nil?
+      return log_skip("No #{resource_type} resources found. Skipping this resource type...") if bundle.entry.empty?
+
+      true
+    end
+
+    def log_skip(message)
+      info message
+      false
     end
 
     def assert_create_success
