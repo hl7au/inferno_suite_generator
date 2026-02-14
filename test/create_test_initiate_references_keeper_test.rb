@@ -12,7 +12,7 @@ module InfernoSuiteGenerator
     class TestableCreateTest
       include CreateTest
 
-      attr_reader :metadata, :references_keeper, :demodata
+      attr_reader :metadata, :references_keeper, :demodata, :resource
       attr_accessor :search_results, :info_messages
 
       def initialize(metadata:, references_keeper:, demodata:)
@@ -35,22 +35,18 @@ module InfernoSuiteGenerator
         @response || {}
       end
 
-      def resource
-        @resource
-      end
-
       def info(message)
         info_messages << message
       end
     end
 
     def test_returns_early_when_references_keeper_already_has_references
-      demodata = demodata_double(["Patient", "Observation"])
+      demodata = demodata_double(%w[Patient Observation])
       keeper = references_keeper_double("Patient" => ["p1"])
       subject = TestableCreateTest.new(
         metadata: metadata_double,
         references_keeper: keeper,
-        demodata: demodata
+        demodata:
       )
       subject.search_results = { "Patient" => { status: 200, bundle: build_bundle("Patient", "p1") } }
 
@@ -67,7 +63,7 @@ module InfernoSuiteGenerator
       subject = TestableCreateTest.new(
         metadata: metadata_double,
         references_keeper: keeper,
-        demodata: demodata
+        demodata:
       )
       subject.search_results = { "Patient" => { status: 200, bundle: bundle_patient } }
 
@@ -83,7 +79,7 @@ module InfernoSuiteGenerator
       subject = TestableCreateTest.new(
         metadata: metadata_double,
         references_keeper: keeper,
-        demodata: demodata
+        demodata:
       )
       subject.search_results = { "Patient" => { status: 404, bundle: build_bundle("Patient", "p1") } }
 
@@ -99,7 +95,7 @@ module InfernoSuiteGenerator
       subject = TestableCreateTest.new(
         metadata: metadata_double,
         references_keeper: keeper,
-        demodata: demodata
+        demodata:
       )
       subject.search_results = { "Patient" => { status: 200, bundle: nil } }
 
@@ -117,9 +113,9 @@ module InfernoSuiteGenerator
       subject = TestableCreateTest.new(
         metadata: metadata_double,
         references_keeper: keeper,
-        demodata: demodata
+        demodata:
       )
-      subject.search_results = { "Patient" => { status: 200, bundle: bundle } }
+      subject.search_results = { "Patient" => { status: 200, bundle: } }
 
       subject.send(:initiate_references_keeper)
 
@@ -134,9 +130,9 @@ module InfernoSuiteGenerator
       subject = TestableCreateTest.new(
         metadata: metadata_double,
         references_keeper: keeper,
-        demodata: demodata
+        demodata:
       )
-      subject.search_results = { "Patient" => { status: 200, bundle: bundle } }
+      subject.search_results = { "Patient" => { status: 200, bundle: } }
 
       subject.send(:initiate_references_keeper)
 
@@ -147,12 +143,12 @@ module InfernoSuiteGenerator
     def test_processes_multiple_resource_types_and_adds_from_each_valid_bundle
       bundle_patient = build_bundle("Patient", "p1")
       bundle_obs = build_bundle("Observation", "obs-1")
-      demodata = demodata_double(["Patient", "Observation"])
+      demodata = demodata_double(%w[Patient Observation])
       keeper = references_keeper_double({})
       subject = TestableCreateTest.new(
         metadata: metadata_double,
         references_keeper: keeper,
-        demodata: demodata
+        demodata:
       )
       subject.search_results = {
         "Patient" => { status: 200, bundle: bundle_patient },
@@ -167,12 +163,12 @@ module InfernoSuiteGenerator
 
     def test_skips_failed_type_but_processes_successful_types
       bundle_patient = build_bundle("Patient", "p1")
-      demodata = demodata_double(["Observation", "Patient"])
+      demodata = demodata_double(%w[Observation Patient])
       keeper = references_keeper_double({})
       subject = TestableCreateTest.new(
         metadata: metadata_double,
         references_keeper: keeper,
-        demodata: demodata
+        demodata:
       )
       subject.search_results = {
         "Observation" => { status: 500, bundle: nil },
@@ -192,7 +188,7 @@ module InfernoSuiteGenerator
       subject = TestableCreateTest.new(
         metadata: metadata_double,
         references_keeper: keeper,
-        demodata: demodata
+        demodata:
       )
 
       subject.send(:initiate_references_keeper)
