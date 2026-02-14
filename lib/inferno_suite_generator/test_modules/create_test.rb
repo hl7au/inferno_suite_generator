@@ -19,9 +19,7 @@ module InfernoSuiteGenerator
 
     def perform_create_test
       initiate_references_keeper
-      info "Default resource payload: #{resource_payload_for_input.to_json}"
       resource = update_resource_by_references(resource_payload_for_input)
-      info "Resource with references: #{resource.to_json}"
       fhir_create(resource)
       assert_create_success
       ensure_id_present(resource_type)
@@ -46,8 +44,6 @@ module InfernoSuiteGenerator
         [path, { "reference" => "#{current_reference[:resource_types].first}/#{resource_id}" }]
       end
       resource_data = SetByPath.multi_set_by_path(resource_data, paths_and_values_to_set.compact)
-      info "References keeper: #{references_keeper.inspect}"
-      info "Resource data with references (JSON): #{resource_data.to_json}"
       FHIR.from_contents(resource_data.to_json)
     end
 
