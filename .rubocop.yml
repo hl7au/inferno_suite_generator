@@ -62,3 +62,11 @@ Style/StringLiterals:
 
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+Metrics/ModuleLength:
+  Exclude:
+    - lib/inferno_suite_generator/utils/set_by_path.rb
+
+Metrics/MethodLength:
+  Exclude:
+    - lib/inferno_suite_generator/utils/set_by_path.rb

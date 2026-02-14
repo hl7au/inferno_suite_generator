@@ -40,7 +40,7 @@ module InfernoSuiteGenerator
       def resource_for_profile(url)
         begin
           resources_by_type["StructureDefinition"].find { |profile| profile.url == url }.type
-        rescue NoMethodError
+        rescue StandardError
           puts "StructureDefinition resource not found for profile #{url}. Add these resources as extra bundle to the IG generator. Or your Inferno suite may work incorrectly."
           nil
         end
