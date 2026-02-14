@@ -6,8 +6,18 @@ module InfernoSuiteGenerator
   class ReferencesKeeper
     attr_reader :references, :url
 
-    def self.entities
-      @entities ||= []
+    class << self
+      def entities
+        @entities ||= []
+      end
+
+      def get_or_create_instance(url)
+        get_instance(url) || new(url)
+      end
+
+      def get_instance(url)
+        entities.find { |entity| entity.url == url }
+      end
     end
 
     def initialize(url, references = {})
@@ -30,10 +40,6 @@ module InfernoSuiteGenerator
 
     def references_for_resource_type(resource_type)
       @references[resource_type] || []
-    end
-
-    def self.get_instance(url)
-      entities.find { |entity| entity.url == url } || new(url)
     end
   end
 end

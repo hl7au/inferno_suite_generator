@@ -28,7 +28,7 @@ module <%= suite_module_name %>
       end
 
       def references_keeper
-        @rerefences_keeper = InfernoSuiteGenerator::ReferencesKeeper.get_instance(url)
+        @rerefences_keeper = InfernoSuiteGenerator::ReferencesKeeper.get_or_create_instance(url)
       end
 
       run do
