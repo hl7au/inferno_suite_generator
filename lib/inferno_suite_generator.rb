@@ -67,7 +67,7 @@ module InfernoSuiteGenerator
     end
 
     def extract_demodata
-      self.ig_demodata = IGDemodataExtractor.new(ig_resources).extract
+      self.ig_demodata = IGDemodataExtractor.new(ig_resources, ig_metadata).extract
 
       FileUtils.mkdir_p(base_output_dir)
       File.write(File.join(base_output_dir, "demodata.yml"), YAML.dump(ig_demodata.to_hash))

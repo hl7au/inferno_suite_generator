@@ -14,14 +14,15 @@ module InfernoSuiteGenerator
     # operations. The extracted data is organized and filtered to exclude certain
     # resource types and elements that are not needed for demonstration purposes.
     class IGDemodataExtractor
-      attr_accessor :ig_resources, :demodata, :config_keeper
+      attr_accessor :ig_resources, :ig_metadata, :demodata, :config_keeper
 
       RESOURCE_TYPES_TO_IGNORE = %w[Basic ValueSet StructureDefinition CapabilityStatement SearchParameter
                                     ImplementationGuide CodeSystem Bundle].freeze
       RESOURCE_ELEMENTS_TO_IGNORE = %w[id text].freeze
 
-      def initialize(ig_resources)
+      def initialize(ig_resources, ig_metadata)
         self.ig_resources = ig_resources
+        self.ig_metadata = ig_metadata
         self.demodata = IGDemodata.new
         self.config_keeper = Registry.get(:config_keeper)
       end
@@ -30,10 +31,15 @@ module InfernoSuiteGenerator
         add_resource_ids
         add_resource_body_list
         add_patch_body_list
+        add_resource_types_to_search
         demodata
       end
 
       private
+
+      def add_resource_types_to_search
+        demodata.resource_types_to_search ||= ig_metadata.resource_types_for_references
+      end
 
       def add_resource_ids
         result = {}

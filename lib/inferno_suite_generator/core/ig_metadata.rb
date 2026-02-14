@@ -58,6 +58,10 @@ module InfernoSuiteGenerator
       def search_groups
         groups.select { |group| group.searches.present? }
       end
+
+      def resource_types_for_references
+        groups.flat_map { |group| group.references.map { |reference| reference[:resource_types] } }.flatten.uniq
+      end
     end
   end
 end
