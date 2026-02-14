@@ -15,26 +15,39 @@ module InfernoSuiteGenerator
     # @return [Hash] New hash with the value set at the path
     def self.set_by_path(hash_data, path_string, data_to_set)
       return hash_data if hash_data.nil?
-      raise ArgumentError, "path_string cannot be nil or empty" if path_string.nil? || path_string.to_s.strip.empty?
+
+      validate_path_string!(path_string)
 
       data = deep_copy_hash(hash_data)
-      path = path_string.to_s.strip
-      path = path.sub(/\A[A-Z][a-zA-Z]+\./, "") if path.match?(/\A[A-Z][a-zA-Z]+\./) # optional ResourceType. prefix
-      segments = path.split(".")
+      segments = normalize_path(path_string).split(".")
       return data if segments.empty?
 
+      apply_path_segments(data, segments, data_to_set)
+      data
+    end
+
+    def self.validate_path_string!(path_string)
+      return unless path_string.nil? || path_string.to_s.strip.empty?
+
+      raise ArgumentError, "path_string cannot be nil or empty"
+    end
+
+    def self.normalize_path(path_string)
+      path = path_string.to_s.strip
+      path = path.sub(/\A[A-Z][a-zA-Z]+\./, "") if path.match?(/\A[A-Z][a-zA-Z]+\./) # optional ResourceType. prefix
+      path
+    end
+
+    def self.apply_path_segments(data, segments, data_to_set)
       current = data
       segments.each_with_index do |segment, i|
         key, index = parse_segment(segment)
-        is_last = (i == segments.length - 1)
-
-        if is_last
+        if i == segments.length - 1
           set_value(current, key, index, data_to_set)
         else
           current = navigate_or_create(current, key, index)
         end
       end
-      data
     end
 
     def self.multi_set_by_path(hash_data, path_string_and_data_array)
@@ -72,14 +85,29 @@ module InfernoSuiteGenerator
 
     def self.navigate_or_create(parent, key, index)
       if index.nil?
-        parent[key] = {} unless parent.key?(key) && parent[key].is_a?(Hash)
-        return parent[key]
+        navigate_to_hash_at(parent, key)
+      else
+        navigate_to_hash_at_index(parent, key, index)
       end
+    end
+
+    def self.navigate_to_hash_at(parent, key)
+      parent[key] = {} unless parent.key?(key) && parent[key].is_a?(Hash)
+      parent[key]
+    end
+
+    def self.navigate_to_hash_at_index(parent, key, index)
       parent[key] = [] unless parent.key?(key) && parent[key].is_a?(Array)
       arr = parent[key]
-      (index - arr.length + 1).times { arr << {} } if index >= arr.length
+      ensure_array_length(arr, index) { {} }
       arr[index] = {} if arr[index].nil?
       arr[index]
+    end
+
+    def self.ensure_array_length(arr, index)
+      return unless index >= arr.length
+
+      (index - arr.length + 1).times { arr << yield }
     end
 
     def self.deep_copy_hash(obj)
