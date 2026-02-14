@@ -41,5 +41,9 @@ module InfernoSuiteGenerator
     def references_for_resource_type(resource_type)
       @references[resource_type] || []
     end
+
+    def add_references_from_bundle(bundle)
+      add_references(bundle.entry.map(&:resource).map { |resource| "#{resource.resourceType}/#{resource.id}" })
+    end
   end
 end

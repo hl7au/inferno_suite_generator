@@ -52,34 +52,26 @@ module InfernoSuiteGenerator
     end
 
     def initiate_references_keeper
-      references_ig_config = metadata.references
-      references_ig_config.each do |reference_metadata|
-        references_keeper.add_references(
-          reference_metadata[:resource_types].map do |resource_type|
-            fhir_search(resource_type)
-            if response[:status] != 200
-              info "Can't search for #{resource_type} resources. Skipping this resource type..."
-              next
-            end
-            bundle = resource
-            if bundle.nil?
-              info "Can't get bundle for #{resource_type} resources. Skipping this resource type..."
-              next
-            end
-            if bundle.entry.nil?
-              info "Bundle entry is nil. Skipping this resource type..."
-              next
-            end
-            if bundle.entry.empty?
-              info "No #{resource_type} resources found. Skipping this resource type..."
-              next
-            end
-            bundle_resources = bundle.entry.map(&:resource)
-            bundle_resources.select do |resource|
-              any_profile_matches_with_target_profiles(resource, reference_metadata[:profiles])
-            end.map { |resource| "#{resource.resourceType}/#{resource.id}" }
-          end.flatten.compact
-        )
+      demodata.resource_types_to_search.each do |resource_type|
+        fhir_search(resource_type)
+        if response[:status] != 200
+          info "Can't search for #{resource_type} resources. Skipping this resource type..."
+          next
+        end
+        bundle = resource
+        if bundle.nil?
+          info "Can't get bundle for #{resource_type} resources. Skipping this resource type..."
+          next
+        end
+        if bundle.entry.nil?
+          info "Bundle entry is nil. Skipping this resource type..."
+          next
+        end
+        if bundle.entry.empty?
+          info "No #{resource_type} resources found. Skipping this resource type..."
+          next
+        end
+        references_keeper.add_references_from_bundle(bundle)
       end
     end
 
