@@ -52,6 +52,8 @@ module InfernoSuiteGenerator
     end
 
     def initiate_references_keeper
+      return if references_keeper.references.keys.any?
+
       demodata.resource_types_to_search.each do |resource_type|
         fhir_search(resource_type)
         if response[:status] != 200
