@@ -2,6 +2,7 @@
 
 require_relative "basic_test"
 require_relative "../utils/set_by_path"
+require_relative "../decorators/capability_statement_decorator"
 
 module InfernoSuiteGenerator
   # Module handles sending FHIR resource instances
