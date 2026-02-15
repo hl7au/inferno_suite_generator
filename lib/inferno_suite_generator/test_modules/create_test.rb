@@ -70,9 +70,9 @@ module InfernoSuiteGenerator
       fhir_get_capability_statement
       cs_resource = CapabilityStatementDecorator.new(resource)
       resources_to_search = cs_resource.get_resources_by_interaction("search-type")&.map(&:type)&.uniq
-      puts "resources_to_search: #{resources_to_search}"
+      info "resources_to_search: #{resources_to_search} (#{resources_to_search.count})"
       filtered_demodata = demodata.resource_types_to_search.select { |resource_type| resources_to_search.include?(resource_type) }
-      puts "filtered_demodata: #{filtered_demodata}"
+      info "filtered_demodata: #{filtered_demodata} (#{filtered_demodata.count})"
       filtered_demodata.each do |resource_type|
         bundle = fetch_valid_bundle_for_resource_type(resource_type)
         references_keeper.add_references_from_bundle(bundle) if bundle
