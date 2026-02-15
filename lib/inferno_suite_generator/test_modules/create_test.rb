@@ -66,8 +66,12 @@ module InfernoSuiteGenerator
 
     def initiate_references_keeper
       return if references_keeper.references.keys.any?
-
-      demodata.resource_types_to_search.each do |resource_type|
+      cs_resource = CapabilityStatementDecorator.new(fhir_get_capability_statement)
+      resources_to_search = cs_resource.get_resources_by_interaction("search-type")&.map(&:type)&.uniq
+      puts "resources_to_search: #{resources_to_search}"
+      filtered_demodata = demodata.resource_types_to_search.select { |resource_type| resources_to_search.include?(resource_type) }
+      puts "filtered_demodata: #{filtered_demodata}"
+      filtered_demodata.each do |resource_type|
         bundle = fetch_valid_bundle_for_resource_type(resource_type)
         references_keeper.add_references_from_bundle(bundle) if bundle
       end
