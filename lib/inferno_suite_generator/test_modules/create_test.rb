@@ -67,18 +67,22 @@ module InfernoSuiteGenerator
 
     def initiate_references_keeper
       return if references_keeper.references.keys.any?
-      fhir_get_capability_statement
-      cs_resource = CapabilityStatementDecorator.new(resource)
-      resources_to_search = cs_resource.get_resources_by_interaction("search-type")&.map(&:type)&.uniq
-      info "resources_to_search: #{resources_to_search} (#{resources_to_search.count})"
-      filtered_demodata = demodata.resource_types_to_search.select { |resource_type| resources_to_search.include?(resource_type) }
-      info "filtered_demodata: #{filtered_demodata} (#{filtered_demodata.count})"
+      add_references_from_server
+      references_keeper.add_references_from_input(references_mapping_input) if references_mapping_input.present?
+    end
+
+    def add_references_from_server
+      filtered_demodata = demodata.resource_types_to_search.select { |resource_type| resources_available_for_search.include?(resource_type) }
       filtered_demodata.each do |resource_type|
         bundle = fetch_valid_bundle_for_resource_type(resource_type)
         references_keeper.add_references_from_bundle(bundle) if bundle
       end
-      references_keeper.add_references_from_input(references_mapping_input) if references_mapping_input.present?
-      info "references_keeper: #{references_keeper.references}"
+    end
+
+    def resources_available_for_search
+      fhir_get_capability_statement
+      cs_resource = CapabilityStatementDecorator.new(resource)
+      cs_resource.get_resources_by_interaction("search-type")&.map(&:type)&.uniq
     end
 
     def fetch_valid_bundle_for_resource_type(resource_type)

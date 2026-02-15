@@ -15,12 +15,20 @@ module InfernoSuiteGenerator
       attr_reader :metadata, :references_keeper, :demodata, :resource
       attr_accessor :search_results, :info_messages
 
+      def references_mapping_input
+        nil
+      end
+
       def initialize(metadata:, references_keeper:, demodata:)
         @metadata = metadata
         @references_keeper = references_keeper
         @demodata = demodata
         @search_results = {}
         @info_messages = []
+      end
+
+      def fhir_get_capability_statement
+        @resource = build_capability_statement_for_types(search_results.keys)
       end
 
       def fhir_search(resource_type)
@@ -37,6 +45,22 @@ module InfernoSuiteGenerator
 
       def info(message)
         info_messages << message
+      end
+
+      private
+
+      def build_capability_statement_for_types(types)
+        resources = Array(types).map do |resource_type|
+          r = FHIR::R4::CapabilityStatement::Rest::Resource.new
+          r.type = resource_type
+          r.interaction = [FHIR::R4::CapabilityStatement::Rest::Resource::Interaction.new("code" => "search-type")]
+          r
+        end
+        rest = FHIR::R4::CapabilityStatement::Rest.new
+        rest.resource = resources
+        cs = FHIR::R4::CapabilityStatement.new
+        cs.rest = [rest]
+        cs
       end
     end
 
