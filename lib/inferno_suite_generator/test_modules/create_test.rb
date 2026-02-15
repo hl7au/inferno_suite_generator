@@ -77,6 +77,8 @@ module InfernoSuiteGenerator
         bundle = fetch_valid_bundle_for_resource_type(resource_type)
         references_keeper.add_references_from_bundle(bundle) if bundle
       end
+      references_keeper.add_references_from_input(references_mapping_input) if references_mapping_input.present?
+      info "references_keeper: #{references_keeper.references}"
     end
 
     def fetch_valid_bundle_for_resource_type(resource_type)

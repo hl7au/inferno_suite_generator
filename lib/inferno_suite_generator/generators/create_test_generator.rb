@@ -47,6 +47,10 @@ module InfernoSuiteGenerator
         build_input_data
       end
 
+      def references_mapping_should_be_shown?
+        group_metadata.references.present?
+      end
+
       private
 
       def read_input_data

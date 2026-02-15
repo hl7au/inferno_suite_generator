@@ -9,6 +9,14 @@ module <%= suite_module_name %>
       title '(<%= conformance_expectation %>) Server returns correct <%= resource_type %> resource from <%= resource_type %> create interaction'
       description 'A server <%= conformance_expectation %> support the <%= resource_type %> create interaction.'
 
+      <% if references_mapping_should_be_shown? %>
+      input :references_mapping_input,
+            title: 'References Mapping',
+            description: 'Mapping of references to the create resource. Format: {"Patient": ["patient_id1", "patient_id2"], "Condition": ["condition_id1", "condition_id2"]}',
+            type: 'textarea',
+            optional: true
+      <% end %>
+
       id :<%= test_id %>
 
       def self.demodata

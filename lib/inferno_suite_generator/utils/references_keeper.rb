@@ -28,7 +28,7 @@ module InfernoSuiteGenerator
 
     def add_reference(reference)
       resource_type, resource_id = reference.split("/", 2)
-      @references[resource_type] = ((@references[resource_type] || []) + [resource_id]).uniq
+      @references[resource_type] = (@references[resource_type] || []) + [resource_id]
     end
 
     def add_references(references)
@@ -36,7 +36,7 @@ module InfernoSuiteGenerator
     end
 
     def references_for_resource_type(resource_type)
-      @references[resource_type] || []
+      (@references[resource_type] || []).reverse
     end
 
     def add_references_from_bundle(bundle)
@@ -46,6 +46,13 @@ module InfernoSuiteGenerator
 
     def self.reference_string_for(resource)
       "#{resource.resourceType}/#{resource.id}"
+    end
+
+    def add_references_from_input(input)
+      references = JSON.parse(input)
+      references.each do |resource_type, resource_ids|
+        add_references(resource_ids.map { |resource_id| "#{resource_type}/#{resource_id}" })
+      end
     end
   end
 end
