@@ -18,6 +18,10 @@ module InfernoSuiteGenerator
       def get_instance(url)
         entities.find { |entity| entity.url == url }
       end
+
+      def destroy_instance(url)
+        entities.delete(get_instance(url))
+      end
     end
 
     def initialize(url, references = {})
