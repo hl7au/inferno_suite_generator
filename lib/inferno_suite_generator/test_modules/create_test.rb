@@ -60,9 +60,12 @@ module InfernoSuiteGenerator
     def pair_from_reference(ref, path)
       resource_type = ref[:resource_types].first
       resource_id = references_keeper.references_for_resource_type(resource_type).first
+      last_segment = path.split(".").last
+      is_last_segment_a_generic = last_segment.include?("[x]")
+      datatype = is_last_segment_a_generic ? "#{last_segment.gsub(/\[x\]/, '')}Reference" : nil
       return unless resource_id
 
-      [path, { "reference" => "#{resource_type}/#{resource_id}" }]
+      [path, { "reference" => "#{resource_type}/#{resource_id}" }, datatype]
     end
 
     def initiate_references_keeper

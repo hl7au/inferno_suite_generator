@@ -12,9 +12,12 @@ module InfernoSuiteGenerator
     # @param hash_data [Hash] FHIR resource as a hash (string or symbol keys)
     # @param path_string [String] FHIRPath-style path (e.g. "name[0].family", "meta.profile[0]", "resourceType")
     # @param data_to_set [Object] Value to set (any type)
+    # @param datatype [String, nil] When the path contains a choice-type segment (e.g. +medication[x]+),
+    #   pass the concrete FHIR property name to use instead (e.g. +"medicationReference"+).
+    #   The value is set under that key rather than under +medication[x]+.
     # @return [Hash] New hash with the value set at the path
     # :reek:TooManyStatements
-    def self.set_by_path(hash_data, path_string, data_to_set)
+    def self.set_by_path(hash_data, path_string, data_to_set, datatype = nil)
       return hash_data unless hash_data
 
       validate_path_string!(path_string)
@@ -22,7 +25,7 @@ module InfernoSuiteGenerator
       segments = normalize_path(path_string).split(".")
       return data if segments.empty?
 
-      apply_path_segments(data, segments, data_to_set)
+      apply_path_segments(data, segments, data_to_set, datatype)
       data
     end
 
@@ -38,8 +41,9 @@ module InfernoSuiteGenerator
       path
     end
 
+    # When a segment is a choice type (key contains "[x]") and datatype is given, use datatype as the key.
     # :reek:TooManyStatements
-    def self.apply_path_segments(data, segments, data_to_set)
+    def self.apply_path_segments(data, segments, data_to_set, datatype = nil)
       segments_length = segments.length
       current = data
       segment_index = 0
@@ -47,6 +51,7 @@ module InfernoSuiteGenerator
       while segment_index < segments_length
         segment = segments[segment_index]
         key, index = parse_segment(segment)
+        key = resolve_choice_key(key, datatype)
         is_last_segment = (segment_index == segments_length - 1)
 
         if is_last_segment
@@ -58,10 +63,18 @@ module InfernoSuiteGenerator
       end
     end
 
+    # For choice-type segments (e.g. "medication[x]"), use datatype as the key when provided.
+    def self.resolve_choice_key(key, datatype)
+      return key if datatype.nil? || datatype.to_s.strip.empty?
+      return datatype.to_s.strip if key.to_s.include?("[x]")
+
+      key
+    end
+
     def self.multi_set_by_path(hash_data, path_string_and_data_array)
       result = deep_copy_hash(hash_data)
-      path_string_and_data_array.each do |path_string, data|
-        result = set_by_path(result, path_string, data)
+      path_string_and_data_array.each do |path_string, data, datatype|
+        result = set_by_path(result, path_string, data, datatype)
       end
       result
     end

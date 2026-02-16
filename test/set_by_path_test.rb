@@ -5,6 +5,26 @@ require "inferno_suite_generator"
 
 module InfernoSuiteGenerator
   class SetByPathTest < Minitest::Test
+    def test_set_by_path_with_datatype
+      resource = { "resourceType" => "Medication", "id" => "123" }
+      result = SetByPath.set_by_path(
+        resource, "medication[x]", { "reference" => "Medication/123" }, "medicationReference"
+      )
+      assert_equal "Medication", result["resourceType"]
+      assert_equal "123", result["id"]
+      assert_equal({ "reference" => "Medication/123" }, result["medicationReference"])
+      refute result.key?("medication[x]"), "choice-type key not used when datatype given"
+    end
+
+    def test_set_by_path_with_datatype_nested
+      resource = { "resourceType" => "Annotation", "note" => [{}] }
+      result = SetByPath.set_by_path(
+        resource, "note[0].author[x]", { "reference" => "Practitioner/1" }, "authorReference"
+      )
+      assert_equal({ "reference" => "Practitioner/1" }, result["note"][0]["authorReference"])
+      refute result["note"][0].key?("author[x]"), "choice-type key not used when datatype given"
+    end
+
     def test_set_top_level_string
       resource = { "resourceType" => "Patient", "id" => "123" }
       result = SetByPath.set_by_path(resource, "resourceType", "Observation")
