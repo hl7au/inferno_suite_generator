@@ -17,6 +17,7 @@ module InfernoSuiteGenerator
     #   The value is set under that key rather than under +medication[x]+.
     # @return [Hash] New hash with the value set at the path
     # :reek:TooManyStatements
+    # :reek:LongParameterList
     def self.set_by_path(hash_data, path_string, data_to_set, datatype = nil)
       return hash_data unless hash_data
 
@@ -41,8 +42,18 @@ module InfernoSuiteGenerator
       path
     end
 
+    # Given a path with optional choice-type segment (e.g. +note.author[x]+), returns the concrete
+    # datatype key for reference (e.g. +authorReference+) or nil if the last segment has no +[x]+.
+    def self.extract_datatype_from_path(path_string)
+      segment = path_string.to_s.strip.split(".").last.to_s
+      return nil unless segment.include?("[x]")
+
+      "#{segment.gsub("[x]", "")}Reference"
+    end
+
     # When a segment is a choice type (key contains "[x]") and datatype is given, use datatype as the key.
     # :reek:TooManyStatements
+    # :reek:LongParameterList
     def self.apply_path_segments(data, segments, data_to_set, datatype = nil)
       segments_length = segments.length
       current = data
@@ -65,8 +76,9 @@ module InfernoSuiteGenerator
 
     # For choice-type segments (e.g. "medication[x]"), use datatype as the key when provided.
     def self.resolve_choice_key(key, datatype)
-      return key if datatype.nil? || datatype.to_s.strip.empty?
-      return datatype.to_s.strip if key.to_s.include?("[x]")
+      stripped_datatype = datatype.to_s.strip
+      return key if stripped_datatype.empty?
+      return stripped_datatype if key.to_s.include?("[x]")
 
       key
     end
