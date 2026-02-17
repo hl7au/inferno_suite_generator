@@ -21,18 +21,18 @@ module InfernoSuiteGenerator
     ATTEMPTS_TO_GET_ENTRIES = 10.freeze
 
     def resource_payload_for_input
-      payload = resource_body_by_resource_type(resource_type).select do |resource|
-        filter_resource_payload_for_input(resource)
-      end.first
+      payload = resource_body_by_resource_type(resource_type).detect do |resource|
+        filter_resource_payload_for_input(FHIR.from_contents(resource.to_json))
+      end
       skip skip_message(resource_type) if payload.nil?
 
       parse_fhir_resource(payload.to_json)
     end
 
-    def filter_resource_payload_for_input(payload)
+    def filter_resource_payload_for_input(fhir_resource)
       return true unless resource_to_create_filter
 
-      evaluate_fhirpath(payload, resource_to_create_filter)
+      evaluate_fhirpath(fhir_resource, resource_to_create_filter)
     end
 
     def available_resource_id

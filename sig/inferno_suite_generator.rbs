@@ -73,6 +73,7 @@ module InfernoSuiteGenerator
         def rewrite_profile_url: () -> Hash[String, untyped]
         def extra_imports: () -> Array[String]
         def rewrite_igs: () -> String
+        def resource_to_create_filter: (String resource_type, String profile_url) -> String
       end
 
       module Extractors
