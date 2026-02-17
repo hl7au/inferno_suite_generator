@@ -11,13 +11,13 @@ Gem::Specification.new do |spec|
   spec.summary = "A Ruby gem for automatically generating test suites for FHIR Implementation Guides"
   spec.description = "Simplifies creating test suites to validate FHIR resources against Implementation Guides. " \
                      "Analyzes IG packages and generates Ruby test classes for the Inferno testing framework."
-  spec.homepage = "https://github.com/beda-software/inferno_suite_generator"
-  spec.license = "MIT"
+  spec.homepage = "https://github.com/hl7au/inferno_suite_generator"
+  spec.license = "Apache-2.0"
   spec.required_ruby_version = "= 3.3.6"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/beda-software/inferno_suite_generator"
-  spec.metadata["changelog_uri"] = "https://github.com/beda-software/inferno_suite_generator/blob/main/CHANGELOG.md"
+  spec.metadata["source_code_uri"] = "https://github.com/hl7au/inferno_suite_generator"
+  spec.metadata["changelog_uri"] = "https://github.com/hl7au/inferno_suite_generator/blob/main/CHANGELOG.md"
   spec.metadata["rubygems_mfa_required"] = "true"
 
   # Specify which files should be added to the gem when it is released.

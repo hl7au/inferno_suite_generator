@@ -353,7 +353,7 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/beda-s
 
 ## Changelog
 
-See [CHANGELOG.md](https://github.com/beda-software/inferno_suite_generator/blob/main/CHANGELOG.md) for version history.
+See [CHANGELOG.md](https://github.com/hl7au/inferno_suite_generator/blob/main/CHANGELOG.md) for version history.
 
 ## License
 
