@@ -22,10 +22,6 @@ module InfernoSuiteGenerator
       def destroy_instance(url)
         entities.delete(get_instance(url))
       end
-
-      def normalize_reference_mapping_item(resource_type, resource_ids)
-        resource_ids.map { |resource_id| "#{resource_type}/#{resource_id}" }
-      end
     end
 
     def initialize(url, references = {})
@@ -57,9 +53,7 @@ module InfernoSuiteGenerator
     end
 
     def add_references_from_input(input)
-      JSON.parse(input).each do |resource_type, resource_ids|
-        add_references(self.class.normalize_reference_mapping_item(resource_type, resource_ids))
-      end
+      add_references(JSON.parse(input))
     end
   end
 end
