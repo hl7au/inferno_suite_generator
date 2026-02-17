@@ -90,6 +90,13 @@ module InfernoSuiteGenerator
           )
         end
 
+        def resource_to_create_filter(resource_type, profile_url)
+          resolve_profile_resource_value(
+            "configs&.profiles&.#{profile_url}&.resources_to_create_filter",
+            "configs&.resources&.#{resource_type}&.resources_to_create_filter"
+          )
+        end
+
         def rewrite_igs
           get("suite.rewrite_igs")
         end

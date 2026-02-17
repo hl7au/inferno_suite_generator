@@ -56,3 +56,6 @@ exclude_paths:
   - 'lib/inferno_suite_generator/test_modules/basic_test.rb'
   - 'lib/inferno_suite_generator/test_modules/patch_test.rb'
   - 'lib/inferno_suite_generator/test_modules/update_test.rb'
+  - 'test/set_by_path_test.rb'
+  - 'test/create_test_update_resource_by_references_test.rb'
+  - 'test/create_test_initiate_references_keeper_test.rb'

@@ -25,10 +25,14 @@ The project is organized into several key components:
 - **Main Generator** (`lib/inferno_suite_generator.rb`): Orchestrates the entire generation process
 - **Metadata Extractors** (`lib/inferno_suite_generator/extractors/`): Extract information from FHIR IGs
 - **Test Generators** (`lib/inferno_suite_generator/generators/`): Create specific types of tests
-- **Configuration System** (`lib/inferno_suite_generator/core/generator_config_keeper.rb`): Manages settings and customizations
+- **Configuration System** (`lib/inferno_suite_generator/core/`): `GeneratorConfigKeeper` and config submodules (`config/getters.rb`, `config/extractors.rb`, `config/generators.rb`, `config/constants.rb`, `config/utils.rb`) manage settings and customizations
 - **Template System** (`lib/inferno_suite_generator/templates/`): Uses ERB templates to generate Ruby code
 - **Test Modules** (`lib/inferno_suite_generator/test_modules/`): Provide common functionality for generated tests
 - **Utilities** (`lib/inferno_suite_generator/utils/`): Helper functions and constants
+
+## Requirements
+
+- Ruby 3.3.6 (see `inferno_suite_generator.gemspec`)
 
 ## Installation
 
@@ -79,8 +83,9 @@ This will:
 The generator follows these steps:
 
 1. **Load IG Package**: Loads the FHIR Implementation Guide package
-2. **Extract Metadata**: Extracts information about resources, profiles, and search parameters
-3. **Generate Tests**: Creates various types of tests based on the metadata
+2. **Extract Metadata**: Extracts information about resources, profiles, and search parameters (writes `metadata.yml`)
+3. **Extract Demodata**: Extracts IG example/demo data used by create/update/patch tests (writes `demodata.yml`)
+4. **Generate Tests**: Creates various types of tests based on the metadata
    - Search tests (including specialized search types)
    - Read tests
    - Provenance revinclude search tests
@@ -91,9 +96,9 @@ The generator follows these steps:
    - Create tests
    - Update tests
    - Patch tests
-4. **Generate Groups**: Organizes tests into groups by resource type
-5. **Generate Suites**: Creates a test suite that includes all the groups
-6. **Integrate with Inferno**: Adds the generated suite to the main Inferno application
+5. **Generate Groups**: Organizes tests into groups by resource type
+6. **Generate Suites**: Creates a test suite that includes all the groups
+7. **Integrate with Inferno**: Adds the generated suite to the main Inferno application
 
 ## Configuration
 
@@ -307,7 +312,7 @@ Run the generator with your configuration file:
 docker run -v $(pwd):/data ghcr.io/beda-software/inferno_suite_generator:latest /data/config.json
 ```
 
-This mounts your current directory to `/data` in the container and runs the generator with your configuration file.
+This mounts your current directory to `/data` in the container and runs the generator with your configuration file. The image passes the first argument as the config path; for multiple config files (base + overrides), use the Ruby API instead.
 
 #### Building the Docker Image Locally
 
@@ -327,11 +332,13 @@ docker run -v $(pwd):/data inferno_suite_generator /data/config.json
 
 The project uses GitHub Actions for continuous integration:
 
-- Code style: RuboCop, Reek, and Fasterer checks run on pushes and pull requests.
-- Type checking: Steep type checking.
-- Tests: The test suite runs to validate functionality.
+- **Lint**: RuboCop (`make docker-lint`)
+- **Reek**: Code smell checks (`make docker-reek`)
+- **Fasterer**: Performance checks (`make docker-fasterer`)
+- **Type checking**: Steep (`make docker-typecheck`)
+- **Tests**: Rake test suite (`make docker-tests`)
 
-These jobs use Make targets (docker-lint, docker-reek, docker-fasterer, docker-typecheck, docker-tests) to execute within consistent environments.
+All CI steps run in Docker via these Make targets for a consistent environment. Local alternatives: `make lint`, `make reek`, `make fasterer`, `make typecheck`, `make tests`; or `make check` to run all.
 
 ## Contributing
 
@@ -343,6 +350,10 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/beda-s
 2. **Maintain separation of concerns**: Keep generators focused on single responsibilities
 3. **Preserve the template method pattern**: Override specific methods rather than changing the overall algorithm
 4. **Update templates appropriately**: Ensure any changes are reflected in templates
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/hl7au/inferno_suite_generator/blob/main/CHANGELOG.md) for version history.
 
 ## License
 

@@ -3,6 +3,7 @@
 require "fhir_models"
 require "inferno/ext/fhir_models"
 
+require_relative "inferno_suite_generator/utils/set_by_path"
 require_relative "inferno_suite_generator/core/ig_loader"
 require_relative "inferno_suite_generator/extractors/ig_metadata_extractor"
 require_relative "inferno_suite_generator/extractors/ig_demodata_extractor"
@@ -66,7 +67,7 @@ module InfernoSuiteGenerator
     end
 
     def extract_demodata
-      self.ig_demodata = IGDemodataExtractor.new(ig_resources).extract
+      self.ig_demodata = IGDemodataExtractor.new(ig_resources, ig_metadata).extract
 
       FileUtils.mkdir_p(base_output_dir)
       File.write(File.join(base_output_dir, "demodata.yml"), YAML.dump(ig_demodata.to_hash))

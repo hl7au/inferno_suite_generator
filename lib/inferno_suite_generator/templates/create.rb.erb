@@ -1,4 +1,5 @@
 require 'inferno_suite_generator/test_modules/create_test'
+require 'inferno_suite_generator/utils/references_keeper'
 
 module <%= suite_module_name %>
   module <%= module_name %>
@@ -7,6 +8,14 @@ module <%= suite_module_name %>
 
       title '(<%= conformance_expectation %>) Server returns correct <%= resource_type %> resource from <%= resource_type %> create interaction'
       description 'A server <%= conformance_expectation %> support the <%= resource_type %> create interaction.'
+
+      <% if references_mapping_should_be_shown? %>
+      input :references_mapping_input,
+            title: 'References Mapping',
+            description: 'Mapping of references to the create resource. Format: ["Patient/patient_id1", "Medication/medication_id1"]',
+            type: 'textarea',
+            optional: true
+      <% end %>
 
       id :<%= test_id %>
 
@@ -24,6 +33,19 @@ module <%= suite_module_name %>
 
       def resource_type
         '<%= resource_type %>'
+      end
+
+      def references_keeper
+        @rerefences_keeper = InfernoSuiteGenerator::ReferencesKeeper.get_or_create_instance(url)
+      end
+
+      def resource_to_create_filter
+        <% if resource_to_create_filter %>
+        # This is a FHIRPath expression that will be used to filter the resources to create.
+        '<%= resource_to_create_filter %>'
+        <% else %>
+        nil
+        <% end %>
       end
 
       run do

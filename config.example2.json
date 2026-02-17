@@ -62,6 +62,9 @@
             "extractor_type": "must_support"
           }
         ]
+      },
+      "https://smartforms.csiro.au/ig/StructureDefinition/SHCAllergyIntolerance": {
+        "resources_to_create_filter": "MedicationStatement.medicationCodeableConcept.exists()"
       }
     },
     "resources": {
@@ -70,6 +73,9 @@
       },
       "DiagnosticReport": {
         "skip": true
+      },
+      "MedicationStatement": {
+        "resources_to_create_filter": "MedicationStatement.medicationCodeableConcept.exists()"
       }
     }
   }

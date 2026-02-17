@@ -47,6 +47,14 @@ module InfernoSuiteGenerator
         build_input_data
       end
 
+      def references_mapping_should_be_shown?
+        group_metadata.references.present?
+      end
+
+      def resource_to_create_filter
+        config.resource_to_create_filter(group_metadata.resource, group_metadata.profile_url) || nil
+      end
+
       private
 
       def read_input_data

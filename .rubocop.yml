@@ -52,9 +52,21 @@ AllCops:
     - 'lib/inferno_suite_generator/test_modules/patch_test.rb'
     - 'lib/inferno_suite_generator/generators/update_test_generator.rb'
     - 'lib/inferno_suite_generator/test_modules/basic_test.rb'
+    - 'lib/inferno_suite_generator/test_modules/create_test.rb'
+    - 'test/set_by_path_test.rb'
+    - 'test/create_test_update_resource_by_references_test.rb'
+    - 'test/create_test_initiate_references_keeper_test.rb'
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+Metrics/ModuleLength:
+  Exclude:
+    - lib/inferno_suite_generator/utils/set_by_path.rb
+
+Metrics/MethodLength:
+  Exclude:
+    - lib/inferno_suite_generator/utils/set_by_path.rb

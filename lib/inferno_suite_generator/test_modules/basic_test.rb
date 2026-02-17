@@ -18,12 +18,21 @@ module InfernoSuiteGenerator
     def_delegators "self.class", :demodata, :metadata
 
     NOT_FOUND_STATUS = 404
+    ATTEMPTS_TO_GET_ENTRIES = 10.freeze
 
     def resource_payload_for_input
-      payload = resource_body_by_resource_type(resource_type).first
+      payload = resource_body_by_resource_type(resource_type).detect do |resource|
+        filter_resource_payload_for_input(FHIR.from_contents(resource.to_json))
+      end
       skip skip_message(resource_type) if payload.nil?
 
       parse_fhir_resource(payload.to_json)
+    end
+
+    def filter_resource_payload_for_input(fhir_resource)
+      return true unless resource_to_create_filter
+
+      evaluate_fhirpath(resource: fhir_resource, path: resource_to_create_filter)
     end
 
     def available_resource_id
@@ -80,6 +89,12 @@ module InfernoSuiteGenerator
     end
 
     def resource_body_by_resource_type(resource_type)
+      # NOTE: This method should be more complex. We should try to read CapabilityStatement of the server
+      # to identify the ability to search resources.
+      # 1. Check if there is any supported references for this resource type/profile;
+      # 2. If there is any supported references, then we need to check CapabilityStatement to ability to search these references resources;
+      # 3. If the search is available, then we need to get references of the available resources on server;
+      # 4. Then we need to add references to the resource body for each resource in the list.
       resources_by_resource_type = resource_body_list[resource_type] || []
       if resources_by_resource_type.empty?
         warning "No #{resource_type} resources appear to be available."
@@ -101,6 +116,15 @@ module InfernoSuiteGenerator
       end
 
       resource_filtered_by_profile
+    end
+
+    def any_profile_matches_with_target_profiles(resource, target_profiles)
+      return false if resource.meta.nil?
+      return false if resource.meta.profile.nil?
+
+      resource.meta.profile.any? do |profile|
+        target_profiles.include?(profile)
+      end
     end
 
     def resource_body_list

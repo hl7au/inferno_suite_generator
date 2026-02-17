@@ -27,6 +27,15 @@ module <%= suite_module_name %>
         @metadata ||= InfernoSuiteGenerator::Generator::GroupMetadata.new(YAML.load_file(File.join(__dir__, 'metadata.yml'), aliases: true))
       end
 
+      def resource_to_create_filter
+        <% if resource_to_create_filter %>
+        # This is a FHIRPath expression used to filter the resource payload for update (UpdateNew).
+        '<%= resource_to_create_filter %>'
+        <% else %>
+        nil
+        <% end %>
+      end
+
       run do
         <%= executor %>
       end

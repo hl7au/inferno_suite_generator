@@ -62,6 +62,10 @@ module InfernoSuiteGenerator
         current_update_test_data["executor"] if current_update_test_data
       end
 
+      def resource_to_create_filter
+        config.resource_to_create_filter(group_metadata.resource, group_metadata.profile_url) || nil
+      end
+
       private
 
       def current_update_test_data

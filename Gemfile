@@ -29,3 +29,5 @@ group :development do
   gem "rubocop-rake", require: false
   gem "steep", "~> 1.10"
 end
+
+gem "yard", "~> 0.9.38"

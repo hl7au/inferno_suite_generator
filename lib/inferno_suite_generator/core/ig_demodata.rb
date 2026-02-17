@@ -8,7 +8,7 @@ module InfernoSuiteGenerator
     # resource IDs, full resource bodies, and partial resource bodies for PATCH operations.
     # It provides a structured way to organize and access demo data used in testing workflows.
     class IGDemodata
-      attr_accessor :resource_ids, :resource_body_list, :patch_body_list
+      attr_accessor :resource_ids, :resource_body_list, :patch_body_list, :resource_types_to_search
 
       def initialize(data = nil)
         return unless data
@@ -16,13 +16,15 @@ module InfernoSuiteGenerator
         @resource_ids = extract_value(data, "resource_ids", :resource_ids)
         @resource_body_list = extract_value(data, "resource_body_list", :resource_body_list)
         @patch_body_list = extract_value(data, "patch_body_list", :patch_body_list)
+        @resource_types_to_search = extract_value(data, "resource_types_to_search", :resource_types_to_search)
       end
 
       def to_hash
         {
           resource_ids:,
           resource_body_list:,
-          patch_body_list:
+          patch_body_list:,
+          resource_types_to_search:
         }
       end
 
