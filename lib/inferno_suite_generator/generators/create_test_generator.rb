@@ -51,6 +51,10 @@ module InfernoSuiteGenerator
         group_metadata.references.present?
       end
 
+      def resource_to_create_filter
+        config.resource_to_create_filter(group_metadata.resource, group_metadata.profile_url) || nil
+      end
+
       private
 
       def read_input_data

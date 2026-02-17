@@ -39,6 +39,15 @@ module <%= suite_module_name %>
         @rerefences_keeper = InfernoSuiteGenerator::ReferencesKeeper.get_or_create_instance(url)
       end
 
+      def resource_to_create_filter
+        <% if resource_to_create_filter %>
+        # This is a FHIRPath expression that will be used to filter the resources to create.
+        '<%= resource_to_create_filter %>'
+        <% else %>
+        nil
+        <% end %>
+      end
+
       run do
         perform_create_test
       end
