@@ -393,6 +393,7 @@ GEM
     unicode-display_width (2.6.0)
     unicode_utils (1.4.0)
     uri (1.0.3)
+    yard (0.9.38)
     zeitwerk (2.7.3)
 
 PLATFORMS
@@ -427,6 +428,7 @@ DEPENDENCIES
   rubocop-rake
   simplecov
   steep (~> 1.10)
+  yard (~> 0.9.38)
 
 RUBY VERSION
    ruby 3.3.6p108
