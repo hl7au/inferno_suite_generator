@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    inferno_suite_generator (0.1.0)
+    inferno_suite_generator (1.0.0)
       deep_merge (~> 1.2, >= 1.2.2)
       inferno_core (>= 0.6.1)
       jsonpath (~> 1.1, >= 1.1.5)
