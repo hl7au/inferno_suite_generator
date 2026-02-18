@@ -1,6 +1,5 @@
 require 'base64'
 require 'inferno/dsl/oauth_credentials'
-require 'inferno_suite_generator/version'
 require 'inferno_suite_generator/utils/helpers'
 require_relative '../../version'
 <% imports.each do |import| %> <%= import %>
@@ -20,7 +19,7 @@ module <%= suite_module_name %>
         HL7® FHIR® resources are validated with the Java validator using
         <%= tx_server_url %> as the terminology server.
 
-        The test suite is generated using the [InfernoSuiteGenerator](https://github.com/hl7au/inferno_suite_generator) gem version <%= InfernoSuiteGenerator::VERSION %>.
+        The test suite is generated using the [InfernoSuiteGenerator](https://github.com/hl7au/inferno_suite_generator) gem version <%= generator_version %>.
       )
       version VERSION
 

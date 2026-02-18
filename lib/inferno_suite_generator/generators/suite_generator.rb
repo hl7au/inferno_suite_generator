@@ -3,6 +3,7 @@
 require_relative "../utils/naming"
 require_relative "basic_test_generator"
 require_relative "../utils/registry"
+require_relative "../version"
 
 module InfernoSuiteGenerator
   class Generator
@@ -25,6 +26,10 @@ module InfernoSuiteGenerator
 
       def version_specific_message_filters
         []
+      end
+
+      def generator_version
+        VERSION
       end
 
       def base_output_file_name
