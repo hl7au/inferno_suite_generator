@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
-require "jsonpath"
-
 require_relative "../utils/assert_helpers"
 
 module InfernoSuiteGenerator
-  # Module for validating FHIR resources against profiles and checking for data absent reason codes/extensions.
+  # @!group ValidationTest
+  # Provides methods for validating FHIR resources against profile conformance requirements, including checks
+  # for expected structure, profile compliance, and the presence of data-absent-reason codes or extensions.
+  # This module is intended to be included in test classes that require automated FHIR resource validation.
   module ValidationTest
     include AssertHelpers
 
@@ -49,17 +50,24 @@ module InfernoSuiteGenerator
       assert !errors_found, "Resource does not conform to the profile #{profile_with_version}"
     end
 
+    # Filters resources using FHIRPath expressions.
+    #
+    # @param config [ValidationConfig] Validation configuration containing resources to filter.
+    # @param filter_set [Array<Array<Hash>>] Array of arrays of filter criteria. Each inner array represents
+    #   a set of AND conditions (all must match for a resource), and the outer array represents OR conditions
+    #   (a resource matches if any set of AND conditions is satisfied).
+    #   Each filter criterion is a Hash with:
+    #     - 'expression' [String]: a FHIRPath expression
+    #     - 'value' [Object]: the expected value for that expression on the resource
+    # @return [Array<FHIR::Model>] Array of resources that match the filter criteria.
+    #
+    # @example filter_set
+    #   [
+    #     [{ 'expression' => 'code.coding.where(system="http://loinc.org").code', 'value' => '8302-2' }],
+    #     [{ 'expression' => 'code.coding.where(system="http://snomed.info/sct").code', 'value' => '50373000' }]
+    #   ]
+    #   # This filter_set will select Observations with LOINC code 8302-2 OR SNOMED code 50373000.
     def filtered_resources(config, filter_set)
-      # Filter resources using JSONPath expressions.
-      # Filter_set is the array of arrays of JSONPath expressions with target values.
-      # The first layer of an array is means OR condition.
-      # The second layer of an array is means AND condition.
-      # NOTE: Example of filter_set
-      # [
-      #   [{ 'expression' => "$.code.coding[?(@.system == 'http://loinc.org')].code", 'value' => '8302-2' }],
-      #   [{ 'expression' => "$.code.coding[?(@.system == 'http://snomed.info/sct')].code", 'value' => '50373000' }]
-      # ]
-      # This filter_set means that we should get Observations with LOINC code 8302-2 or SNOMED code 50373000.
       if filter_set.empty?
         config.resources
       else
