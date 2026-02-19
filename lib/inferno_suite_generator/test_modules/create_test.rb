@@ -74,6 +74,8 @@ module InfernoSuiteGenerator
       info "Requests before: #{requests.count}"
       fhir_search(resource_type, tags: ["must-be-hidden"])
       info "Requests after: #{requests.count}"
+      requests << requests.delete_at(-1)
+      info "Requests after delete: #{requests.count}"
       unless response[:status] == SUCCESS_RESPONSE_STATUS
         info "Can't search for #{resource_type} resources. Skipping this resource type..."
         return nil
