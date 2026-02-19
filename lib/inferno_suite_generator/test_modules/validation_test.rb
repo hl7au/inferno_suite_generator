@@ -92,7 +92,7 @@ module InfernoSuiteGenerator
       info "Evaluating FHIRPath expression #{path} on resource #{resource.id}"
       result = evaluate_fhirpath(resource:, path:)
       info "Result: #{result}"
-      return result.first if result.any?
+      return result.first.element if result.any?
 
       nil
     end
