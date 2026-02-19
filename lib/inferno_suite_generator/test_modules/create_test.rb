@@ -72,7 +72,8 @@ module InfernoSuiteGenerator
 
     def search_bundle_for_resource_type(resource_type)
       info "Requests before: #{requests.count}"
-      fhir_search(resource_type, tags: ["must-be-hidden"])
+      temp_response = fhir_search(resource_type, tags: ["must-be-hidden"])
+      info "Response: #{temp_response.inspect}"
       info "Requests after: #{requests.count}"
       requests.delete_at(-1)
       info "Requests after delete: #{requests.count}"
