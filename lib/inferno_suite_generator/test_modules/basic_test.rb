@@ -32,7 +32,7 @@ module InfernoSuiteGenerator
     def filter_resource_payload_for_input(fhir_resource)
       return true unless resource_to_create_filter
 
-      evaluate_fhirpath(resource: fhir_resource, path: resource_to_create_filter)
+      evaluate_fhirpath(resource: fhir_resource, path: resource_to_create_filter).any?
     end
 
     def available_resource_id

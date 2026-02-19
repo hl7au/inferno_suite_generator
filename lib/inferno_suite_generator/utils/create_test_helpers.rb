@@ -67,7 +67,7 @@ module InfernoSuiteGenerator
       # @return [Boolean] true if the path is present and has a value, false otherwise
       def path_present_in_resource?(path, resource)
         fhirpath_string = ReferencePath.new(path).to_fhirpath_string
-        evaluate_fhirpath(resource:, path: fhirpath_string).present?
+        evaluate_fhirpath(resource:, path: fhirpath_string).any?
       end
 
       # Finds the reference config for a path and builds a [path, value, datatype] tuple if applicable.
