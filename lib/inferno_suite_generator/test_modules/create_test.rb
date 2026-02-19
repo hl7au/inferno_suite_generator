@@ -50,8 +50,9 @@ module InfernoSuiteGenerator
     end
 
     def add_references_from_server
+      resources_to_search = resources_available_for_search
       filtered_demodata = demodata.resource_types_to_search.select do |resource_type|
-        resources_available_for_search.include?(resource_type)
+        resources_to_search.include?(resource_type)
       end
       filtered_demodata.each do |resource_type|
         bundle = fetch_valid_bundle_for_resource_type(resource_type)
