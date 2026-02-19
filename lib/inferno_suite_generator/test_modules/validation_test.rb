@@ -70,13 +70,21 @@ module InfernoSuiteGenerator
     def filterset_on_resource?(resource, filter_set)
       filter_set.map do |or_filter|
         or_filter.map do |and_filter|
-          jsonpath_on_resource(and_filter["expression"], resource) == and_filter["value"]
+          evaluate_fhirpath_first_or_nil(resource, and_filter["expression"]) == and_filter["value"]
         end.all?
       end.any?
     end
 
-    def jsonpath_on_resource(jsonpath_string, resource)
-      JsonPath.new(jsonpath_string).first(resource.to_hash)
+    # Returns the first result of evaluating a FHIRPath expression on a resource, or nil if no result.
+    #
+    # @param resource [FHIR::Model] The FHIR resource to evaluate the path against.
+    # @param path [String] The FHIRPath expression to evaluate.
+    # @return [Object, nil] The first value returned from the FHIRPath evaluation, or nil if none is found.
+    def evaluate_fhirpath_first_or_nil(resource, path)
+      result = evaluate_fhirpath(resource:, path:)
+      return result.first if result.any?
+
+      nil
     end
 
     def check_for_dar(resource)
