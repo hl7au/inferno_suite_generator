@@ -81,9 +81,7 @@ module InfernoSuiteGenerator
       end
       response_body = fhir_req.response_body
       info "Response body: #{response_body.inspect}"
-      parsed_body = JSON.parse(response_body)
-      info "Parsed body: #{parsed_body.inspect}"
-      bundle = FHIR.from_contents(parsed_body)
+      bundle = FHIR.from_contents(response_body)
       info "Bundle: #{bundle.inspect}"
       bundle
     end
