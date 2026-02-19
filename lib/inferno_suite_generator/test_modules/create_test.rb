@@ -71,13 +71,13 @@ module InfernoSuiteGenerator
     end
 
     def search_bundle_for_resource_type(resource_type)
-      response = fhir_search(resource_type)
+      fhir_req = fhir_search(resource_type)
       requests.delete_at(-1)
-      unless response.status == SUCCESS_RESPONSE_STATUS
+      unless fhir_req.status == SUCCESS_RESPONSE_STATUS
         info "Can't search for #{resource_type} resources. Skipping this resource type..."
         return nil
       end
-      FHIR.from_contents(JSON.parse(response.body))
+      FHIR.from_contents(JSON.parse(fhir_req.response_body))
     end
 
     def valid_bundle_for_references?(bundle, resource_type)
