@@ -89,7 +89,9 @@ module InfernoSuiteGenerator
     # @param path [String] The FHIRPath expression to evaluate.
     # @return [Object, nil] The first value returned from the FHIRPath evaluation, or nil if none is found.
     def evaluate_fhirpath_first_or_nil(resource, path)
+      info "Evaluating FHIRPath expression #{path} on resource #{resource.id}"
       result = evaluate_fhirpath(resource:, path:)
+      info "Result: #{result}"
       return result.first if result.any?
 
       nil
