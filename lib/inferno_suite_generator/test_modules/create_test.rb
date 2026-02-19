@@ -71,17 +71,13 @@ module InfernoSuiteGenerator
     end
 
     def search_bundle_for_resource_type(resource_type)
-      info "Requests before: #{requests.count}"
-      temp_response = fhir_search(resource_type, tags: ["must-be-hidden"])
-      info "Response: #{temp_response.inspect}"
-      info "Requests after: #{requests.count}"
+      response = fhir_search(resource_type)
       requests.delete_at(-1)
-      info "Requests after delete: #{requests.count}"
-      unless response[:status] == SUCCESS_RESPONSE_STATUS
+      unless response.status == SUCCESS_RESPONSE_STATUS
         info "Can't search for #{resource_type} resources. Skipping this resource type..."
         return nil
       end
-      resource
+      FHIR.from_contents(JSON.parse(response.body))
     end
 
     def valid_bundle_for_references?(bundle, resource_type)
