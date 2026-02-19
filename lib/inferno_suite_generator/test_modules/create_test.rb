@@ -4,6 +4,7 @@ require_relative "basic_test"
 require_relative "../utils/set_by_path"
 require_relative "../utils/create_test_helpers"
 require_relative "../decorators/capability_statement_decorator"
+require "json"
 
 module InfernoSuiteGenerator
   # Module handles sending FHIR resource instances
@@ -72,12 +73,19 @@ module InfernoSuiteGenerator
 
     def search_bundle_for_resource_type(resource_type)
       fhir_req = fhir_search(resource_type)
+      info "FHIR request: #{fhir_req.inspect}"
       requests.delete_at(-1)
       unless fhir_req.status == SUCCESS_RESPONSE_STATUS
         info "Can't search for #{resource_type} resources. Skipping this resource type..."
         return nil
       end
-      FHIR.from_contents(JSON.parse(fhir_req.response_body))
+      response_body = fhir_req.response_body
+      info "Response body: #{response_body.inspect}"
+      parsed_body = JSON.parse(response_body)
+      info "Parsed body: #{parsed_body.inspect}"
+      bundle = FHIR.from_contents(parsed_body)
+      info "Bundle: #{bundle.inspect}"
+      bundle
     end
 
     def valid_bundle_for_references?(bundle, resource_type)
