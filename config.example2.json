@@ -68,6 +68,9 @@
       }
     },
     "resources": {
+      "Observation": {
+        "keep_all_resources_on_search": true
+      },
       "Medication": {
         "skip": true
       },

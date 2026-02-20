@@ -2,6 +2,7 @@
 
 require_relative "constants"
 require_relative "utils"
+require_relative "../../utils/getter_entity"
 
 module InfernoSuiteGenerator
   class Generator

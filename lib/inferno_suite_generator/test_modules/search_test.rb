@@ -23,6 +23,7 @@ module InfernoSuiteGenerator
                    :search_param_names,
                    :saves_delayed_references?,
                    :first_search?,
+                   :saves_resources_to_scratch?,
                    :fixed_value_search?,
                    :possible_status_search?,
                    :test_medication_inclusion?,
@@ -196,7 +197,7 @@ module InfernoSuiteGenerator
       filter_conditions(resources_returned) if resource_type == "Condition" && metadata.version == "v5.0.1"
       filter_devices(resources_returned) if resource_type == "Device"
 
-      if first_search?
+      if saves_resources_to_scratch?
         all_scratch_resources.concat(resources_returned).uniq!
         scratch_resources_for_patient(patient_id).concat(resources_returned).uniq!
       end

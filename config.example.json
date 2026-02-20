@@ -73,6 +73,9 @@
       ]
     },
     "profiles": {
+      "http://hl7.org.au/fhir/core/StructureDefinition/au-core-observation": {
+        "keep_all_resources_on_search": true
+      },
       "http://hl7.org.au/fhir/core/StructureDefinition/au-core-bodyweight": {
         "register_extractors": [
           {

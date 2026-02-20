@@ -191,6 +191,7 @@ The configuration file (`config.json`) controls how the generator works. Pass an
     },
     "resources": {
       "Observation": {
+        "keep_all_resources_on_search": true,
         "forced_initial_search": ["patient", "code"],
         "search_param": {
           "clinical-date": {
@@ -275,10 +276,12 @@ Note: Module names and paths are derived from `suite.title`; you do not need to 
     - `comparators`: Allowed comparators for that param
     - `expectation_change`: `{ from: "SHALL", to: "SHOULD" }`
   - `must_support.remove_elements`: Optional removal rules for must support
+  - `keep_all_resources_on_search`: When `true`, every search for this profile saves all returned resources to scratch (for use by later tests). When unset or `false`, only the first search in the sequence saves to scratch.
 - `resources`: Per-resource overrides (keyed by resource type)
   - All the same options as `profiles` (without profile URL)
   - `search_multiple_or_and_by_target_resource`: Configure multi-OR/AND behavior for target resource params
   - `search.test_medication_inclusion`: Enable special include tests for Medication where applicable
+  - `keep_all_resources_on_search`: When `true`, every search for this resource saves all returned resources to scratch (same behavior as under `profiles`).
 
 ## Development
 

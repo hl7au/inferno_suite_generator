@@ -18,9 +18,16 @@ module InfernoSuiteGenerator
       end
     end
 
+    def saves_resources_to_scratch?
+      first_search? || Registry.get(:config_keeper).keep_all_resources_on_search?(
+        group_metadata.profile_url, group_metadata.resource
+      )
+    end
+
     def simple_search_test_configs
       [
         { property: :first_search, value: "true", condition: first_search? },
+        { property: :saves_resources_to_scratch, value: "true", condition: saves_resources_to_scratch? },
         { property: :fixed_value_search, value: "true", condition: fixed_value_search? },
         { property: :resource_type, value: "'#{resource_type}'", condition: true },
         { property: :search_param_names, value: search_param_names, condition: true },

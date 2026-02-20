@@ -6,6 +6,7 @@ module InfernoSuiteGenerator
       resource_type
       search_param_names
       first_search
+      saves_resources_to_scratch
       fixed_value_search
       saves_delayed_references
       possible_status_search
@@ -38,6 +39,10 @@ module InfernoSuiteGenerator
 
     def first_search?
       !!first_search
+    end
+
+    def saves_resources_to_scratch?
+      !!saves_resources_to_scratch
     end
 
     def fixed_value_search?

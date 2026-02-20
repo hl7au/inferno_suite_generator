@@ -36,7 +36,8 @@ module InfernoSuiteGenerator
   # ]
   class FilterSet
     # @param filter_set [Array<Array<Hash>>] filter structure (OR of AND conditions)
-    # @param fhirpath_evaluator [Object] object that responds to evaluate_fhirpath(resource:, path:), e.g. the test instance
+    # @param fhirpath_evaluator [Object] object that responds to evaluate_fhirpath(resource:, path:),
+    #  e.g. the test instance
     def initialize(filter_set, fhirpath_evaluator:)
       @filter_set = filter_set
       @fhirpath_evaluator = fhirpath_evaluator

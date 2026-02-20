@@ -3,6 +3,7 @@
 require_relative "constants"
 require_relative "utils"
 require_relative "getters"
+require_relative "../../utils/getter_entity"
 require_relative "../../utils/generic"
 
 module InfernoSuiteGenerator
@@ -106,11 +107,11 @@ module InfernoSuiteGenerator
         end
 
         def test_medication_inclusion?(profile_url, resource_type)
-          # NOTE: This attribute of the config should be changed for something generic
-          resolve_profile_resource_value(
-            "configs&.profiles&.#{profile_url}&.search&.test_medication_inclusion",
-            "configs&.resources&.#{resource_type}&.search&.test_medication_inclusion"
-          )
+          GetterEntity.new(profile_url, resource_type, "search&.test_medication_inclusion", false).resolve_value
+        end
+
+        def keep_all_resources_on_search?(profile_url, resource_type)
+          GetterEntity.new(profile_url, resource_type, "keep_all_resources_on_search", false).resolve_value
         end
 
         def process_include_search(result, resource, search)

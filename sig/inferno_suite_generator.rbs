@@ -111,6 +111,7 @@ module InfernoSuiteGenerator
         def read_test_ids_inputs: (String profile_url, String resource_type) -> (Hash[String, String] | nil)
         def search_test_ids_inputs: (String profile_url, String resource_type, Array[String] param_names) -> (Hash[String, String] | nil)
         def test_medication_inclusion?: (String profile_url, String resource_type) -> untyped
+        def keep_all_resources_on_search?: (String profile_url, String resource_type) -> bool
         def process_include_search: (Hash[String, untyped] result, String resource, Hash[String, untyped] search) -> Hash[String, untyped]
         def special_includes_cases: (String profile_url, String resource) -> Hash[String, untyped]
         def custom_generators: () -> (Array[Hash[String, untyped]] | Array[untyped])
@@ -124,4 +125,9 @@ module InfernoSuiteGenerator
       end
     end
   end
+end
+
+class GetterEntity
+  def initialize: (String profile_url, String resource_type, String path, ?untyped default_value) -> void
+  def resolve_value: () -> untyped
 end
