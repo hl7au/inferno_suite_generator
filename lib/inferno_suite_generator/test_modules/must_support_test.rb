@@ -3,6 +3,7 @@
 require_relative "../utils/fhir_resource_navigation"
 require_relative "../utils/helpers"
 require_relative "../utils/assert_helpers"
+require_relative "../utils/filter_set"
 
 module InfernoSuiteGenerator
   module MustSupportTest
@@ -17,11 +18,12 @@ module InfernoSuiteGenerator
     end
 
     def perform_must_support_test(resources)
-      conditional_skip_with_msg resources.blank?, "No #{resource_type} resources were found"
+      filtered_resources = filter_set.any? ? FilterSet.new(filter_set).filter_resources(resources) : resources
+      conditional_skip_with_msg filtered_resources.blank?, "No #{resource_type} resources were found"
 
-      missing_elements(resources)
-      missing_slices(resources)
-      missing_extensions(resources)
+      missing_elements(filtered_resources)
+      missing_slices(filtered_resources)
+      missing_extensions(filtered_resources)
 
       handle_must_support_choices if metadata.must_supports[:choices].present?
 

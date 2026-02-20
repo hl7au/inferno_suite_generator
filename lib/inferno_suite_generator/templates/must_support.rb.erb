@@ -33,6 +33,14 @@ module <%= suite_module_name %>
         scratch[:<%= profile_identifier %>_resources] ||= {}
       end
 
+      def filter_set
+        <% if filter_set.length.positive? %>
+        <%= filter_set %>
+        <% else %>
+        []
+        <% end %>
+      end
+
       run do
         perform_must_support_test(<%= resource_collection_string %>)
       end
