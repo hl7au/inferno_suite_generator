@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../utils/assert_helpers"
+require_relative "../utils/filter_set"
 
 module InfernoSuiteGenerator
   # @!group ValidationTest
@@ -37,68 +38,25 @@ module InfernoSuiteGenerator
 
     def process_resources(config, profile_version)
       profile_with_version = "#{config.profile_url}|#{profile_version}"
-      filtered_resources = filtered_resources(config, filter_set)
+      filtered_resources = filtered_resources(filter_set, config.resources)
       skip_if filtered_resources.blank?, message_no_resource_found_using_filterset(filter_set)
 
-      filtered_resources.each do |resource|
-        resource_is_valid?(resource:, profile_url: profile_with_version)
-        check_for_dar(resource)
-      end
+      validate_and_check_dar(filtered_resources, profile_with_version)
 
       errors_found = messages.any? { |message| message[:type] == "error" }
 
       assert !errors_found, "Resource does not conform to the profile #{profile_with_version}"
     end
 
-    # Filters resources using FHIRPath expressions.
-    #
-    # @param config [ValidationConfig] Validation configuration containing resources to filter.
-    # @param filter_set [Array<Array<Hash>>] Array of arrays of filter criteria. Each inner array represents
-    #   a set of AND conditions (all must match for a resource), and the outer array represents OR conditions
-    #   (a resource matches if any set of AND conditions is satisfied).
-    #   Each filter criterion is a Hash with:
-    #     - 'expression' [String]: a FHIRPath expression
-    #     - 'value' [Object]: the expected value for that expression on the resource
-    # @return [Array<FHIR::Model>] Array of resources that match the filter criteria.
-    #
-    # @example filter_set
-    #   [
-    #     [{ 'expression' => 'code.coding.where(system="http://loinc.org").code', 'value' => '8302-2' }],
-    #     [{ 'expression' => 'code.coding.where(system="http://snomed.info/sct").code', 'value' => '50373000' }]
-    #   ]
-    #   # This filter_set will select Observations with LOINC code 8302-2 OR SNOMED code 50373000.
-    def filtered_resources(config, filter_set)
-      if filter_set.empty?
-        config.resources
-      else
-        config.resources.select { |resource| filterset_on_resource?(resource, filter_set) }
+    def filtered_resources(filter_set, config)
+      FilterSet.new(filter_set).filter_resources(config.resources)
+    end
+
+    def validate_and_check_dar(resources, profile_url)
+      resources.each do |resource|
+        resource_is_valid?(resource:, profile_url:)
+        check_for_dar(resource)
       end
-    end
-
-    def filterset_on_resource?(resource, filter_set)
-      filter_set.map do |or_filter|
-        or_filter.map do |and_filter|
-          evaluate_fhirpath_first_or_nil(resource, and_filter["expression"]) == and_filter["value"]
-        end.all?
-      end.any?
-    end
-
-    # Returns the first result of evaluating a FHIRPath expression on a resource, or nil if no result.
-    #
-    # @param resource [FHIR::Model] The FHIR resource to evaluate the path against.
-    # @param path [String] The FHIRPath expression to evaluate.
-    # @return [Object, nil] The first value returned from the FHIRPath evaluation, or nil if none is found.
-    def evaluate_fhirpath_first_or_nil(resource, path)
-      info "Evaluating FHIRPath expression #{path} on resource #{resource.id}"
-      result = evaluate_fhirpath(resource:, path:)
-      info "Result: #{result}"
-      return extract_fhirpath_result(result.first) if result.any?
-
-      nil
-    end
-
-    def extract_fhirpath_result(result)
-      result["element"]
     end
 
     def check_for_dar(resource)
