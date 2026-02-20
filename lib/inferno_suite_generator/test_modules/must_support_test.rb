@@ -18,7 +18,7 @@ module InfernoSuiteGenerator
     end
 
     def perform_must_support_test(resources)
-      filtered_resources = filter_set.any? ? FilterSet.new(filter_set).filter_resources(resources) : resources
+      filtered_resources = filter_set.any? ? FilterSet.new(filter_set, fhirpath_evaluator: self).filter_resources(resources) : resources
       conditional_skip_with_msg filtered_resources.blank?, "No #{resource_type} resources were found"
 
       missing_elements(filtered_resources)

@@ -3,10 +3,12 @@
 module InfernoSuiteGenerator
   # Represents a single filter criterion consisting of a FHIRPath expression and an expected value.
   # Used to determine whether a given FHIR resource conforms to a specific filter condition.
+  # Requires an evaluator (e.g. the test instance) that responds to evaluate_fhirpath(resource:, path:).
   class FilterSetEntity
-    def initialize(filter)
+    def initialize(filter, fhirpath_evaluator:)
       @expression = filter["expression"]
       @value = filter["value"]
+      @fhirpath_evaluator = fhirpath_evaluator
     end
 
     def conform_to_filter?(resource)
@@ -16,7 +18,7 @@ module InfernoSuiteGenerator
     private
 
     def evaluate_fhirpath_first_or_nil(resource, path)
-      evaluate_fhirpath(resource:, path:).map { |result| result["element"] }.first
+      @fhirpath_evaluator.evaluate_fhirpath(resource:, path:).map { |result| result["element"] }.first
     end
   end
 
@@ -33,8 +35,11 @@ module InfernoSuiteGenerator
   #   [ { "expression" => FHIRPath, "value" => value }, ... ]
   # ]
   class FilterSet
-    def initialize(filter_set)
+    # @param filter_set [Array<Array<Hash>>] filter structure (OR of AND conditions)
+    # @param fhirpath_evaluator [Object] object that responds to evaluate_fhirpath(resource:, path:), e.g. the test instance
+    def initialize(filter_set, fhirpath_evaluator:)
       @filter_set = filter_set
+      @fhirpath_evaluator = fhirpath_evaluator
     end
 
     def filter_resources(resources)
@@ -53,7 +58,7 @@ module InfernoSuiteGenerator
     # :reek:UtilityFunction
     def all_conditions_true?(conditions, resource)
       conditions.all? do |cond_entity|
-        FilterSetEntity.new(cond_entity).conform_to_filter?(resource)
+        FilterSetEntity.new(cond_entity, fhirpath_evaluator: @fhirpath_evaluator).conform_to_filter?(resource)
       end
     end
   end
