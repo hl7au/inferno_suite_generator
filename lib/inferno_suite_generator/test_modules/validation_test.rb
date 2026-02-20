@@ -49,7 +49,7 @@ module InfernoSuiteGenerator
     end
 
     def filtered_resources(filter_set, resources)
-      FilterSet.new(filter_set).filter_resources(resources)
+      filter_set.any? ? FilterSet.new(filter_set).filter_resources(resources) : resources
     end
 
     def validate_and_check_dar(resources, profile_url)
