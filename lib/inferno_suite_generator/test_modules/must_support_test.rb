@@ -18,12 +18,11 @@ module InfernoSuiteGenerator
     end
 
     def perform_must_support_test(resources)
-      filtered_resources = filter_set.any? ? FilterSet.new(filter_set, fhirpath_evaluator: self).filter_resources(resources) : resources
-      conditional_skip_with_msg filtered_resources.blank?, "No #{resource_type} resources were found"
+      conditional_skip_with_msg resources.blank?, "No #{resource_type} resources were found"
 
-      missing_elements(filtered_resources)
-      missing_slices(filtered_resources)
-      missing_extensions(filtered_resources)
+      missing_elements(resources)
+      missing_slices(resources)
+      missing_extensions(resources)
 
       handle_must_support_choices if metadata.must_supports[:choices].present?
 
