@@ -48,8 +48,8 @@ module InfernoSuiteGenerator
       assert !errors_found, "Resource does not conform to the profile #{profile_with_version}"
     end
 
-    def filtered_resources(filter_set, config)
-      FilterSet.new(filter_set).filter_resources(config.resources)
+    def filtered_resources(filter_set, resources)
+      FilterSet.new(filter_set).filter_resources(resources)
     end
 
     def validate_and_check_dar(resources, profile_url)
