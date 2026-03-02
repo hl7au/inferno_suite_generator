@@ -46,8 +46,9 @@ module InfernoSuiteGenerator
         end
 
         def resolve_value(profile, resource_type, attribute, default_value = nil)
-          profile_string = "configs&.profiles&.#{profile}&.#{attribute}"
-          resource_string = "configs&.resources&.#{resource_type}&.#{attribute}"
+          attribute_path = attribute.to_s.split(".").join("&.")
+          profile_string = "configs&.profiles&.#{profile}&.#{attribute_path}"
+          resource_string = "configs&.resources&.#{resource_type}&.#{attribute_path}"
           resolve_profile_resource_value(profile_string, resource_string, default_value)
         end
 
