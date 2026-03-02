@@ -45,12 +45,14 @@ module InfernoSuiteGenerator
           value.respond_to?(:any?) && value.any?
         end
 
+        def resolve_value(profile, resource_type, attribute, default_value = nil)
+          profile_string = "configs&.profiles&.#{profile}&.#{attribute}"
+          resource_string = "configs&.resources&.#{resource_type}&.#{attribute}"
+          resolve_profile_resource_value(profile_string, resource_string, default_value)
+        end
+
         def first_class_read?(profile_url, resource_type)
-          resolve_profile_resource_value(
-            "configs&.profiles&.#{profile_url}&.first_class_profile",
-            "configs&.resources&.#{resource_type}&.first_class_profile",
-            ""
-          ) == "read"
+          resolve_value(profile_url, resource_type, "first_class_profile", "") == "read"
         end
       end
     end
