@@ -50,6 +50,10 @@ module InfernoSuiteGenerator
           resolve_value(profile_url, resource, "forced_initial_search", EMPTY_ARRAY)
         end
 
+        def keep_all_search_results(profile_url, resource)
+          resolve_value(profile_url, resource, "keep_all_search_results", false)
+        end
+
         def first_search_params(profile_url, resource)
           is_first_class = get_first_class_status(profile_url, resource)
           forced_initial_search = get_forced_initial_search(profile_url, resource)

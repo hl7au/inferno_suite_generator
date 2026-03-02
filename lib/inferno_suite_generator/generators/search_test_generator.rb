@@ -301,6 +301,10 @@ module InfernoSuiteGenerator
         }
       end
 
+      def keep_all_search_results?
+        Registry.get(:config_keeper).keep_all_search_results(group_metadata.profile_url, resource_type)
+      end
+
       private
 
       def needs_ids_input?

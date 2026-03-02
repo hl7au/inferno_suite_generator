@@ -302,6 +302,7 @@
         "skip": true
       },
       "Observation": {
+        "keep_all_search_results": true,
         "forced_initial_search": ["patient", "code"],
         "search_param": {
           "clinical-date": {

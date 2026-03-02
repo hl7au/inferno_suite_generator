@@ -196,7 +196,7 @@ module InfernoSuiteGenerator
       filter_conditions(resources_returned) if resource_type == "Condition" && metadata.version == "v5.0.1"
       filter_devices(resources_returned) if resource_type == "Device"
 
-      if first_search?
+      if first_search? || keep_all_search_results?
         all_scratch_resources.concat(resources_returned).uniq!
         scratch_resources_for_patient(patient_id).concat(resources_returned).uniq!
       end

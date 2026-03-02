@@ -260,6 +260,7 @@ Note: Module names and paths are derived from `suite.title`; you do not need to 
   - `register_generators`: Custom generators to load
     - `path_to_generator`, `generator_class`, `path_to_template`, `test_type`
 - `profiles`: Per-profile overrides (keyed by profile URL)
+  - `keep_all_search_results`: All resources from search tests will be saved into the Inferno scratch
   - `skip`: Skip generating tests for this profile
   - `first_class_profile`: Mark as first-class `read` or `search`
   - `override_executor.search.<param>`: Override executor for specific search param

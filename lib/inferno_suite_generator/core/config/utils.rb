@@ -19,6 +19,9 @@ module InfernoSuiteGenerator
         end
 
         def resolve_profile_resource_value(profile_path, resource_path, default_value = nil)
+          # TODO: This method is not working as expected. We need to fix it.
+          # It should be able to resolve values from both profiles and resources.
+          # But it resolved values from profiles only. Pavel R.
           profile_value = get_new(profile_path, default_value)
           resolved_profile_value = resolve_from_constants(profile_value)
 
