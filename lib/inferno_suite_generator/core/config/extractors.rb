@@ -72,6 +72,10 @@ module InfernoSuiteGenerator
         def filter_set(profile_url, resource_type)
           resolve_value(profile_url, resource_type, "filter_set", EMPTY_ARRAY)
         end
+
+        def elements_to_exclude(profile_url, resource)
+          resolve_value(profile_url, resource, "exclude_elements_from_must_support", EMPTY_ARRAY)
+        end
       end
     end
   end

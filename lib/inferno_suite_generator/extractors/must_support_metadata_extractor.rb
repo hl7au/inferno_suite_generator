@@ -17,10 +17,13 @@ module InfernoSuiteGenerator
       end
 
       def must_supports
+        ms_elements_to_exclude = config.elements_to_exclude(profile.url, resource)
+        ms_elements = must_support_elements.reject { |element| ms_elements_to_exclude.include?(element[:path]) }
+        
         @must_supports = {
           extensions: must_support_extensions,
           slices: must_support_slices,
-          elements: must_support_elements
+          elements: ms_elements
         }
 
         @must_supports
