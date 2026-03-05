@@ -202,7 +202,14 @@ module InfernoSuiteGenerator
 
             current_element_values_match =
               current_element_value_definitions
-              .all? { |value_definition| value_definition[:value] == el_found }
+              .all? do |value_definition|
+                expected = value_definition[:value]
+                if expected.is_a?(Array)
+                  expected.any? { |v| v == el_found }
+                else
+                  expected == el_found
+                end
+              end
 
             child_element_values_match =
               if child_element_value_definitions.present?

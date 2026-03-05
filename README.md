@@ -276,6 +276,7 @@ Note: Module names and paths are derived from `suite.title`; you do not need to 
     - `comparators`: Allowed comparators for that param
     - `expectation_change`: `{ from: "SHALL", to: "SHOULD" }`
   - `must_support.remove_elements`: Optional removal rules for must support
+  - `slice_discriminator_default_value`: Override or supply discriminator values for value-type slices. Array of hashes: `slice_id`, optional `discriminator_path`, and `value`. Each `value` is an array of `{ "path": "...", "value": ... }`; the inner `value` may be a scalar (e.g. `"CH"`) or an array (e.g. `["CH", "CA"]`) for multi-value matching.
 - `resources`: Per-resource overrides (keyed by resource type)
   - All the same options as `profiles` (without profile URL)
   - `search_multiple_or_and_by_target_resource`: Configure multi-OR/AND behavior for target resource params
