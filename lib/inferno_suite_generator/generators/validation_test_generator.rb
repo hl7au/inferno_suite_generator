@@ -9,19 +9,13 @@ module InfernoSuiteGenerator
     class ValidationTestGenerator < BasicTestGenerator
       class << self
         def generate(ig_metadata, base_output_dir)
-          ig_metadata.groups
-                     .reject do |group|
-                       config = Registry.get(:config_keeper)
-                       config.exclude_resource_old?(group.resource)
-                     end
-                     .each do |group|
+          all_groups = ig_metadata.groups
+          filtered_groups = all_groups.reject do |group|
+            config = Registry.get(:config_keeper)
+            config.exclude_resource?(group.profile_url, group.resource)
+          end
+          filtered_groups.each do |group|
             new(group, ig_metadata, base_output_dir:).generate
-            next unless group.resource == "MedicationRequest"
-
-            # The Medication validation test lives in the MedicationRequest
-            # group, so we need to pass in that group's metadata
-            medication_group_metadata = ig_metadata.groups.find { |group| group.resource == "Medication" }
-            new(medication_group_metadata, ig_metadata, group, base_output_dir:).generate
           end
         end
       end
