@@ -1,366 +1,301 @@
-# InfernoSuiteGenerator
+## InfernoSuiteGenerator
 
-A Ruby gem for automatically generating test suites for FHIR Implementation Guides (IGs) to be used with the Inferno testing framework.
+**InfernoSuiteGenerator** is a Ruby gem and Docker image for automatically generating Inferno test suites from FHIR Implementation Guides (IGs).
 
-## Description
+It analyzes an IG package, extracts profiles, search parameters and example data, and emits Ruby test classes/groups/suites ready to be plugged into an Inferno test kit.
 
-InfernoSuiteGenerator is a tool that simplifies the creation of test suites for validating FHIR resources against Implementation Guides. It analyzes FHIR Implementation Guide packages and generates Ruby test classes for the Inferno testing framework.
+It generates, among others:
+- **Read tests** (retrieve by ID)
+- **Search tests** (including multi-OR/AND, chained, identifier searches)
+- **Validation tests** (profile validation)
+- **Must Support tests** (required elements present)
+- **Reference resolution tests**
+- **Provenance `_revinclude` search tests**
+- **`_include` search tests**
+- **Create / Update / Patch tests** (where IG example data allows)
 
-The generator creates various types of tests:
-- Read tests (retrieving resources by ID)
-- Search tests (including multiple OR/AND searches, chain searches, special identifier searches)
-- Validation tests (validating resources against profiles)
-- Must Support tests (verifying required elements are present)
-- Reference resolution tests (ensuring references can be resolved)
-- Provenance revinclude search tests (searching for Provenance resources)
-- Include search tests (testing _include parameters)
-- Create tests (creating resources for testing when applicable)
-- Update tests (updating resources to validate server behavior)
-- Patch tests
+The primary audience is **IG authors and test-kit maintainers** who want to quickly stand up a high‑coverage Inferno suite for their IG, with contributors supported via a dedicated development section.
 
-## Project Structure
+---
 
-The project is organized into several key components:
+## Quickstart (IG authors)
 
-- **Main Generator** (`lib/inferno_suite_generator.rb`): Orchestrates the entire generation process
-- **Metadata Extractors** (`lib/inferno_suite_generator/extractors/`): Extract information from FHIR IGs
-- **Test Generators** (`lib/inferno_suite_generator/generators/`): Create specific types of tests
-- **Configuration System** (`lib/inferno_suite_generator/core/`): `GeneratorConfigKeeper` and config submodules (`config/getters.rb`, `config/extractors.rb`, `config/generators.rb`, `config/constants.rb`, `config/utils.rb`) manage settings and customizations
-- **Template System** (`lib/inferno_suite_generator/templates/`): Uses ERB templates to generate Ruby code
-- **Test Modules** (`lib/inferno_suite_generator/test_modules/`): Provide common functionality for generated tests
-- **Utilities** (`lib/inferno_suite_generator/utils/`): Helper functions and constants
+### Requirements
 
-## Requirements
+- Ruby **3.3.6** (if using the gem directly)
+- A FHIR IG package (e.g. `*.tgz` or unpacked package directory)
+- A JSON configuration file describing how your IG maps to an Inferno suite  
+  (see `config.example.json` / `config.example2.json` in the repo)
 
-- Ruby 3.3.6 (see `inferno_suite_generator.gemspec`)
+You can run the generator either:
+- **As a Ruby gem** inside a test kit project, or
+- **Via Docker** using the published container image.
 
-## Installation
+### Install as a gem
 
-Add this line to your application's Gemfile:
+In your test kit’s `Gemfile`:
 
 ```ruby
 gem "inferno_suite_generator"
 ```
 
-And then execute:
+Then:
 
 ```bash
 bundle install
 ```
 
-Or install it yourself as:
-
-```bash
-gem install inferno_suite_generator
-```
-
-## Usage
-
-### Basic Usage
-
-1. Create a configuration file (`config.json`) with your Implementation Guide settings (see Configuration section below)
-2. Run the generator:
+### Minimal Ruby usage example
 
 ```ruby
 require "inferno_suite_generator"
 
-# One config
-InfernoSuiteGenerator::Generator.generate(["path/to/config.json"])
+# Single config
+InfernoSuiteGenerator::Generator.generate(["config/your_suite_config.json"])
 
-# Or two configs (base + overrides), merged in order
-InfernoSuiteGenerator::Generator.generate(["path/to/base.json", "path/to/overrides.json"])
+# Base + overrides, merged in order
+InfernoSuiteGenerator::Generator.generate([
+  "config/your_suite_config.base.json",
+  "config/your_suite_config.version_specific.json"
+])
 ```
 
-This will:
-- Load the IG package
-- Extract metadata about resources and profiles
-- Generate test files for various FHIR interactions
-- Organize tests into groups and suites
-- Add the generated test suite to your Inferno application
+After running, you will have:
+- Extracted metadata (`metadata.yml`)
+- Extracted demo/example data (`demodata.yml`)
+- Generated tests, groups and suites wired into your test kit
+---
 
-### Generation Process
+## How generation works (high‑level)
 
-The generator follows these steps:
+Given one or more configuration files, the generator:
 
-1. **Load IG Package**: Loads the FHIR Implementation Guide package
-2. **Extract Metadata**: Extracts information about resources, profiles, and search parameters (writes `metadata.yml`)
-3. **Extract Demodata**: Extracts IG example/demo data used by create/update/patch tests (writes `demodata.yml`)
-4. **Generate Tests**: Creates various types of tests based on the metadata
-   - Search tests (including specialized search types)
-   - Read tests
-   - Provenance revinclude search tests
-   - Include search tests
-   - Validation tests
-   - Must Support tests
-   - Reference resolution tests
-   - Create tests
-   - Update tests
-   - Patch tests
-5. **Generate Groups**: Organizes tests into groups by resource type
-6. **Generate Suites**: Creates a test suite that includes all the groups
-7. **Integrate with Inferno**: Adds the generated suite to the main Inferno application
+1. **Loads the IG package**  
+   Resolves profiles, search parameters, examples and other artifacts.
+2. **Extracts metadata**  
+   Writes a consolidated `metadata.yml` describing resources, profiles and search parameters.
+3. **Extracts demo/example data**  
+   Writes `demodata.yml` representing IG examples, used by create/update/patch tests.
+4. **Generates tests**  
+   Creates Ruby test classes for:
+   - Search / read / include / revinclude
+   - Validation and must support
+   - Reference resolution
+   - Create / update / patch (when example data is available)
+5. **Builds groups and suites**  
+   Groups tests by resource, composes them into suites, and wires them into your Inferno app.
+6. **Integrates with your test kit**  
+   Uses templates and shared modules to emit code that fits Inferno’s conventions.
 
-## Configuration
+Internally, the project is organised as:
+- **Main generator** (`lib/inferno_suite_generator.rb`) – orchestrates the flow above
+- **Extractors** (`lib/inferno_suite_generator/extractors/`) – turn IG content into metadata and demo data
+- **Test generators** (`lib/inferno_suite_generator/generators/`) – emit specific test types
+- **Configuration/core** (`lib/inferno_suite_generator/core/`) – configuration loading, merging and helpers
+- **Templates** (`lib/inferno_suite_generator/templates/`) – ERB templates that define the emitted Ruby
+- **Shared test modules** (`lib/inferno_suite_generator/test_modules/`) – common behavior for generated tests
 
-The configuration file (`config.json`) controls how the generator works. Pass an **array of config file paths** (at least one) to `generate`; multiple configs are deep-merged in order, so later configs override earlier ones (e.g. a base config plus a local overrides file). See the example configurations at the project root: `config.example.json` and `config.example2.json`. Here's an example configuration with explanations:
+---
 
-```json
-{
-  "ig": {
-    "id": "your_ig_id",
-    "version": "1.0.0",
-    "name": "Your IG Name",
-    "link": "https://example.com/your-ig",
-    "cs_profile_url": "http://example.com/fhir/CapabilityStatement/your-ig-server",
-    "cs_version_specific_url": "https://example.com/your-ig/1.0.0/CapabilityStatement-your-ig-server.html"
-  },
-  "suite": {
-    "title": "Your IG Title",
-    "extra_json_paths": ["extra-config.json"],
-    "tx_server_url": "https://tx.fhir.org/r4",
-    "outer_groups": [
-      {
-        "import_type": "relative",
-        "import_path": "../../custom_groups/capability_statement/capability_statement_group",
-        "group_position": "before",
-        "group_id": "your_capability_statement_group"
-      }
-    ],
-    "links": [
-      {
-        "label": "Report Issue",
-        "url": "https://github.com/your-org/your-repo/issues"
-      },
-      {
-        "label": "Your IG",
-        "url": "https://example.com/your-ig"
-      }
-    ]
-  },
-  "constants": {
-    "default_fhir_server": "https://example.com/fhir",
-    "read_ids.patient": "patient1, patient2",
-    "search_default_values.diagnostic_result": ["251739003", "24701-5"],
-    "search_default_values.date": ["ge1950-01-01", "le2050-01-01", "gt1950-01-01", "lt2050-01-01"],
-    "search_default_values.datetime": [
-      "ge1950-01-01T00:00:00.000Z",
-      "le2050-01-01T23:59:59.999Z",
-      "gt1950-01-01T00:00:00.000Z",
-      "lt2050-01-01T23:59:59.999Z"
-    ],
-    "search.comparators": ["gt", "lt", "ge", "le"]
-  },
-  "configs": {
-    "generic": {
-      "expectation": ["SHALL", "SHOULD", "MAY"],
-      "search_params_to_ignore": ["count", "_sort", "_include"],
-      "register_generators": [
-        {
-          "path_to_generator": "lib/your_test_kit/generators/custom_identifier_search/generator.rb",
-          "generator_class": "InfernoSuiteGenerator::Generator::SpecialIdentifierSearchTestGenerator",
-          "path_to_template": "lib/your_test_kit/generators/custom_identifier_search/template.rb.erb",
-          "test_type": "search"
-        }
-      ]
-    },
-    "profiles": {
-      "http://example.com/fhir/StructureDefinition/your-profile": {
-        "first_class_profile": "search",
-        "override_executor": {
-          "search": {
-            "identifier": "run_search_test_with_system"
-          }
-        },
-        "register_extractors": [
-          {
-            "path_to_extractor": "lib/your_test_kit/extractors/ms_delete/extractor.rb",
-            "extractor_class": "InfernoSuiteGenerator::Generator::MustSupportDeleteExtractor",
-            "extractor_type": "must_support"
-          }
-        ],
-        "extra_searches": [
-          { "type": "search", "params": ["_id"] },
-          {
-            "type": "include",
-            "param": "medication",
-            "target_resource": "Medication",
-            "paths": ["medicationReference"]
-          }
-        ]
-      }
-    },
-    "resources": {
-      "Observation": {
-        "forced_initial_search": ["patient", "code"],
-        "search_param": {
-          "clinical-date": {
-            "default_values": "search_default_values.datetime",
-            "multiple_and_expectation": "SHOULD",
-            "comparators": "search.comparators"
-          },
-          "Observation-status": {
-            "multiple_or_expectation": "SHALL"
-          },
-          "clinical-code": {
-            "multiple_or_expectation": "SHOULD"
-          }
-        }
-      },
-      "MedicationRequest": {
-        "search": { "test_medication_inclusion": true },
-        "search_param": {
-          "MedicationRequest-authoredon": {
-            "default_values": "search_default_values.datetime",
-            "multiple_and_expectation": "SHOULD",
-            "comparators": "search.comparators"
-          },
-          "MedicationRequest-intent": { "multiple_or_expectation": "SHOULD" }
-        }
-      },
-      "Medication": { "skip": true }
-    }
-  }
-}
-```
+## Configuration overview
 
-### Configuration Options
+The generator is driven by one or more JSON configuration files. You always pass an **array of config paths**; if there is only a single file it is still wrapped in an array, and when multiple are given they are **deep‑merged in order** (later overrides earlier).
 
-#### IG Section
-- `id`: The ID of the Implementation Guide
-- `version`: The version of the Implementation Guide
-- `name`: The name of the Implementation Guide
-- `link`: The URL to the Implementation Guide
-- `cs_profile_url`: The URL to the CapabilityStatement profile
-- `cs_version_specific_url`: The URL to the version-specific CapabilityStatement
+There are two example configurations in the project root:
+- `config.example.json`
+- `config.example2.json`
 
-#### Suite Section
-- `title`: The title of the test suite (also used to derive module name and paths automatically)
-- `extra_json_paths`: Additional JSON configuration files to merge
-- `tx_server_url`: Terminology server URL used by generated tests
-- `links`: Links to be included in the test suite UI
-- `outer_groups`: Additional groups to include before/after generated groups
-  - `import_type`: How to import the group (e.g., `relative`)
-  - `import_path`: Path to the external group file
-  - `group_position`: Where to place it (`before` or `after`)
-  - `group_id`: The group ID to reference
+At a high level, a config file contains:
+- **`ig`** – which IG this suite targets
+- **`suite`** – how the top‑level Inferno suite looks and behaves
+- **`constants`** – reusable values for IDs, search defaults, comparators, etc.
+- **`configs.generic`** – global behavior tweaks and custom generators
+- **`configs.profiles`** – per‑profile overrides
+- **`configs.resources`** – per‑resource overrides (by FHIR resource type)
 
-Note: Module names and paths are derived from `suite.title`; you do not need to set `suite_module_name`, `module_name_prefix`, `test_id_prefix`, or explicit paths.
+### IG section
 
-#### Constants Section
-- `default_fhir_server`: Default FHIR server URL used for inputs
-- `read_ids.<resource>`: Default IDs for first-class read/search tests (e.g., `read_ids.patient`)
-- `patch_ids.<resource>`: Default IDs for patch tests (e.g., `patch_ids.patient`)
-- `search_default_values.*`: Named sets of default values used in search tests
-- `search.comparators`: Allowed comparators for date/datetime searches
+- **`id`**: Implementation Guide ID
+- **`version`**: IG version
+- **`name`**: Human‑readable name
+- **`link`**: IG documentation URL
+- **`cs_profile_url`**: CapabilityStatement profile URL
+- **`cs_version_specific_url`**: Version‑specific CapabilityStatement URL
 
-#### Configs Section
-- `generic`: Global settings
-  - `expectation`: Allowed expectation levels (e.g., `SHALL`, `SHOULD`, `MAY`)
-  - `search_params_to_ignore`: Search params to ignore when generating tests
-  - `register_generators`: Custom generators to load
-    - `path_to_generator`, `generator_class`, `path_to_template`, `test_type`
-- `profiles`: Per-profile overrides (keyed by profile URL)
-  - `keep_all_search_results`: All resources from search tests will be saved into the Inferno scratch
-  - `skip`: Skip generating tests for this profile
-  - `first_class_profile`: Mark as first-class `read` or `search`
-  - `override_executor.search.<param>`: Override executor for specific search param
-  - `forced_initial_search`: Force initial search params (e.g., `["patient", "code"]`)
-  - `register_extractors`: Register custom extractors
-    - `path_to_extractor`, `extractor_class`, `extractor_type`
-  - `extra_searches`: Additional searches to generate
-    - `{ "type": "search", "params": ["_id"] }`
-    - `{ "type": "include", "param": "medication", "target_resource": "Medication", "paths": ["medicationReference"] }`
-  - `search_param.<id>`: Per-search-parameter options
-    - `default_values`: Named constant key or explicit list
-    - `multiple_and_expectation` / `multiple_or_expectation`
-    - `comparators`: Allowed comparators for that param
-    - `expectation_change`: `{ from: "SHALL", to: "SHOULD" }`
-  - `must_support.remove_elements`: Optional removal rules for must support
-  - `slice_discriminator_default_value`: Override or supply discriminator values for value-type slices. Array of hashes: `slice_id`, optional `discriminator_path`, and `value`. Each `value` is an array of `{ "path": "...", "value": ... }`; the inner `value` may be a scalar (e.g. `"CH"`) or an array (e.g. `["CH", "CA"]`) for multi-value matching.
-- `resources`: Per-resource overrides (keyed by resource type)
-  - All the same options as `profiles` (without profile URL)
-  - `search_multiple_or_and_by_target_resource`: Configure multi-OR/AND behavior for target resource params
-  - `search.test_medication_inclusion`: Enable special include tests for Medication where applicable
+### Suite section
 
-## Development
+- **`title`**: Test suite title (also used to derive Ruby module names and paths)
+- **`extra_json_paths`**: Additional JSON configs to merge
+- **`tx_server_url`**: Terminology server URL used by generated tests
+- **`links`**: Links shown in the Inferno UI (e.g. “Report Issue”, “IG Documentation”)
+- **`outer_groups`**: Extra groups to include before/after generated groups:
+  - `import_type`
+  - `import_path`
+  - `group_position` (`before` / `after`)
+  - `group_id`
 
-After checking out the repo, run `bin/setup` to install dependencies. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+> **Note**: Module names and paths are derived from `suite.title`. You do **not** need to set `suite_module_name`, `module_name_prefix`, `test_id_prefix` or explicit code paths.
 
-### Project Structure
+### Constants section
 
-The project follows a clear organization pattern:
+- **`default_fhir_server`**: Default FHIR server URL used in inputs
+- **`read_ids.<resource>`**: Default IDs for first‑class read/search tests (e.g. `read_ids.patient`)
+- **`patch_ids.<resource>`**: Default IDs for patch tests
+- **`search_default_values.*`**: Named sets of default values for date/datetime/code search params
+- **`search.comparators`**: Allowed comparators for date/datetime params (`gt`, `lt`, `ge`, `le`, etc.)
 
-1. **Main Module**: `InfernoSuiteGenerator` module contains all classes
-2. **Generator Class**: Main orchestrator that coordinates the entire process
-3. **Test Generators**: Inherit from `BasicTestGenerator` and implement specific test types
-4. **Metadata Extractors**: Extract and process metadata from FHIR IGs
-5. **Configuration**: Uses Registry pattern for global configuration
+These constants can be referred to from profile/resource configs, allowing you to centralise and reuse values.
 
-### Docker
+### Configs – generic section
 
-The InfernoSuiteGenerator is available as a Docker image from GitHub Container Registry. This allows you to run the generator without setting up a Ruby environment.
+- **`expectation`**: Allowed expectation levels (e.g. `["SHALL", "SHOULD", "MAY"]`)
+- **`search_params_to_ignore`**: Search parameters to ignore when generating tests (e.g. `["_sort"]`)
+- **`register_generators`**: Custom generators to load, each with:
+  - `path_to_generator`
+  - `generator_class`
+  - `path_to_template`
+  - `test_type` (e.g. `"search"`)
 
-#### Using the Docker Image
+### Configs – profiles section
 
-Pull the latest image:
+Keyed by **profile URL**; lets you tune or override behavior for specific profiles:
+
+- **`keep_all_search_results`**: Keep all search results in Inferno scratch
+- **`skip`**: Skip all tests for this profile
+- **`first_class_profile`**: Mark as first‑class `read` or `search`
+- **`override_executor.search.<param>`**: Swap executors for specific search parameters
+- **`forced_initial_search`**: Force initial search params (e.g. `["patient", "code"]`)
+- **`register_extractors`**: Register custom extractors with:
+  - `path_to_extractor`
+  - `extractor_class`
+  - `extractor_type` (e.g. `"must_support"`)
+- **`extra_searches`**: Describe additional searches to generate, such as:
+  - `{ "type": "search", "params": ["_id"] }`
+  - `{ "type": "include", "param": "medication", "target_resource": "Medication", "paths": ["medicationReference"] }`
+- **`search_param.<id>`**: Per‑search‑parameter options:
+  - `default_values` (constant key or explicit list)
+  - `multiple_and_expectation` / `multiple_or_expectation`
+  - `comparators`
+  - `expectation_change` (e.g. `{ "from": "SHALL", "to": "SHOULD" }`)
+- **`must_support.remove_elements`**: Optional rules for trimming must‑support elements
+- **`slice_discriminator_default_value`**: Defaults for value‑type slice discriminators; an array of objects with:
+  - `slice_id`
+  - optional `discriminator_path`
+  - `value`: array of `{ "path": "...", "value": ... }`, where inner `value` may be scalar or an array
+
+### Configs – resources section
+
+Keyed by FHIR **resource type** (e.g. `"Observation"`, `"MedicationRequest"`). Options largely mirror the profile‑level settings, but apply to all profiles of that resource type:
+
+- All options from **profiles** (other than the URL key)
+- **`search_multiple_or_and_by_target_resource`**: Configure multi‑OR/AND behavior for target‑resource params
+- **`search.test_medication_inclusion`**: Enable special include tests for Medication where applicable
+
+See `config.example.json` and `config.example2.json` for a fully worked example.
+
+---
+
+## Using the gem in a test kit
+
+In a typical Inferno test kit repo you will:
+
+1. Add `inferno_suite_generator` to the `Gemfile`.
+2. Create one or more config files under `config/`.
+3. Add a small Ruby script or Rake task that calls:
+
+   ```ruby
+   InfernoSuiteGenerator::Generator.generate(["config/your_ig.json"])
+   ```
+
+4. Run that script to generate tests/groups/suites into your test kit’s structure.
+5. Commit the generated code (or generate in CI as part of the build).
+
+You can re‑run the generator whenever the IG or configuration changes; it’s designed to be part of your regular workflow.
+
+---
+
+## Development & CI (for contributors)
+
+### Local development
+
+After checking out the repo:
 
 ```bash
-docker pull ghcr.io/hl7au/inferno_suite_generator:latest
+bin/setup
 ```
 
-Run the generator with your configuration file:
+This installs dependencies and prepares the project. You can then use:
 
-```bash
-docker run -v $(pwd):/data ghcr.io/hl7au/inferno_suite_generator:latest /data/config.json
-```
+- `bin/console` – interactive Ruby console with the gem loaded
 
-This mounts your current directory to `/data` in the container and runs the generator with your configuration file. The image passes the first argument as the config path; for multiple config files (base + overrides), use the Ruby API instead.
+### Ruby and dependencies
 
-#### Building the Docker Image Locally
+- This gem targets **Ruby 3.3.6** (see `inferno_suite_generator.gemspec`).
+- Dependencies include `deep_merge`, `inferno_core`, and `jsonpath`; see the gemspec for exact versions.
 
-You can also build the Docker image locally:
+### Project structure (internal)
 
-```bash
-docker build -t inferno_suite_generator .
-```
+- **Main module**: `InfernoSuiteGenerator` contains the overall orchestration
+- **Generator**: coordinates extraction, metadata, test generation and suite creation
+- **Test generators**: inherit from a basic generator and implement each test type
+- **Extractors**: handle metadata and demo data extraction
+- **Configuration**: registry‑style configuration system with helpers under `lib/inferno_suite_generator/core/`
 
-And run it:
-
-```bash
-docker run -v $(pwd):/data inferno_suite_generator /data/config.json
-```
+When modifying or extending:
+- **Follow existing naming and structure patterns**
+- **Keep generators focused** (single responsibility)
+- **Prefer overriding hook methods** over changing global algorithms
+- **Update templates** when you change generated code shape
 
 ### CI
 
-The project uses GitHub Actions for continuous integration:
+GitHub Actions CI (`.github/workflows/ci.yml`) runs on every push and executes:
 
-- **Lint**: RuboCop (`make docker-lint`)
-- **Reek**: Code smell checks (`make docker-reek`)
-- **Fasterer**: Performance checks (`make docker-fasterer`)
-- **Type checking**: Steep (`make docker-typecheck`)
-- **Tests**: Rake test suite (`make docker-tests`)
+- **RuboCop**: `make docker-lint`
+- **Reek**: `make docker-reek`
+- **Fasterer**: `make docker-fasterer`
+- **Steep type checking**: `make docker-typecheck`
+- **Tests**: `make docker-tests`
 
-All CI steps run in Docker via these Make targets for a consistent environment. Local alternatives: `make lint`, `make reek`, `make fasterer`, `make typecheck`, `make tests`; or `make check` to run all.
+These use Docker for a consistent environment. For local equivalents, you can run:
 
-## Contributing
+- `make lint`
+- `make reek`
+- `make fasterer`
+- `make typecheck`
+- `make tests`
+- or `make check` to run them all.
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/beda-software/inferno_suite_generator. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/beda-software/inferno_suite_generator/blob/main/CODE_OF_CONDUCT.md).
+### Docker image build & publish
 
-### Best Practices for Modifying the Codebase
+The published Docker image is built from `Dockerfile`, which:
+- Uses `ruby:3.3.6-slim`
+- Installs build tooling and git
+- Installs gem dependencies via `bundle install`
+- Sets the entrypoint to:
+  - add `./lib` to `$LOAD_PATH`
+  - require `inferno_suite_generator`
+  - call `InfernoSuiteGenerator::Generator.generate(ARGV[0])`
 
-1. **Respect the patterns**: Follow existing patterns for naming, organization, and inheritance
-2. **Maintain separation of concerns**: Keep generators focused on single responsibilities
-3. **Preserve the template method pattern**: Override specific methods rather than changing the overall algorithm
-4. **Update templates appropriately**: Ensure any changes are reflected in templates
+You can build and run locally:
+
+```bash
+docker build -t inferno_suite_generator .
+docker run -v "$(pwd)":/data inferno_suite_generator /data/config.json
+```
+
+A manual GitHub Actions workflow (`.github/workflows/manual-build-push.yml`) is available to build and push the image to GitHub Container Registry (`ghcr.io/<owner>/<repo>`), tagging it with semver tags, a short SHA and `latest`.
+
+---
 
 ## Changelog
 
-See [CHANGELOG.md](https://github.com/hl7au/inferno_suite_generator/blob/main/CHANGELOG.md) for version history.
+See `CHANGELOG.md` in the repository for version history.
 
 ## License
 
-The gem is available as open source under the terms of the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+The gem is available as open source under the terms of the **Apache 2.0** license.
 
 ## Code of Conduct
 
-Everyone interacting in the InfernoSuiteGenerator project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/beda-software/inferno_suite_generator/blob/main/CODE_OF_CONDUCT.md).
+Everyone interacting in this project’s codebases, issue trackers, chat rooms and mailing lists is expected to follow the project’s Code of Conduct (`CODE_OF_CONDUCT.md` in the repository).
