@@ -15,7 +15,7 @@ module InfernoSuiteGenerator
     DAR_EXTENSION_URL = "http://hl7.org/fhir/StructureDefinition/data-absent-reason"
 
     # Configuration structure for validation tests that holds resources and profile URL
-    ValidationConfig = Struct.new(:resources, :profile_url, keyword_init: true)
+    ValidationConfig = Struct.new(:resources, :profile_url)
 
     def perform_validation_test(resources,
                                 profile_url,
