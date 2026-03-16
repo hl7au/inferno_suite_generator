@@ -2,7 +2,7 @@ require:
   - rubocop-packaging
   - rubocop-performance
   - rubocop-md
-#  - rubocop-erb
+  #  - rubocop-erb
   - rubocop-rake
 
 AllCops:
@@ -10,52 +10,51 @@ AllCops:
   TargetRubyVersion: 3.3
   SuggestExtensions: false
   Exclude:
-    - 'lib/inferno_suite_generator/core/ig_resources.rb'
-    - 'lib/inferno_suite_generator/core/group_metadata.rb'
-    - 'lib/inferno_suite_generator/core/ig_loader.rb'
-    - 'lib/inferno_suite_generator/core/ig_metadata.rb'
-    - 'lib/inferno_suite_generator/core/search_test_properties.rb'
-    - 'lib/inferno_suite_generator/utils/helpers.rb'
-    - 'lib/inferno_suite_generator/utils/assert_helpers.rb'
-    - 'lib/inferno_suite_generator/utils/fhir_resource_navigation.rb'
-    - 'lib/inferno_suite_generator/utils/date_search_validation.rb'
-    - 'lib/inferno_suite_generator/utils/search_test_helpers.rb'
-    - 'lib/inferno_suite_generator/utils/naming.rb'
-    - 'lib/inferno_suite_generator/utils/registry.rb'
-    - 'lib/inferno_suite_generator/utils/generic.rb'
-    - 'lib/inferno_suite_generator/utils/generator_constants.rb'
-    - 'lib/inferno_suite_generator/generators/read_test_generator.rb'
-    - 'lib/inferno_suite_generator/generators/multiple_and_search_test_generator.rb'
-    - 'lib/inferno_suite_generator/generators/provenance_revinclude_search_test_generator.rb'
-    - 'lib/inferno_suite_generator/generators/search_test_generator.rb'
-    - 'lib/inferno_suite_generator/generators/validation_test_generator.rb'
-    - 'lib/inferno_suite_generator/generators/must_support_test_generator.rb'
-    - 'lib/inferno_suite_generator/generators/include_search_test_generator.rb'
-    - 'lib/inferno_suite_generator/generators/suite_generator.rb'
-    - 'lib/inferno_suite_generator/generators/basic_test_generator.rb'
-    - 'lib/inferno_suite_generator/generators/group_generator.rb'
-    - 'lib/inferno_suite_generator/generators/chain_search_test_generator.rb'
-    - 'lib/inferno_suite_generator/extractors/search_definition_metadata_extractor.rb'
-    - 'lib/inferno_suite_generator/extractors/value_extractor.rb'
-    - 'lib/inferno_suite_generator/extractors/group_metadata_extractor.rb'
-    - 'lib/inferno_suite_generator/extractors/terminology_binding_metadata_extractor.rb'
-    - 'lib/inferno_suite_generator/extractors/search_metadata_extractor.rb'
-    - 'lib/inferno_suite_generator/extractors/ig_metadata_extractor.rb'
-    - 'lib/inferno_suite_generator/extractors/must_support_metadata_extractor.rb'
-    - 'lib/inferno_suite_generator/test_modules/chained_search_test.rb'
-    - 'lib/inferno_suite_generator/test_modules/must_support_test.rb'
-    - 'lib/inferno_suite_generator/test_modules/search_test.rb'
-    - 'lib/inferno_suite_generator/test_modules/reference_resolution_test.rb'
-    - 'lib/inferno_suite_generator/test_modules/read_test.rb'
-    - 'lib/inferno_suite_generator.rb'
-    - 'lib/inferno_suite_generator/test_modules/update_test.rb'
-    - 'lib/inferno_suite_generator/test_modules/patch_test.rb'
-    - 'lib/inferno_suite_generator/generators/update_test_generator.rb'
-    - 'lib/inferno_suite_generator/test_modules/basic_test.rb'
-    - 'lib/inferno_suite_generator/test_modules/create_test.rb'
-    - 'test/set_by_path_test.rb'
-    - 'test/create_test_update_resource_by_references_test.rb'
-    - 'test/create_test_initiate_references_keeper_test.rb'
+    - "lib/inferno_suite_generator/core/ig_resources.rb"
+    - "lib/inferno_suite_generator/core/group_metadata.rb"
+    - "lib/inferno_suite_generator/core/ig_loader.rb"
+    - "lib/inferno_suite_generator/core/ig_metadata.rb"
+    - "lib/inferno_suite_generator/core/search_test_properties.rb"
+    - "lib/inferno_suite_generator/utils/helpers.rb"
+    - "lib/inferno_suite_generator/utils/assert_helpers.rb"
+    - "lib/inferno_suite_generator/utils/fhir_resource_navigation.rb"
+    - "lib/inferno_suite_generator/utils/date_search_validation.rb"
+    - "lib/inferno_suite_generator/utils/search_test_helpers.rb"
+    - "lib/inferno_suite_generator/utils/naming.rb"
+    - "lib/inferno_suite_generator/utils/registry.rb"
+    - "lib/inferno_suite_generator/utils/generic.rb"
+    - "lib/inferno_suite_generator/utils/generator_constants.rb"
+    - "lib/inferno_suite_generator/generators/read_test_generator.rb"
+    - "lib/inferno_suite_generator/generators/multiple_and_search_test_generator.rb"
+    - "lib/inferno_suite_generator/generators/provenance_revinclude_search_test_generator.rb"
+    - "lib/inferno_suite_generator/generators/search_test_generator.rb"
+    - "lib/inferno_suite_generator/generators/validation_test_generator.rb"
+    - "lib/inferno_suite_generator/generators/must_support_test_generator.rb"
+    - "lib/inferno_suite_generator/generators/include_search_test_generator.rb"
+    - "lib/inferno_suite_generator/generators/suite_generator.rb"
+    - "lib/inferno_suite_generator/generators/basic_test_generator.rb"
+    - "lib/inferno_suite_generator/generators/group_generator.rb"
+    - "lib/inferno_suite_generator/generators/chain_search_test_generator.rb"
+    - "lib/inferno_suite_generator/extractors/search_definition_metadata_extractor.rb"
+    - "lib/inferno_suite_generator/extractors/value_extractor.rb"
+    - "lib/inferno_suite_generator/extractors/group_metadata_extractor.rb"
+    - "lib/inferno_suite_generator/extractors/terminology_binding_metadata_extractor.rb"
+    - "lib/inferno_suite_generator/extractors/search_metadata_extractor.rb"
+    - "lib/inferno_suite_generator/extractors/ig_metadata_extractor.rb"
+    - "lib/inferno_suite_generator/extractors/must_support_metadata_extractor.rb"
+    - "lib/inferno_suite_generator/test_modules/chained_search_test.rb"
+    - "lib/inferno_suite_generator/test_modules/must_support_test.rb"
+    - "lib/inferno_suite_generator/test_modules/search_test.rb"
+    - "lib/inferno_suite_generator/test_modules/reference_resolution_test.rb"
+    - "lib/inferno_suite_generator/test_modules/read_test.rb"
+    - "lib/inferno_suite_generator.rb"
+    - "lib/inferno_suite_generator/test_modules/update_test.rb"
+    - "lib/inferno_suite_generator/test_modules/patch_test.rb"
+    - "lib/inferno_suite_generator/generators/update_test_generator.rb"
+    - "lib/inferno_suite_generator/test_modules/basic_test.rb"
+    - "test/set_by_path_test.rb"
+    - "test/create_test_update_resource_by_references_test.rb"
+    - "test/create_test_initiate_references_keeper_test.rb"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

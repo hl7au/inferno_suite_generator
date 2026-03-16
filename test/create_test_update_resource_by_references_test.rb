@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "jsonpath"
 require "inferno_suite_generator"
 require "inferno_suite_generator/test_modules/create_test"
 
 module InfernoSuiteGenerator
   class CreateTestUpdateResourceByReferencesTest < Minitest::Test
-    # Test double that includes CreateTest and provides metadata + references_keeper
+    # Test double that includes CreateTest and provides metadata + references_keeper.
+    # Defines evaluate_fhirpath for unit tests (normally provided by Inferno runtime).
     class TestableCreateTest
       include CreateTest
 
@@ -15,6 +17,28 @@ module InfernoSuiteGenerator
       def initialize(metadata:, references_keeper:)
         @metadata = metadata
         @references_keeper = references_keeper
+      end
+
+      # Stub for Inferno's evaluate_fhirpath: path is considered present if it exists in the
+      # resource or is a valid settable path (so references can be set at missing optional paths).
+      def evaluate_fhirpath(resource:, path:)
+        matches = JsonPath.new("$.#{path}").on(resource.to_hash)
+        return matches if matches.present?
+
+        # Path not in hash yet; treat as present if parent structure exists (path is settable).
+        settable?(resource.to_hash, path) ? [true] : []
+      end
+
+      def settable?(hash, path)
+        segs = path.split(".")
+        cur = hash
+        segs[0..-2].each do |seg|
+          key, idx = seg.include?("[") ? seg.split(/\[|\]/) : [seg, nil]
+          return false unless cur.is_a?(Hash) && cur.key?(key)
+          cur = cur[key]
+          cur = cur[idx.to_i] if idx && cur.is_a?(Array)
+        end
+        true
       end
     end
 

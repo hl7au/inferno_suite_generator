@@ -83,18 +83,11 @@ module InfernoSuiteGenerator
         end
 
         def extra_searches(profile_url, resource_type)
-          resolve_profile_resource_value(
-            "configs&.profiles&.#{profile_url}&.extra_searches",
-            "configs&.resources&.#{resource_type}&.extra_searches",
-            EMPTY_ARRAY
-          )
+          resolve_value(profile_url, resource_type, "extra_searches", EMPTY_ARRAY)
         end
 
         def resource_to_create_filter(resource_type, profile_url)
-          resolve_profile_resource_value(
-            "configs&.profiles&.#{profile_url}&.resources_to_create_filter",
-            "configs&.resources&.#{resource_type}&.resources_to_create_filter"
-          )
+          resolve_value(profile_url, resource_type, "resources_to_create_filter")
         end
 
         def rewrite_igs

@@ -23,11 +23,7 @@ module InfernoSuiteGenerator
         end
 
         def resources_to_exclude(profile_url, resource_type)
-          resolve_profile_resource_value(
-            "configs&.profiles&.#{profile_url}&.skip",
-            "configs&.resources&.#{resource_type}&.skip",
-            false
-          )
+          resolve_value(profile_url, resource_type, "skip", false)
         end
 
         def add_extra_searches?(profile_url, resource_type, search_names)
@@ -42,40 +38,23 @@ module InfernoSuiteGenerator
         end
 
         def exclude_resource?(profile_url, resource_type)
-          resolve_profile_resource_value("configs&.profiles&.#{profile_url}&.skip",
-                                         "configs&.resources&.#{resource_type}&.skip", nil)
+          resolve_value(profile_url, resource_type, "skip", nil)
         end
 
         def specific_identifiers(profile_url, resource_type, param_id)
-          resolve_profile_resource_value(
-            "configs&.profiles&.#{profile_url}&.search_param&.#{param_id}&.extra_tests_with",
-            "configs&.resources&.#{resource_type}&.search_param&.#{param_id}&.extra_tests_with",
-            EMPTY_ARRAY
-          )
+          resolve_value(profile_url, resource_type, "search_param.#{param_id}.extra_tests_with", EMPTY_ARRAY)
         end
 
         def get_executor(profile_url, resource, param_id)
-          resolve_profile_resource_value(
-            "configs&.profiles&.#{profile_url}&.override_executor&.search&.#{param_id}",
-            "configs&.resources&.#{resource}&.override_executor&.search&.#{param_id}",
-            "run_search_test"
-          )
+          resolve_value(profile_url, resource, "override_executor.search.#{param_id}", "run_search_test")
         end
 
         def multiple_or_and_search_by_target_resource?(profile_url, resource_type, params)
-          resolve_profile_resource_value(
-            "configs&.profiles&.#{profile_url}&.search_multiple_or_and_by_target_resource",
-            "configs&.resources&.#{resource_type}&.search_multiple_or_and_by_target_resource",
-            EMPTY_ARRAY
-          ) == params
+          resolve_value(profile_url, resource_type, "search_multiple_or_and_by_target_resource", EMPTY_ARRAY) == params
         end
 
         def first_class_search?(profile_url, resource_type, search_params)
-          resolve_profile_resource_value(
-            "configs&.profiles&.#{profile_url}&.first_class_profile",
-            "configs&.resources&.#{resource_type}&.first_class_profile",
-            ""
-          ) == "search" && search_params == ["_id"]
+          resolve_value(profile_url, resource_type, "first_class_profile", "") == "search" && search_params == ["_id"]
         end
 
         def create_test_input_data(group_name, profile_name, default_value)
@@ -107,10 +86,7 @@ module InfernoSuiteGenerator
 
         def test_medication_inclusion?(profile_url, resource_type)
           # NOTE: This attribute of the config should be changed for something generic
-          resolve_profile_resource_value(
-            "configs&.profiles&.#{profile_url}&.search&.test_medication_inclusion",
-            "configs&.resources&.#{resource_type}&.search&.test_medication_inclusion"
-          )
+          resolve_value(profile_url, resource_type, "search.test_medication_inclusion")
         end
 
         def process_include_search(result, resource, search)

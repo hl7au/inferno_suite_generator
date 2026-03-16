@@ -19,7 +19,7 @@ module InfernoSuiteGenerator
       include GeneratorUtils
 
       # Holds base_output_dir and ig_metadata to avoid passing the same pair to multiple methods.
-      GenerationContext = Struct.new(:base_output_dir, :ig_metadata, keyword_init: true)
+      GenerationContext = Struct.new(:base_output_dir, :ig_metadata)
 
       class << self
         def generate(ig_metadata, base_output_dir)

@@ -47,6 +47,10 @@ module <%= suite_module_name %>
         scratch[:<%= profile_identifier %>_resources] ||= {}
       end
 
+      def keep_all_search_results?
+        <%= keep_all_search_results? %>
+      end
+
       run do
         <%= search_method %>
       end

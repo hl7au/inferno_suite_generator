@@ -48,6 +48,9 @@ module InfernoSuiteGenerator
         def collection_with_elements?: (untyped value) -> bool
         def first_class_read?: (String profile_url, String resource_type) -> bool
         def constants: () -> Hash[String, untyped]
+        def resolve_value: (String profile_url, String resource_type, String attribute, ?untyped default_value) -> untyped
+        def resolve_raw: (String value_path) -> untyped
+        def slice_discriminator_default_values: (String profile_url, String resource) -> untyped
       end
 
       module Getters
@@ -92,6 +95,8 @@ module InfernoSuiteGenerator
         def first_search_params: (String profile_url, String resource) -> Array[String]
         def custom_extractors: (String profile_url, String resource) -> (Array[Hash[String, untyped]] | Array[untyped])
         def filter_set: (String profile_url, String resource_type) -> untyped
+        def keep_all_search_results: (String profile_url, String resource) -> bool
+        def elements_to_exclude: (String profile_url, String resource) -> Array[untyped]
       end
 
       module Generators

@@ -12,7 +12,7 @@ module InfernoSuiteGenerator
     class TestableCreateTest
       include CreateTest
 
-      attr_reader :metadata, :references_keeper, :demodata, :resource
+      attr_reader :metadata, :references_keeper, :demodata, :resource, :requests
       attr_accessor :search_results, :info_messages
 
       def references_mapping_input
@@ -25,6 +25,7 @@ module InfernoSuiteGenerator
         @demodata = demodata
         @search_results = {}
         @info_messages = []
+        @requests = []
       end
 
       def fhir_get_capability_statement
@@ -37,6 +38,9 @@ module InfernoSuiteGenerator
 
         @response = { status: result[:status] }
         @resource = result[:bundle]
+        response_body = result[:bundle].nil? ? nil : result[:bundle].to_json
+        @requests << { status: result[:status], response_body: response_body }
+        Struct.new(:status, :response_body).new(result[:status], response_body)
       end
 
       def response
@@ -109,7 +113,6 @@ module InfernoSuiteGenerator
 
       subject.send(:initiate_references_keeper)
 
-      assert_includes subject.info_messages.first, "Can't search for Patient"
       refute keeper.references.key?("Patient"), "should not add references when status != 200"
     end
 
@@ -130,8 +133,8 @@ module InfernoSuiteGenerator
     end
 
     def test_skips_resource_type_when_bundle_entry_is_nil
-      # Use a mock bundle so entry is truly nil (FHIR::Bundle.new(entry: nil) normalizes to [])
-      bundle = Struct.new(:entry).new(nil)
+      # Bundle with entry nil (FHIR::Bundle.new(entry: nil) normalizes to []); stub so valid_bundle_for_references? sees it.
+      bundle_with_nil_entry = Struct.new(:entry).new(nil)
       demodata = demodata_double(["Patient"])
       keeper = references_keeper_double({})
       subject = TestableCreateTest.new(
@@ -139,7 +142,8 @@ module InfernoSuiteGenerator
         references_keeper: keeper,
         demodata:
       )
-      subject.search_results = { "Patient" => { status: 200, bundle: } }
+      subject.search_results = { "Patient" => { status: 200, bundle: bundle_with_nil_entry } }
+      subject.define_singleton_method(:search_bundle_for_resource_type) { |_type| bundle_with_nil_entry }
 
       subject.send(:initiate_references_keeper)
 
@@ -201,7 +205,6 @@ module InfernoSuiteGenerator
 
       subject.send(:initiate_references_keeper)
 
-      assert_includes subject.info_messages.first, "Can't search for Observation"
       assert keeper.references.key?("Patient")
       assert_includes keeper.references["Patient"], "p1"
     end

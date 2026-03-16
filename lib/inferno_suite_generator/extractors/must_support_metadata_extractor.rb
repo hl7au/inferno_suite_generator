@@ -17,10 +17,13 @@ module InfernoSuiteGenerator
       end
 
       def must_supports
+        ms_elements_to_exclude = config.elements_to_exclude(profile.url, resource)
+        ms_elements = must_support_elements.reject { |element| ms_elements_to_exclude.include?(element[:path]) }
+        
         @must_supports = {
           extensions: must_support_extensions,
           slices: must_support_slices,
-          elements: must_support_elements
+          elements: ms_elements
         }
 
         @must_supports
@@ -192,7 +195,7 @@ module InfernoSuiteGenerator
               type: "value"
             }
           }.tap do |metadata|
-            metadata[:discriminator][:values] = discriminators(sliced_element(current_element)).map do |discriminator|
+            metadata[:discriminator][:values] = discriminators(sliced_element(current_element)).filter_map do |discriminator|
               fixed_element = profile_elements.find do |element|
                 element.id.starts_with?(current_element.id) &&
                   element.path == "#{current_element.path}.#{discriminator.path}"
@@ -211,8 +214,32 @@ module InfernoSuiteGenerator
         end
       end
 
+      def apply_slice_discriminator_default_values(slices)
+        defaults = config.slice_discriminator_default_values(profile.url, resource)
+        return slices if defaults.blank?
+
+        slices.map do |slice|
+          override = defaults.find { |d| (d["slice_id"] || d[:slice_id]) == slice[:slice_id] }
+          next slice unless override
+
+          value_entries = override["value"] || override[:value]
+          next slice if value_entries.blank?
+
+          slice = slice.dup
+          slice[:discriminator] = (slice[:discriminator] || {}).dup
+          slice[:discriminator][:type] = "value"
+          slice[:discriminator][:values] = Array(value_entries).map do |entry|
+            path = entry["path"] || entry[:path]
+            value = entry["value"] != nil ? entry["value"] : entry[:value]
+            { path: path.to_s, value: value }
+          end
+          slice
+        end
+      end
+
       def must_support_slices
-        pattern_slices + type_slices + value_slices
+        all_slices = pattern_slices + type_slices + value_slices
+        apply_slice_discriminator_default_values(all_slices)
       end
 
       def plain_must_support_elements

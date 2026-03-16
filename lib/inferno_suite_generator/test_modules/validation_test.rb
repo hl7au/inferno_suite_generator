@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
-require "jsonpath"
-
 require_relative "../utils/assert_helpers"
+require_relative "../utils/filter_set"
 
 module InfernoSuiteGenerator
-  # Module for validating FHIR resources against profiles and checking for data absent reason codes/extensions.
+  # @!group ValidationTest
+  # Provides methods for validating FHIR resources against profile conformance requirements, including checks
+  # for expected structure, profile compliance, and the presence of data-absent-reason codes or extensions.
+  # This module is intended to be included in test classes that require automated FHIR resource validation.
   module ValidationTest
     include AssertHelpers
 
@@ -13,7 +15,7 @@ module InfernoSuiteGenerator
     DAR_EXTENSION_URL = "http://hl7.org/fhir/StructureDefinition/data-absent-reason"
 
     # Configuration structure for validation tests that holds resources and profile URL
-    ValidationConfig = Struct.new(:resources, :profile_url, keyword_init: true)
+    ValidationConfig = Struct.new(:resources, :profile_url)
 
     def perform_validation_test(resources,
                                 profile_url,
@@ -36,47 +38,25 @@ module InfernoSuiteGenerator
 
     def process_resources(config, profile_version)
       profile_with_version = "#{config.profile_url}|#{profile_version}"
-      filtered_resources = filtered_resources(config, filter_set)
+      filtered_resources = filtered_resources(filter_set, config.resources)
       skip_if filtered_resources.blank?, message_no_resource_found_using_filterset(filter_set)
 
-      filtered_resources.each do |resource|
-        resource_is_valid?(resource:, profile_url: profile_with_version)
-        check_for_dar(resource)
-      end
+      validate_and_check_dar(filtered_resources, profile_with_version)
 
       errors_found = messages.any? { |message| message[:type] == "error" }
 
       assert !errors_found, "Resource does not conform to the profile #{profile_with_version}"
     end
 
-    def filtered_resources(config, filter_set)
-      # Filter resources using JSONPath expressions.
-      # Filter_set is the array of arrays of JSONPath expressions with target values.
-      # The first layer of an array is means OR condition.
-      # The second layer of an array is means AND condition.
-      # NOTE: Example of filter_set
-      # [
-      #   [{ 'expression' => "$.code.coding[?(@.system == 'http://loinc.org')].code", 'value' => '8302-2' }],
-      #   [{ 'expression' => "$.code.coding[?(@.system == 'http://snomed.info/sct')].code", 'value' => '50373000' }]
-      # ]
-      # This filter_set means that we should get Observations with LOINC code 8302-2 or SNOMED code 50373000.
-      if filter_set.empty?
-        config.resources
-      else
-        config.resources.select { |resource| filterset_on_resource?(resource, filter_set) }
+    def filtered_resources(filter_set, resources)
+      filter_set.any? ? FilterSet.new(filter_set, fhirpath_evaluator: self).filter_resources(resources) : resources
+    end
+
+    def validate_and_check_dar(resources, profile_url)
+      resources.each do |resource|
+        resource_is_valid?(resource:, profile_url:)
+        check_for_dar(resource)
       end
-    end
-
-    def filterset_on_resource?(resource, filter_set)
-      filter_set.map do |or_filter|
-        or_filter.map do |and_filter|
-          jsonpath_on_resource(and_filter["expression"], resource) == and_filter["value"]
-        end.all?
-      end.any?
-    end
-
-    def jsonpath_on_resource(jsonpath_string, resource)
-      JsonPath.new(jsonpath_string).first(resource.to_hash)
     end
 
     def check_for_dar(resource)
