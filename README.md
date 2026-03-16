@@ -203,7 +203,7 @@ In a typical Inferno test kit repo you will:
 2. Create one or more config files under `config/`.
 3. Add a small Ruby script or Rake task that calls:
 
-   ```ruby
+```ruby
 InfernoSuiteGenerator::Generator.generate(["config/your_ig.json"])
    ```
 
@@ -265,28 +265,6 @@ These use Docker for a consistent environment. For local equivalents, you can ru
 - `make typecheck`
 - `make tests`
 - or `make check` to run them all.
-
-### Docker image build & publish
-
-The published Docker image is built from `Dockerfile`, which:
-- Uses `ruby:3.3.6-slim`
-- Installs build tooling and git
-- Installs gem dependencies via `bundle install`
-- Sets the entrypoint to:
-  - add `./lib` to `$LOAD_PATH`
-  - require `inferno_suite_generator`
-  - call `InfernoSuiteGenerator::Generator.generate(ARGV[0])`
-
-You can build and run locally:
-
-```bash
-docker build -t inferno_suite_generator .
-docker run -v "$(pwd)":/data inferno_suite_generator /data/config.json
-```
-
-A manual GitHub Actions workflow (`.github/workflows/manual-build-push.yml`) is available to build and push the image to GitHub Container Registry (`ghcr.io/<owner>/<repo>`), tagging it with semver tags, a short SHA and `latest`.
-
----
 
 ## Changelog
 
