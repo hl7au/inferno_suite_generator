@@ -305,13 +305,13 @@ The InfernoSuiteGenerator is available as a Docker image from GitHub Container R
 Pull the latest image:
 
 ```bash
-docker pull ghcr.io/beda-software/inferno_suite_generator:latest
+docker pull ghcr.io/hl7au/inferno_suite_generator:latest
 ```
 
 Run the generator with your configuration file:
 
 ```bash
-docker run -v $(pwd):/data ghcr.io/beda-software/inferno_suite_generator:latest /data/config.json
+docker run -v $(pwd):/data ghcr.io/hl7au/inferno_suite_generator:latest /data/config.json
 ```
 
 This mounts your current directory to `/data` in the container and runs the generator with your configuration file. The image passes the first argument as the config path; for multiple config files (base + overrides), use the Ruby API instead.
