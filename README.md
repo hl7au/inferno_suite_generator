@@ -24,7 +24,7 @@ The primary audience is **IG authors and test-kit maintainers** who want to quic
 
 - Ruby **3.3.6** (if using the gem directly)
 - A FHIR IG package (e.g. `*.tgz` or unpacked package directory)
-- A JSON configuration file describing how your IG maps to an Inferno suite  
+- A JSON configuration file describing how your IG maps to an Inferno suite
   (see `config.example.json` / `config.example2.json` in the repo)
 
 You can run the generator either:
@@ -55,9 +55,9 @@ InfernoSuiteGenerator::Generator.generate(["config/your_suite_config.json"])
 
 # Base + overrides, merged in order
 InfernoSuiteGenerator::Generator.generate([
-  "config/your_suite_config.base.json",
+                                            "config/your_suite_config.base.json",
   "config/your_suite_config.version_specific.json"
-])
+                                          ])
 ```
 
 After running, you will have:
@@ -70,21 +70,21 @@ After running, you will have:
 
 Given one or more configuration files, the generator:
 
-1. **Loads the IG package**  
+1. **Loads the IG package**
    Resolves profiles, search parameters, examples and other artifacts.
-2. **Extracts metadata**  
+2. **Extracts metadata**
    Writes a consolidated `metadata.yml` describing resources, profiles and search parameters.
-3. **Extracts demo/example data**  
+3. **Extracts demo/example data**
    Writes `demodata.yml` representing IG examples, used by create/update/patch tests.
-4. **Generates tests**  
+4. **Generates tests**
    Creates Ruby test classes for:
    - Search / read / include / revinclude
    - Validation and must support
    - Reference resolution
    - Create / update / patch (when example data is available)
-5. **Builds groups and suites**  
+5. **Builds groups and suites**
    Groups tests by resource, composes them into suites, and wires them into your Inferno app.
-6. **Integrates with your test kit**  
+6. **Integrates with your test kit**
    Uses templates and shared modules to emit code that fits Inferno’s conventions.
 
 Internally, the project is organised as:
@@ -204,7 +204,7 @@ In a typical Inferno test kit repo you will:
 3. Add a small Ruby script or Rake task that calls:
 
    ```ruby
-   InfernoSuiteGenerator::Generator.generate(["config/your_ig.json"])
+InfernoSuiteGenerator::Generator.generate(["config/your_ig.json"])
    ```
 
 4. Run that script to generate tests/groups/suites into your test kit’s structure.
