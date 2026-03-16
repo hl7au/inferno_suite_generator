@@ -56,7 +56,7 @@ InfernoSuiteGenerator::Generator.generate(["config/your_suite_config.json"])
 # Base + overrides, merged in order
 InfernoSuiteGenerator::Generator.generate([
                                             "config/your_suite_config.base.json",
-  "config/your_suite_config.version_specific.json"
+                                            "config/your_suite_config.version_specific.json"
                                           ])
 ```
 
