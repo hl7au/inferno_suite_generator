@@ -78,10 +78,10 @@ Given one or more configuration files, the generator:
    Writes `demodata.yml` representing IG examples, used by create/update/patch tests.
 4. **Generates tests**
    Creates Ruby test classes for:
-   - Search / read / include / revinclude
-   - Validation and must support
-   - Reference resolution
-   - Create / update / patch (when example data is available)
+    - Search / read / include / revinclude
+    - Validation and must support
+    - Reference resolution
+    - Create / update / patch (when example data is available)
 5. **Builds groups and suites**
    Groups tests by resource, composes them into suites, and wires them into your Inferno app.
 6. **Integrates with your test kit**
@@ -129,10 +129,10 @@ At a high level, a config file contains:
 - **`tx_server_url`**: Terminology server URL used by generated tests
 - **`links`**: Links shown in the Inferno UI (e.g. “Report Issue”, “IG Documentation”)
 - **`outer_groups`**: Extra groups to include before/after generated groups:
-  - `import_type`
-  - `import_path`
-  - `group_position` (`before` / `after`)
-  - `group_id`
+    - `import_type`
+    - `import_path`
+    - `group_position` (`before` / `after`)
+    - `group_id`
 
 > **Note**: Module names and paths are derived from `suite.title`. You do **not** need to set `suite_module_name`, `module_name_prefix`, `test_id_prefix` or explicit code paths.
 
@@ -151,10 +151,10 @@ These constants can be referred to from profile/resource configs, allowing you t
 - **`expectation`**: Allowed expectation levels (e.g. `["SHALL", "SHOULD", "MAY"]`)
 - **`search_params_to_ignore`**: Search parameters to ignore when generating tests (e.g. `["_sort"]`)
 - **`register_generators`**: Custom generators to load, each with:
-  - `path_to_generator`
-  - `generator_class`
-  - `path_to_template`
-  - `test_type` (e.g. `"search"`)
+    - `path_to_generator`
+    - `generator_class`
+    - `path_to_template`
+    - `test_type` (e.g. `"search"`)
 
 ### Configs – profiles section
 
@@ -166,22 +166,22 @@ Keyed by **profile URL**; lets you tune or override behavior for specific profil
 - **`override_executor.search.<param>`**: Swap executors for specific search parameters
 - **`forced_initial_search`**: Force initial search params (e.g. `["patient", "code"]`)
 - **`register_extractors`**: Register custom extractors with:
-  - `path_to_extractor`
-  - `extractor_class`
-  - `extractor_type` (e.g. `"must_support"`)
+    - `path_to_extractor`
+    - `extractor_class`
+    - `extractor_type` (e.g. `"must_support"`)
 - **`extra_searches`**: Describe additional searches to generate, such as:
-  - `{ "type": "search", "params": ["_id"] }`
-  - `{ "type": "include", "param": "medication", "target_resource": "Medication", "paths": ["medicationReference"] }`
+    - `{ "type": "search", "params": ["_id"] }`
+    - `{ "type": "include", "param": "medication", "target_resource": "Medication", "paths": ["medicationReference"] }`
 - **`search_param.<id>`**: Per‑search‑parameter options:
-  - `default_values` (constant key or explicit list)
-  - `multiple_and_expectation` / `multiple_or_expectation`
-  - `comparators`
-  - `expectation_change` (e.g. `{ "from": "SHALL", "to": "SHOULD" }`)
+    - `default_values` (constant key or explicit list)
+    - `multiple_and_expectation` / `multiple_or_expectation`
+    - `comparators`
+    - `expectation_change` (e.g. `{ "from": "SHALL", "to": "SHOULD" }`)
 - **`must_support.remove_elements`**: Optional rules for trimming must‑support elements
 - **`slice_discriminator_default_value`**: Defaults for value‑type slice discriminators; an array of objects with:
-  - `slice_id`
-  - optional `discriminator_path`
-  - `value`: array of `{ "path": "...", "value": ... }`, where inner `value` may be scalar or an array
+    - `slice_id`
+    - optional `discriminator_path`
+    - `value`: array of `{ "path": "...", "value": ... }`, where inner `value` may be scalar or an array
 
 ### Configs – resources section
 
@@ -203,7 +203,7 @@ In a typical Inferno test kit repo you will:
 2. Create one or more config files under `config/`.
 3. Add a small Ruby script or Rake task that calls:
 
-   ```ruby
+```ruby
 InfernoSuiteGenerator::Generator.generate(["config/your_ig.json"])
    ```
 
@@ -265,28 +265,6 @@ These use Docker for a consistent environment. For local equivalents, you can ru
 - `make typecheck`
 - `make tests`
 - or `make check` to run them all.
-
-### Docker image build & publish
-
-The published Docker image is built from `Dockerfile`, which:
-- Uses `ruby:3.3.6-slim`
-- Installs build tooling and git
-- Installs gem dependencies via `bundle install`
-- Sets the entrypoint to:
-  - add `./lib` to `$LOAD_PATH`
-  - require `inferno_suite_generator`
-  - call `InfernoSuiteGenerator::Generator.generate(ARGV[0])`
-
-You can build and run locally:
-
-```bash
-docker build -t inferno_suite_generator .
-docker run -v "$(pwd)":/data inferno_suite_generator /data/config.json
-```
-
-A manual GitHub Actions workflow (`.github/workflows/manual-build-push.yml`) is available to build and push the image to GitHub Container Registry (`ghcr.io/<owner>/<repo>`), tagging it with semver tags, a short SHA and `latest`.
-
----
 
 ## Changelog
 
