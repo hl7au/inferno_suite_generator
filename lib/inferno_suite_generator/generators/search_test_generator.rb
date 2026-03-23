@@ -179,32 +179,22 @@ module InfernoSuiteGenerator
         first_search?
       end
 
+      def includes_from_config
+        config = Registry.get(:config_keeper)
+        search_names = search_metadata[:names].sort
+        include_cases = config.extra_searches(group_metadata.profile_url, group_metadata.resource).select { |search| search["type"] == "include" }
+        include_case = include_cases.find { |include_case| include_case["names"].sort == search_names }
+
+        return [] unless include_case
+
+        [{
+           "parameter" => include_case["param"],
+           "target_resource" => include_case["target_resource"],
+           "paths" => include_case["paths"]
+         }]
+      end
       def includes
-        special_cases = Registry.get(:config_keeper).special_includes_cases(group_metadata.profile_url,
-                                                                            group_metadata.resource)
-        include_params_list = group_metadata.include_params
-        search_definitions = group_metadata.search_definitions
-
-        include_params_list.map do |include_param|
-          return [special_cases[include_param]] if special_cases.key?(include_param)
-
-          target_resource = ""
-          paths = ""
-          search_definitions.each_key do |search_def_key|
-            current_search_def_path = search_definitions[search_def_key]
-            next unless current_search_def_path[:full_paths].first.split(".") == include_param.split(":")
-
-            target_resource = current_search_def_path[:target_resource]
-            paths = current_search_def_path[:paths]
-            break
-          end
-
-          {
-            "parameter" => include_param,
-            "target_resource" => target_resource,
-            "paths" => paths
-          }
-        end
+        includes_from_config
       end
 
       def search_properties
