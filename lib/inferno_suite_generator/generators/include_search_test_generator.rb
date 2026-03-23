@@ -9,21 +9,28 @@ module InfernoSuiteGenerator
     class IncludeSearchTestGenerator < SearchTestGenerator
       class << self
         def generate(ig_metadata, base_output_dir)
-          ig_metadata.groups
-                     .reject do |group|
-                       Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
-                     end
-                     .select { |group| group.include_params.present? }
-                     .each do |group|
+          config = Registry.get(:config_keeper)
+          filtered_groups(ig_metadata, config).each do |group|
+            include_searches = group_include_searches(group, config)
+            next unless include_searches.present?
             group.searches.each do |search|
-              config = Registry.get(:config_keeper)
-              next unless config.add_extra_searches?(group.profile_url, group.resource, search[:names])
-
-              group.include_params.each do |include_param|
-                new(group, search, base_output_dir, include_param, ig_metadata).generate
-              end
+              filtered_include_search = include_searches.find { |include_search| include_search["names"].sort == search[:names].sort }
+              next unless filtered_include_search.present?
+              new(group, search, base_output_dir, filtered_include_search, ig_metadata).generate
             end
           end
+        end
+
+        private
+
+        def filtered_groups(ig_metadata, config)
+          ig_metadata.groups.reject do |group|
+            config.exclude_resource?(group.profile_url, group.resource)
+          end
+        end
+
+        def group_include_searches(group, config)
+          config.extra_searches(group.profile_url, group.resource).select { |search| search["type"] == "include" }
         end
       end
 
