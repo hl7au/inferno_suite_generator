@@ -70,11 +70,7 @@ module InfernoSuiteGenerator
           file_name: base_output_file_name
         }
 
-        if resource_type == "Medication"
-          medication_request_metadata.add_test(**test_metadata)
-        else
-          group_metadata.add_test(**test_metadata)
-        end
+        group_metadata.add_test(**test_metadata)
       end
 
       def description

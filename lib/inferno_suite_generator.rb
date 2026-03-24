@@ -92,6 +92,7 @@ module InfernoSuiteGenerator
 
     def generate_validation_tests
       ValidationTestGenerator.generate(ig_metadata, base_output_dir)
+      generate_custom_tests_with_type("validation")
     end
 
     def generate_read_tests
