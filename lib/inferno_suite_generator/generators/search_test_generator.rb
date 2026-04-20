@@ -62,7 +62,7 @@ module InfernoSuiteGenerator
         fixed_values = Registry.get(:config_keeper).fixed_values_to_search(group_metadata.profile_url, group_metadata.resource)
         search_params = search_metadata[:names]
 
-        fixed_values.any? { |fixed_value| search_params.include?(fixed_value[:name]) }
+        fixed_values.any? { |fixed_value| search_params.include?(fixed_value) }
       end
 
       def first_search_not_patient?
