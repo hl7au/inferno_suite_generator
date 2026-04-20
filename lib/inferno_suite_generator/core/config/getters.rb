@@ -90,6 +90,10 @@ module InfernoSuiteGenerator
           resolve_value(profile_url, resource_type, "resources_to_create_filter")
         end
 
+        def fixed_values_to_search(profile_url, resource_type)
+          resolve_value(profile_url, resource_type, "fixed_values_to_search", EMPTY_ARRAY)
+        end
+
         def rewrite_igs
           get("suite.rewrite_igs")
         end

@@ -55,17 +55,19 @@ module InfernoSuiteGenerator
       end
 
       def fixed_value_search?
-        first_search_not_patient? || any_observation_search?
+        first_search_not_patient? || fixed_value_search_from_config?
+      end
+
+      def fixed_value_search_from_config?
+        fixed_values = Registry.get(:config_keeper).fixed_values_to_search(group_metadata.profile_url, group_metadata.resource)
+        search_params = search_metadata[:names]
+
+        fixed_values.any? { |fixed_value| search_params.include?(fixed_value[:name]) }
       end
 
       def first_search_not_patient?
         first_search? && search_metadata[:names] != ["patient"] &&
           !group_metadata.delayed? && resource_type != "Patient"
-      end
-
-      def any_observation_search?
-        # TODO: SHOULD BE REMOVED
-        resource_type == "Observation" && search_metadata[:names].include?("code")
       end
 
       def fixed_value_search_param_name
