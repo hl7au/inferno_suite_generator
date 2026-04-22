@@ -60,7 +60,7 @@ module InfernoSuiteGenerator
       end
 
       def resource_types_for_references
-        groups.flat_map { |group| group.references.map { |reference| reference[:resource_types] } }.flatten.uniq
+        groups.flat_map { |group| group.references.map { |reference| reference[:resource_types] } }.flatten.uniq.compact
       end
     end
   end
