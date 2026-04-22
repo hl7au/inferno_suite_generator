@@ -23,7 +23,8 @@ module InfernoSuiteGenerator
         end
 
         def resources_to_exclude(profile_url, resource_type)
-          resolve_value(profile_url, resource_type, "skip", false)
+          resolve_value(profile_url, resource_type, "skip_generation", false) ||
+            resolve_value(profile_url, resource_type, "skip", false)
         end
 
         def add_extra_searches?(profile_url, resource_type, search_names)
@@ -34,11 +35,14 @@ module InfernoSuiteGenerator
         end
 
         def exclude_resource_old?(resource_type)
-          resources_configs.key?(resource_type) ? resources_configs[resource_type]["skip"] || false : false
+          return false unless resources_configs.key?(resource_type)
+
+          resources_configs[resource_type]["skip_generation"] || resources_configs[resource_type]["skip"] || false
         end
 
         def exclude_resource?(profile_url, resource_type)
-          resolve_value(profile_url, resource_type, "skip", nil)
+          resolve_value(profile_url, resource_type, "skip_generation", nil) ||
+            resolve_value(profile_url, resource_type, "skip", nil)
         end
 
         def specific_identifiers(profile_url, resource_type, param_id)

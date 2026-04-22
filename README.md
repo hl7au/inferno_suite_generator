@@ -161,7 +161,8 @@ These constants can be referred to from profile/resource configs, allowing you t
 Keyed by **profile URL**; lets you tune or override behavior for specific profiles:
 
 - **`keep_all_search_results`**: Keep all search results in Inferno scratch
-- **`skip`**: Skip all tests for this profile
+- **`skip`**: Skip this profile entirely (metadata extraction and generation)
+- **`skip_generation`**: Skip generation only (tests/groups/suite), while still keeping metadata extraction
 - **`first_class_profile`**: Mark as first‑class `read` or `search`
 - **`override_executor.search.<param>`**: Swap executors for specific search parameters
 - **`forced_initial_search`**: Force initial search params (e.g. `["patient", "code"]`)
@@ -187,7 +188,7 @@ Keyed by **profile URL**; lets you tune or override behavior for specific profil
 
 Keyed by FHIR **resource type** (e.g. `"Observation"`, `"MedicationRequest"`). Options largely mirror the profile‑level settings, but apply to all profiles of that resource type:
 
-- All options from **profiles** (other than the URL key)
+- All options from **profiles** (other than the URL key), including `skip` and `skip_generation`
 - **`search_multiple_or_and_by_target_resource`**: Configure multi‑OR/AND behavior for target‑resource params
 - **`search.test_medication_inclusion`**: Enable special include tests for Medication where applicable
 

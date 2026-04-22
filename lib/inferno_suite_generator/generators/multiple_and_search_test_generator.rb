@@ -12,6 +12,9 @@ module InfernoSuiteGenerator
         def generate(ig_metadata, base_output_dir)
           ig_metadata.groups
                      .select { |group| group.searches.present? }
+                     .reject do |group|
+            Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
+          end
                      .each do |group|
             group.search_definitions.each_key do |search_key|
               if group.search_definitions[search_key].key?(:multiple_and) && search_key.to_s != "patient"

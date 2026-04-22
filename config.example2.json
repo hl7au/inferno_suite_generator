@@ -69,7 +69,7 @@
     },
     "resources": {
       "Medication": {
-        "skip": true
+        "skip_generation": true
       },
       "DiagnosticReport": {
         "skip": true

@@ -288,7 +288,7 @@
         "skip": true
       },
       "http://hl7.org/fhir/StructureDefinition/DocumentReference": {
-        "skip": true
+        "skip_generation": true
       }
     },
     "resources": {
@@ -296,7 +296,7 @@
         "search_multiple_or_and_by_target_resource": ["practitioner"]
       },
       "Medication": {
-        "skip": true
+        "skip_generation": true
       },
       "DiagnosticReport": {
         "skip": true

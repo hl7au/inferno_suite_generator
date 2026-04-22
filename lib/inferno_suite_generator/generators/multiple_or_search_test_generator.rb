@@ -24,7 +24,11 @@ module InfernoSuiteGenerator
       class << self
         def generate(ig_metadata, base_output_dir)
           ctx = GenerationContext.new(base_output_dir:, ig_metadata:)
-          ig_metadata.search_groups.each { |group| generate_test(group, ctx) }
+          filtered_groups = ig_metadata.search_groups.reject do |group|
+            Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
+          end
+
+          filtered_groups.each { |group| generate_test(group, ctx) }
         end
 
         def generate_test(group, ctx)
