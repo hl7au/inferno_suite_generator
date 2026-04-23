@@ -7,10 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.1] - 2026-03-24
 
+### Added
+
+- Added `skip_generation` as a generator exclusion setting, while preserving backward compatibility with existing `skip` configurations.
+- Added `exclude_slices_from_must_support` to control Must Support metadata extraction for specific slices.
+- Added support for custom generators in validation test generation.
+
 ### Changed
 
-- Fixed extra include tests.
-- Added the ability to use a custom generator for validation tests.
+- Applied resource exclusion filtering more consistently across search test generators (`include`, `chain`, `multiple AND`, and `multiple OR`).
+- Updated fixed-value search behavior to use configurable `fixed_values_to_search` definitions and better default parameter population for non-fixed inputs.
+- Improved group metadata extraction by removing `ig_id` from group payloads and compacting nil reference target resource types.
+
+### Fixed
+
+- Fixed include-search test generation to follow configured `extra_searches` entries with `type: include` and correct search-name matching.
+- Removed debug output from search test module execution.
 
 ## [0.1.0] - 2025-03-18
 
