@@ -38,7 +38,6 @@ module InfernoSuiteGenerator
             profile_url:,
             profile_name:,
             profile_version:,
-            ig_id:,
             title:,
             short_description:,
             interactions:,
@@ -142,10 +141,6 @@ module InfernoSuiteGenerator
           .join
           .gsub(ig_metadata.ig_module_name_prefix, "#{ig_metadata.ig_module_name_prefix}#{ig_metadata.reformatted_version}")
           .concat("Sequence")
-      end
-
-      def ig_id
-        ig_metadata.ig_id
       end
 
       def version

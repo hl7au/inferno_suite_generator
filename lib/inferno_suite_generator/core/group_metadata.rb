@@ -29,7 +29,6 @@ module InfernoSuiteGenerator
         id
         file_name
         delayed_references
-        ig_id
       ].freeze
 
       NON_USCDI_RESOURCES = {
