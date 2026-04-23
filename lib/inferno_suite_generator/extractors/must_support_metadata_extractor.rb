@@ -19,10 +19,12 @@ module InfernoSuiteGenerator
       def must_supports
         ms_elements_to_exclude = config.elements_to_exclude(profile.url, resource)
         ms_elements = must_support_elements.reject { |element| ms_elements_to_exclude.include?(element[:path]) }
-        
+        ms_slices_to_exclude = config.slices_to_exclude(profile.url, resource)
+        ms_slices = must_support_slices.reject { |slice| slice_excluded_from_must_support?(slice, ms_slices_to_exclude) }
+
         @must_supports = {
           extensions: must_support_extensions,
-          slices: must_support_slices,
+          slices: ms_slices,
           elements: ms_elements
         }
 
@@ -358,6 +360,17 @@ module InfernoSuiteGenerator
             end
           end
         end.uniq
+      end
+
+      private
+
+      def slice_excluded_from_must_support?(slice, exclude_list)
+        sid = slice[:slice_id].to_s
+        short = sid.delete_prefix("#{resource}.")
+        exclude_list.any? do |entry|
+          e = entry.to_s
+          e == sid || e == short
+        end
       end
     end
   end

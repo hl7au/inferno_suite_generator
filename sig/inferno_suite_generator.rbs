@@ -97,6 +97,7 @@ module InfernoSuiteGenerator
         def filter_set: (String profile_url, String resource_type) -> untyped
         def keep_all_search_results: (String profile_url, String resource) -> bool
         def elements_to_exclude: (String profile_url, String resource) -> Array[untyped]
+        def slices_to_exclude: (String profile_url, String resource) -> Array[untyped]
       end
 
       module Generators

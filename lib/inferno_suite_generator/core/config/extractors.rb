@@ -77,6 +77,10 @@ module InfernoSuiteGenerator
           resolve_value(profile_url, resource, "exclude_elements_from_must_support", EMPTY_ARRAY)
         end
 
+        def slices_to_exclude(profile_url, resource)
+          resolve_value(profile_url, resource, "exclude_slices_from_must_support", EMPTY_ARRAY)
+        end
+
         def slice_discriminator_default_values(profile_url, resource)
           resolve_value(profile_url, resource, "slice_discriminator_default_value", EMPTY_ARRAY)
         end
