@@ -182,14 +182,31 @@ module InfernoSuiteGenerator
       prepare_uscdi_ms(:slices, metadata)
     end
 
+    def must_support_slice_present?(resource, slice)
+      path = slice[:path] # .delete_suffix('[x]')
+      find_slice(resource, path, slice[:discriminator]).present?
+    end
+
+    def slices_present_statuses(metadata = nil, resources = [])
+      must_support_slices(metadata).map do |slice|
+        {
+          definition: slice,
+          path: slice[:path],
+          present: resources.any? { |resource| must_support_slice_present?(resource, slice) }
+        }
+      end
+    end
+
+    def miss_slices(metadata = nil, resources = [])
+      found_slices = slices_present_statuses(metadata, resources).select do |slice_status|
+        !slice_status[:present]
+      end
+      found_slices.map { |slice_status| slice_status[:definition] }
+    end
+
     def missing_slices(resources = [], metadata = nil)
-      @missing_slices ||=
-        must_support_slices(metadata).select do |slice|
-          resources.none? do |resource|
-            path = slice[:path] # .delete_suffix('[x]')
-            find_slice(resource, path, slice[:discriminator]).present?
-          end
-        end
+      @missing_slices ||= miss_slices(metadata, resources)
+      @missing_slices
     end
 
     def find_slice(resource, path, discriminator)
