@@ -20,9 +20,9 @@ module InfernoSuiteGenerator
     def perform_must_support_test(resources)
       conditional_skip_with_msg resources.blank?, "No #{resource_type} resources were found"
 
-      missing_elements(resources)
-      missing_slices(resources)
-      missing_extensions(resources)
+      missing_elements(resources, metadata)
+      missing_slices(resources, metadata)
+      missing_extensions(resources, metadata)
 
       handle_must_support_choices if metadata.must_supports[:choices].present?
 
@@ -82,21 +82,21 @@ module InfernoSuiteGenerator
       config.options[:exclude_uscdi_only_test] == true
     end
 
-    def prepare_uscdi_ms(metadata_key)
+    def prepare_uscdi_ms(metadata_key, metadata = nil)
       if exclude_uscdi_only_test?
-        metadata.must_supports[metadata_key].reject { |item| item[:uscdi_only] }
+        metadata&.must_supports&.dig(metadata_key)&.reject { |item| item[:uscdi_only] } || []
       else
-        metadata.must_supports[metadata_key]
+        metadata&.must_supports&.dig(metadata_key) || []
       end
     end
 
-    def must_support_extensions
-      prepare_uscdi_ms(:extensions)
+    def must_support_extensions(metadata = nil)
+      prepare_uscdi_ms(:extensions, metadata)
     end
 
-    def missing_extensions(resources = [])
+    def missing_extensions(resources = [], metadata = nil)
       @missing_extensions ||=
-        must_support_extensions.select do |extension_definition|
+        must_support_extensions(metadata).select do |extension_definition|
           resources.none? do |resource|
             resource_extensions_url_arr = Helpers.extract_extensions_from_resource(resource).map { |ext| ext["url"] }
             resource_extensions_url_arr.include? extension_definition[:url]
@@ -104,36 +104,87 @@ module InfernoSuiteGenerator
         end
     end
 
-    def must_support_elements
-      prepare_uscdi_ms(:elements)
+    def must_support_elements(metadata = nil)
+      prepare_uscdi_ms(:elements, metadata)
     end
 
-    def missing_elements(resources = [])
-      @missing_elements ||=
-        must_support_elements.select do |element_definition|
-          resources.none? do |resource|
-            path = element_definition[:path] # .delete_suffix('[x]')
-            value_found = find_a_value_at(resource, path) do |value|
-              value_without_extensions =
-                value.respond_to?(:to_hash) ? value.to_hash.except("extension") : value
+    # Checks if a value is found at the given FHIRPath within a resource that satisfies the
+    # must-support element definition, including fixed-value constraints if specified.
+    # Ignores the 'extension' field when checking for presence.
+    #
+    # @param resource [Hash] the resource to inspect
+    # @param path [String] the FHIRPath to the element
+    # @param element_definition [Hash] definition hash, may include :fixed_value
+    # @return [Object, nil] the value if found and matches constraints, otherwise nil
+    def value_found?(resource, path, element_definition)
+      find_a_value_at(resource, path) do |value|
+        value_without_extensions =
+          value.respond_to?(:to_hash) ? value.to_hash.except("extension") : value
 
-              (value_without_extensions.present? || value_without_extensions == false) &&
-                (element_definition[:fixed_value].blank? || value == element_definition[:fixed_value])
-            end
-            # Note that false.present? => false, which is why we need to add this extra check
-            value_found.present? || value_found == false
-          end
-        end
+        (value_without_extensions.present? || value_without_extensions == false) &&
+          (element_definition[:fixed_value].blank? || value == element_definition[:fixed_value])
+      end
+    end
+
+    # Checks whether the given must-support element is present in the resource.
+    # Presence is determined by finding a value at the specified FHIRPath that satisfies
+    # any fixed value constraints (if specified in the element definition).
+    # Returns true if the value is present (including the special case of false values),
+    # otherwise returns false.
+    #
+    # @param element_definition [Hash] The definition of the must-support element, including its FHIRPath and any fixed value.
+    # @param resource [Hash] The FHIR resource to check for the element's presence.
+    # @return [Boolean] True if the element is present in the resource, false otherwise.
+    def must_support_element_present?(element_definition, resource)
+      path = element_definition[:path]
+      value_found = value_found?(resource, path, element_definition)
+      value_found.present? || value_found == false
+    end
+
+
+    # Returns an array of hashes describing the presence status of each must-support element
+    # in the provided resources. For each must-support element definition in the metadata,
+    # checks all resources to see if any resource satisfies the must-support condition, and
+    # records whether it is present.
+    #
+    # @param metadata [Hash, nil] Optional metadata containing must-support element definitions.
+    # @param resources [Array<Hash>] Array of FHIR resources to check for element presence.
+    # @return [Array<Hash>] Array of hashes, each with :path and :present keys.
+    def elements_present_statuses(metadata = nil, resources = [])
+      must_support_elements(metadata).map do |element_definition|
+        {
+          definition: element_definition,
+          path: element_definition[:path],
+          present: resources.any? { |resource| must_support_element_present?(element_definition, resource) }
+        }
+      end
+    end
+
+    # Finds and returns all must-support elements that are missing from the provided resources.
+    # This method filters the must-support elements based on the presence of matching values in the resources.
+    #
+    # @param metadata [Hash, nil] Optional metadata containing must-support element definitions.
+    # @param resources [Array] Array of FHIR resources to check for presence of must-support elements.
+    # @return [Array] Array of must-support elements that are missing from the resources.
+    def miss_elements(metadata = nil, resources = [])
+      found_elements = elements_present_statuses(metadata, resources).select do |element_status|
+        !element_status[:present]
+      end
+      found_elements.map { |element_status| element_status[:definition] }
+    end
+
+    def missing_elements(resources = [], metadata = nil)
+      @missing_elements ||= miss_elements(metadata, resources)
       @missing_elements
     end
 
-    def must_support_slices
-      prepare_uscdi_ms(:slices)
+    def must_support_slices(metadata = nil)
+      prepare_uscdi_ms(:slices, metadata)
     end
 
-    def missing_slices(resources = [])
+    def missing_slices(resources = [], metadata = nil)
       @missing_slices ||=
-        must_support_slices.select do |slice|
+        must_support_slices(metadata).select do |slice|
           resources.none? do |resource|
             path = slice[:path] # .delete_suffix('[x]')
             find_slice(resource, path, slice[:discriminator]).present?
