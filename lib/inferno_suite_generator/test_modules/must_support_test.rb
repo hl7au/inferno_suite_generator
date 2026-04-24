@@ -94,14 +94,31 @@ module InfernoSuiteGenerator
       prepare_uscdi_ms(:extensions, metadata)
     end
 
+    def extension_present?(resource, extension_definition)
+      resource_extensions_url_arr = Helpers.extract_extensions_from_resource(resource).map { |ext| ext["url"] }
+      resource_extensions_url_arr.include? extension_definition[:url]
+    end
+
+    def extensions_present_statuses(metadata = nil, resources = [])
+      must_support_extensions(metadata).map do |extension_definition|
+        {
+          definition: extension_definition,
+          url: extension_definition[:url],
+          present: resources.any? { |resource| extension_present?(resource, extension_definition) }
+        }
+      end
+    end
+
+    def miss_extensions(metadata = nil, resources = [])
+      found_extensions = extensions_present_statuses(metadata, resources).select do |extension_status|
+        !extension_status[:present]
+      end
+      found_extensions.map { |extension_status| extension_status[:definition] }
+    end
+
     def missing_extensions(resources = [], metadata = nil)
-      @missing_extensions ||=
-        must_support_extensions(metadata).select do |extension_definition|
-          resources.none? do |resource|
-            resource_extensions_url_arr = Helpers.extract_extensions_from_resource(resource).map { |ext| ext["url"] }
-            resource_extensions_url_arr.include? extension_definition[:url]
-          end
-        end
+      @missing_extensions ||= miss_extensions(metadata, resources)
+      @missing_extensions
     end
 
     def must_support_elements(metadata = nil)
