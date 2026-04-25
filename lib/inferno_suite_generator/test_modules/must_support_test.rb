@@ -168,10 +168,14 @@ module InfernoSuiteGenerator
     # @param resources [Array<Hash>] Array of FHIR resources to check for element presence.
     # @return [Array<Hash>] Array of hashes, each with :path and :present keys.
     def elements_present_statuses(metadata = nil, resources = [])
+      mandatory_elements = metadata.mandatory_elements.map { |element| element.gsub("#{metadata.resource}.", "") }
       must_support_elements(metadata).map do |element_definition|
+        path = element_definition[:path]
+
         {
           definition: element_definition,
-          path: element_definition[:path],
+          path: path,
+          mandatory: mandatory_elements.include?(path),
           present: resources.any? { |resource| must_support_element_present?(element_definition, resource) }
         }
       end
