@@ -4,12 +4,14 @@ require_relative "../utils/fhir_resource_navigation"
 require_relative "../utils/helpers"
 require_relative "../utils/assert_helpers"
 require_relative "../utils/filter_set"
+require_relative "../utils/must_support_helpers"
 
 module InfernoSuiteGenerator
   module MustSupportTest
     extend Forwardable
     include FHIRResourceNavigation
     include AssertHelpers
+    include MustSupportHelpers
 
     def_delegators "self.class", :metadata
 
@@ -19,6 +21,8 @@ module InfernoSuiteGenerator
 
     def perform_must_support_test(resources)
       conditional_skip_with_msg resources.blank?, "No #{resource_type} resources were found"
+
+      report_profile_elements_status(metadata, resources)
 
       missing_elements(resources, metadata)
       missing_slices(resources, metadata)
