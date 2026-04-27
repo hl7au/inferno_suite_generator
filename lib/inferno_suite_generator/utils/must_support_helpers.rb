@@ -28,8 +28,11 @@ module InfernoSuiteGenerator
     def report_profile_elements_status(profile_metadata, resources_to_check)
       elements_statuses = elements_present_statuses(profile_metadata, resources_to_check)
       msg_level = calculate_elements_status_message_level(elements_statuses)
-      add_message(msg_level, build_report_message(profile_metadata, elements_statuses).join("\n\n"))
-      msg_level
+
+      {
+        msg_level:,
+        message: build_report_message(profile_metadata, elements_statuses).join("\n\n")
+      }
     end
 
     def message_with_details(elements_statuses)

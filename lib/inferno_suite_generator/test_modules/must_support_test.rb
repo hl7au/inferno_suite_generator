@@ -22,7 +22,8 @@ module InfernoSuiteGenerator
     def perform_must_support_test(resources)
       conditional_skip_with_msg resources.blank?, "No #{resource_type} resources were found"
 
-      report_profile_elements_status(metadata, resources)
+      report_msg = report_profile_elements_status(metadata, resources)
+      add_message(report_msg[:msg_level], report_msg[:message])
 
       missing_elements(resources, metadata)
       missing_slices(resources, metadata)
