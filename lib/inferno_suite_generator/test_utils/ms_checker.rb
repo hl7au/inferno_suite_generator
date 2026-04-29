@@ -47,7 +47,7 @@ module InfernoSuiteGenerator
     end
 
     def prepare_uscdi_ms(metadata_key)
-      return ms_exclude_usdi(metadata_key) if @metadata.exclude_uscdi_only_test?
+      return ms_exclude_usdi(metadata_key) if exclude_uscdi_only_test?
 
       @metadata.must_supports&.dig(metadata_key) || []
     end
