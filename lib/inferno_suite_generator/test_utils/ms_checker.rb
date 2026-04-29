@@ -7,8 +7,9 @@ module InfernoSuiteGenerator
   class MSChecker
     include FHIRResourceNavigation
 
-    def initialize(group_metadata)
+    def initialize(group_metadata, config = {})
       @metadata = group_metadata
+      @config = config
     end
 
     def elements_present_statuses(resources = [])
@@ -49,6 +50,10 @@ module InfernoSuiteGenerator
       return ms_exclude_usdi(metadata_key) if @metadata.exclude_uscdi_only_test?
 
       @metadata.must_supports&.dig(metadata_key) || []
+    end
+
+    def exclude_uscdi_only_test?
+      !!@config["exclude_uscdi_only_test"]
     end
 
     def ms_exclude_usdi(metadata_key)
