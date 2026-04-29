@@ -4,14 +4,13 @@ require_relative "../utils/fhir_resource_navigation"
 require_relative "../utils/helpers"
 require_relative "../utils/assert_helpers"
 require_relative "../utils/filter_set"
-require_relative "../utils/must_support_helpers"
+require_relative "../test_utils/ms_checker"
 
 module InfernoSuiteGenerator
   module MustSupportTest
     extend Forwardable
     include FHIRResourceNavigation
     include AssertHelpers
-    include MustSupportHelpers
 
     def_delegators "self.class", :metadata
 
@@ -21,9 +20,6 @@ module InfernoSuiteGenerator
 
     def perform_must_support_test(resources)
       conditional_skip_with_msg resources.blank?, "No #{resource_type} resources were found"
-
-      report_msg = report_profile_elements_status(metadata, resources)
-      add_message(report_msg[:msg_level], report_msg[:message])
 
       missing_elements(resources, metadata)
       missing_slices(resources, metadata)
@@ -193,7 +189,8 @@ module InfernoSuiteGenerator
     # @param resources [Array] Array of FHIR resources to check for presence of must-support elements.
     # @return [Array] Array of must-support elements that are missing from the resources.
     def miss_elements(metadata = nil, resources = [])
-      found_elements = elements_present_statuses(metadata, resources).select do |element_status|
+      ms_checker = MSChecker.new(metadata, {"exclude_uscdi_only_test": config.options[:exclude_uscdi_only_test]})
+      found_elements = ms_checker.elements_present_statuses(resources).select do |element_status|
         !element_status[:present]
       end
       found_elements.map { |element_status| element_status[:definition] }
