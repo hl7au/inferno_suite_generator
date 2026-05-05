@@ -3,7 +3,17 @@
 require_relative "../utils/fhir_resource_navigation"
 
 module InfernoSuiteGenerator
-  # This class is used to check if the mandatory and must-support elements are present in the resources
+  # Evaluates Must Support coverage for a test group.
+  #
+  # Features:
+  # - Builds per-element presence statuses across provided resources.
+  # - Distinguishes mandatory-missing elements (error) from optional-missing
+  #   elements (warning).
+  # - Produces a human-readable report with profile context and per-element
+  #   populated/missing indicators.
+  # - Supports configurable top-level status messages through `@config` keys:
+  #   `mandatory_error_message`, `optional_warning_message`, and
+  #   `okay_message`.
   class MSChecker # rubocop:disable Metrics/ClassLength
     include FHIRResourceNavigation
 
@@ -39,8 +49,8 @@ module InfernoSuiteGenerator
 
     def build_report_message(profile_metadata, elements_statuses)
       [
+        message_with_details(elements_statuses),
         msg_line("Profile", "#{profile_metadata.resource} — #{profile_metadata.profile_url}"),
-        msg_line("Message", message_with_details(elements_statuses)),
         "List of Must Support elements populated or missing",
         elements_statuses.map { |element_status| build_element_status_text(element_status) }
       ].flatten
@@ -101,10 +111,21 @@ module InfernoSuiteGenerator
     def message_with_details(elements_statuses)
       status = calculate_elements_status_message_level(elements_statuses)
 
-      return MANDATORY_ERROR_MS_MESSAGE if status == "error"
-      return OPTIONAL_MS_WARNING_MESSAGE if status == "warning"
+      if status == "error"
+        return ms_checker_config_getter(key: "mandatory_error_message",
+                                        default: MANDATORY_ERROR_MS_MESSAGE)
+      end
 
-      MS_OKAY_MESSAGE
+      if status == "warning"
+        return ms_checker_config_getter(key: "optional_warning_message",
+                                        default: OPTIONAL_MS_WARNING_MESSAGE)
+      end
+
+      ms_checker_config_getter(key: "okay_message", default: MS_OKAY_MESSAGE)
+    end
+
+    def ms_checker_config_getter(key:, default: nil)
+      @config[key] || default
     end
 
     def msg_line(label, value)
