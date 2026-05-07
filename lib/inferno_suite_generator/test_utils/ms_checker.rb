@@ -36,7 +36,7 @@ module InfernoSuiteGenerator
 
     def elements_present_statuses(resources = [])
       must_support_elements.map do |element_definition|
-        build_element_status(element_definition, mandatory_elements_clean, resources)
+        build_element_status(element_definition, mandatory_elements_clean, resources, all_present: false)
       end
     end
 
@@ -64,14 +64,23 @@ module InfernoSuiteGenerator
       end
     end
 
-    def build_element_status(element_definition, mandatory_elements, resources)
+    def build_element_status(element_definition, mandatory_elements, resources, all_present: false)
       path = element_definition[:path]
+
       {
         definition: element_definition,
         path:,
         mandatory: mandatory_elements.include?(path),
-        present: resources.any? { |resource| must_support_element_present?(element_definition, resource) }
+        present: elements_present?(resources, element_definition, all_present:)
       }
+    end
+
+    def elements_present?(resources, element_definition, all_present: false)
+      if all_present
+        resources.all? { |resource| must_support_element_present?(element_definition, resource) }
+      else
+        resources.any? { |resource| must_support_element_present?(element_definition, resource) }
+      end
     end
 
     def must_support_element_present?(element_definition, resource)
