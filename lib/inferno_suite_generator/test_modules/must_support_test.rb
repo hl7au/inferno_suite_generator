@@ -201,27 +201,9 @@ module InfernoSuiteGenerator
       @missing_elements
     end
 
-    def must_support_slices(metadata = nil)
-      prepare_uscdi_ms(:slices, metadata)
-    end
-
-    def must_support_slice_present?(resource, slice)
-      path = slice[:path] # .delete_suffix('[x]')
-      find_slice(resource, path, slice[:discriminator]).present?
-    end
-
-    def slices_present_statuses(metadata = nil, resources = [])
-      must_support_slices(metadata).map do |slice|
-        {
-          definition: slice,
-          path: slice[:path],
-          present: resources.any? { |resource| must_support_slice_present?(resource, slice) }
-        }
-      end
-    end
-
     def miss_slices(metadata = nil, resources = [])
-      found_slices = slices_present_statuses(metadata, resources).select do |slice_status|
+      ms_checker = MSChecker.new(metadata, {"exclude_uscdi_only_test": config.options[:exclude_uscdi_only_test]})
+      found_slices = ms_checker.slices_present_statuses(resources).select do |slice_status|
         !slice_status[:present]
       end
       found_slices.map { |slice_status| slice_status[:definition] }
@@ -230,89 +212,6 @@ module InfernoSuiteGenerator
     def missing_slices(resources = [], metadata = nil)
       @missing_slices ||= miss_slices(metadata, resources)
       @missing_slices
-    end
-
-    def find_slice(resource, path, discriminator)
-      find_a_value_at(resource, path) do |element|
-        case discriminator[:type]
-        when "patternCodeableConcept"
-          coding_path = discriminator[:path].present? ? "#{discriminator[:path]}.coding" : "coding"
-          find_a_value_at(element, coding_path) do |coding|
-            coding.code == discriminator[:code] && coding.system == discriminator[:system]
-          end
-        when "patternCoding"
-          coding_path = discriminator[:path].present? ? discriminator[:path] : ""
-          find_a_value_at(element, coding_path) do |coding|
-            coding.code == discriminator[:code] && coding.system == discriminator[:system]
-          end
-        when "patternIdentifier"
-          find_a_value_at(element, discriminator[:path]) { |identifier| identifier.system == discriminator[:system] }
-        when "value"
-          values = discriminator[:values].map { |value| value.merge(path: value[:path].split(".")) }
-          find_slice_by_values(element, values)
-        when "type"
-          case discriminator[:code]
-          when "Date"
-            date_like_slice?(element, "Date")
-          when "DateTime"
-            date_like_slice?(element, "DateTime")
-          when "String"
-            element.is_a? String
-          else
-            element.is_a? FHIR.const_get(discriminator[:code])
-          end
-        when "requiredBinding"
-          coding_path = discriminator[:path].present? ? "#{discriminator[:path]}.coding" : "coding"
-          find_a_value_at(element, coding_path) { |coding| discriminator[:values].include?(coding.code) }
-        end
-      end
-    rescue StandardError => e
-      error_message = "Error finding slice for the resource #{resource.class.name} with path #{path} and discriminator #{discriminator}. Got error #{e.message}"
-      raise error_message
-    end
-
-    def find_slice_by_values(element, value_definitions)
-      path_prefixes = value_definitions.map { |value_definition| value_definition[:path].first }.uniq
-      Array.wrap(element).find do |el|
-        path_prefixes.all? do |path_prefix|
-          value_definitions_for_path =
-            value_definitions
-            .select { |value_definition| value_definition[:path].first == path_prefix }
-            .each { |value_definition| value_definition[:path].shift }
-
-          search_path = if el.respond_to?(:coding) && !el.respond_to?(path_prefix.to_sym) && %w[code system
-                                                                                                display].include?(path_prefix)
-                          "coding.#{path_prefix}"
-                        else
-                          path_prefix
-                        end
-
-          find_a_value_at(el, search_path) do |el_found|
-            child_element_value_definitions, current_element_value_definitions =
-              value_definitions_for_path.partition { |value_definition| value_definition[:path].present? }
-
-            current_element_values_match =
-              current_element_value_definitions
-              .all? do |value_definition|
-                expected = value_definition[:value]
-                if expected.is_a?(Array)
-                  expected.any? { |v| v == el_found }
-                else
-                  expected == el_found
-                end
-              end
-
-            child_element_values_match =
-              if child_element_value_definitions.present?
-                find_slice_by_values(el_found, child_element_value_definitions)
-              else
-                true
-              end
-
-            current_element_values_match && child_element_values_match
-          end
-        end
-      end
     end
   end
 end
