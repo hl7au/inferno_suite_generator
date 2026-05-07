@@ -171,13 +171,15 @@ module InfernoSuiteGenerator
     end
 
     def build_element_status_text(element_status)
+      is_child = element_status[:path].include?(".")
       is_mandatory = element_status[:mandatory]
       missing_icon = is_mandatory ? ERROR_ICON : WARNING_ICON
       missing_text = "#{missing_icon} Missing"
       populated_text = "#{SUCCESS_ICON} Populated"
       element_status_text = element_status[:present] ? populated_text : missing_text
       default_message = "#{element_status_text}: #{element_status[:path]}"
-      is_mandatory ? "#{default_message} (M)" : default_message
+      message_with_mandatory = is_mandatory ? "#{default_message} (M)" : default_message
+      is_child ? "|- #{message_with_mandatory}" : message_with_mandatory
     end
   end
 end
