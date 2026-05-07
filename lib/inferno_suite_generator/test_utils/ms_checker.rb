@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../utils/fhir_resource_navigation"
+require_relative "ms_checker/extensions"
 require_relative "ms_checker/slices"
 
 module InfernoSuiteGenerator
@@ -17,6 +18,7 @@ module InfernoSuiteGenerator
   #   `okay_message`.
   class MSChecker # rubocop:disable Metrics/ClassLength
     include FHIRResourceNavigation
+    include Extensions
     include Slices
 
     MANDATORY_ERROR_MS_MESSAGE = "At least one mandatory Must Support elements is not populated."
