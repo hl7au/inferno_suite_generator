@@ -34,9 +34,9 @@ module InfernoSuiteGenerator
       @config = config
     end
 
-    def elements_present_statuses(resources = [])
+    def elements_present_statuses(resources = [], all_present: false)
       must_support_elements.map do |element_definition|
-        build_element_status(element_definition, mandatory_elements_clean, resources, all_present: false)
+        build_element_status(element_definition, mandatory_elements_clean, resources, all_present:)
       end
     end
 
