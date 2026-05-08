@@ -90,7 +90,16 @@ module InfernoSuiteGenerator
     def must_support_element_present?(element_definition, resource)
       path = element_definition[:path]
       value_found = value_found?(resource, path, element_definition)
-      value_found.present? || value_found == false
+      return true if value_found.present? || value_found == false
+
+      dar_found?(resource, path)
+    end
+
+    def dar_found?(resource, path)
+      find_a_value_at(resource, path, include_dar: true) do |value|
+        value.respond_to?(:extension) &&
+          value.extension.any? { |ext| ext.url == FHIRResourceNavigation::DAR_EXTENSION_URL }
+      end.present?
     end
 
     def must_support_elements
