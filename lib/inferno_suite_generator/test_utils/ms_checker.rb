@@ -98,8 +98,37 @@ module InfernoSuiteGenerator
     def dar_found?(resource, path)
       find_a_value_at(resource, path, include_dar: true) do |value|
         value.respond_to?(:extension) &&
-          value.extension.any? { |ext| ext.url == FHIRResourceNavigation::DAR_EXTENSION_URL }
-      end.present?
+          value.extension.any? { |ext| ext.url == DAR_EXTENSION_URL }
+      end.present? || primitive_dar_found?(resource, path)
+    end
+
+    def primitive_dar_found?(resource, path)
+      segments = path.split(/(?<!hl7)\./)
+      last_segment = segments.last
+      parent_path = segments[0..-2].join(".")
+
+      parents = parent_path.empty? ? [resource] : resolve_path([resource], parent_path)
+
+      parents_any?(parents, last_segment)
+    end
+
+    def parents_any?(parents, last_segment)
+      parents.any? do |parent|
+        next false unless parent.respond_to?(:to_hash)
+
+        primitive_ext = parent.to_hash["_#{last_segment}"]
+        next false if primitive_ext.nil?
+
+        primitive_ext_any?(primitive_ext)
+      end
+    end
+
+    def primitive_ext_any?(primitive_ext)
+      Array.wrap(primitive_ext).compact.any? do |ext_obj|
+        next false unless ext_obj.is_a?(Hash)
+
+        (ext_obj["extension"] || []).any? { |ext| ext["url"] == DAR_EXTENSION_URL }
+      end
     end
 
     def must_support_elements
