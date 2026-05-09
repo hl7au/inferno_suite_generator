@@ -56,8 +56,12 @@ module InfernoSuiteGenerator
         message_with_details(elements_statuses),
         msg_line("Profile", "#{profile_metadata.resource} — #{profile_metadata.profile_url}"),
         "List of Must Support elements populated or missing",
-        elements_statuses.map { |element_status| build_element_status_text(element_status) }
+        element_statuses_texts(elements_statuses)
       ].flatten
+    end
+
+    def element_statuses_texts(elements_statuses)
+      elements_statuses.map { |element_status| build_element_status_text(element_status) }
     end
 
     private
