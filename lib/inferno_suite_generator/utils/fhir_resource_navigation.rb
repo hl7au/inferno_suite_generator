@@ -92,9 +92,56 @@ module InfernoSuiteGenerator
       elsif property.to_s.include?(":") && !property.to_s.include?("url")
         find_slice_via_discriminator(element, property)
       else
-        return nil unless element.respond_to?(property)
+        local_name = local_field_name(property)
+        return nil unless element.respond_to?(local_name)
 
-        element.send(property)
+        value = element.send(local_name)
+        primitive_value = primitive_type_value_for(element, property, value)
+        primitive_value.nil? ? value : primitive_value
+      end
+    rescue NoMethodError
+      nil
+    end
+
+    def primitive_type_value_for(element, property, value)
+      return nil unless element.respond_to?(:source_hash)
+
+      source_value = element.source_hash["_#{property}"]
+      return nil unless source_value.present?
+
+      primitive = build_primitive_type(source_value)
+      primitive.value = value if primitive.respond_to?(:value=)
+      primitive
+    end
+
+    def build_primitive_type(source_value)
+      if defined?(Inferno::DSL::PrimitiveType)
+        Inferno::DSL::PrimitiveType.new(source_value)
+      else
+        PrimitiveTypeFallback.new(source_value)
+      end
+    end
+
+    def local_field_name(field_name)
+      %w[method class].include?(field_name.to_s) ? "local_#{field_name}" : field_name
+    end
+
+    class PrimitiveTypeFallback
+      attr_accessor :value
+      attr_reader :extension
+
+      def initialize(source_hash)
+        @extension = Array(source_hash["extension"]).map do |ext|
+          ext.respond_to?(:url) ? ext : ExtensionFallback.new(ext["url"])
+        end
+      end
+    end
+
+    class ExtensionFallback
+      attr_reader :url
+
+      def initialize(url)
+        @url = url
       end
     end
 

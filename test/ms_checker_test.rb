@@ -10,6 +10,7 @@ module InfernoSuiteGenerator
     Extension = Struct.new(:url)
     ElementWithExtension = Struct.new(:extension)
     TestMetadata = Struct.new(:mandatory_elements, :resource, :must_supports)
+    ResourceWithPrimitiveSourceHash = Struct.new(:valueString, :source_hash)
 
     def test_dar_found_true_when_value_has_dar_extension
       checker = build_checker
@@ -46,6 +47,22 @@ module InfernoSuiteGenerator
           refute checker.send(:dar_found?, Object.new, "valueString")
         end
       end
+    end
+
+    def test_dar_found_true_when_primitive_extension_is_only_in_source_hash
+      checker = build_checker
+      resource = ResourceWithPrimitiveSourceHash.new(
+        "unknown",
+        {
+          "_valueString" => {
+            "extension" => [
+              { "url" => FHIRResourceNavigation::DAR_EXTENSION_URL }
+            ]
+          }
+        }
+      )
+
+      assert checker.send(:dar_found?, resource, "valueString")
     end
 
     private
