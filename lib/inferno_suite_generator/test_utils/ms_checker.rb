@@ -103,7 +103,17 @@ module InfernoSuiteGenerator
     end
 
     def primitive_dar_found?(resource, path)
-      resolve_path([resource], "#{path}.extension").any? { |ext| ext.url == DAR_EXTENSION_URL }
+      primitive_paths_with_extensions(path).any? do |primitive_path|
+        resolve_path([resource], primitive_path).any? { |ext| ext.url == DAR_EXTENSION_URL }
+      end
+    end
+
+    def primitive_paths_with_extensions(path)
+      path_segments = path.split(/(?<!hl7)\./)
+      primitive_segment = path_segments.pop
+      nested_primitive_path = [*path_segments, "_#{primitive_segment}", "extension"].join(".")
+
+      ["#{path}.extension", nested_primitive_path].uniq
     end
 
     def must_support_elements
