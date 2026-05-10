@@ -10,11 +10,15 @@ module InfernoSuiteGenerator
     Extension = Struct.new(:url)
     ElementWithExtension = Struct.new(:extension)
     TestMetadata = Struct.new(:mandatory_elements, :resource, :must_supports)
+    # rubocop:disable Naming/MethodName -- doubles mirror FHIR JSON field names used by FHIRResourceNavigation
+    ResourceWithValueString = Struct.new(:valueString)
+    ResourceWithUnderscoreValueString = Struct.new(:_valueString)
     ResourceWithPrimitiveSourceHash = Struct.new(:valueString, :source_hash)
+    # rubocop:enable Naming/MethodName
 
     def test_dar_found_true_when_value_has_dar_extension
       checker = build_checker
-      resource = Struct.new(:valueString).new(
+      resource = ResourceWithValueString.new(
         ElementWithExtension.new([Extension.new(FHIRResourceNavigation::DAR_EXTENSION_URL)])
       )
 
@@ -34,7 +38,7 @@ module InfernoSuiteGenerator
     def test_dar_found_true_for_underscore_primitive_extension_path
       checker = build_checker
       primitive_extension = ElementWithExtension.new([Extension.new(FHIRResourceNavigation::DAR_EXTENSION_URL)])
-      resource = Struct.new(:_valueString).new(primitive_extension)
+      resource = ResourceWithUnderscoreValueString.new(primitive_extension)
 
       assert checker.send(:dar_found?, resource, "valueString")
     end
@@ -51,21 +55,21 @@ module InfernoSuiteGenerator
 
     def test_dar_found_true_when_primitive_extension_is_only_in_source_hash
       checker = build_checker
-      resource = ResourceWithPrimitiveSourceHash.new(
-        "unknown",
-        {
-          "_valueString" => {
-            "extension" => [
-              { "url" => FHIRResourceNavigation::DAR_EXTENSION_URL }
-            ]
-          }
-        }
-      )
+      resource = primitive_source_hash_resource
 
       assert checker.send(:dar_found?, resource, "valueString")
     end
 
     private
+
+    def primitive_source_hash_resource
+      ResourceWithPrimitiveSourceHash.new(
+        "unknown",
+        "_valueString" => {
+          "extension" => [{ "url" => FHIRResourceNavigation::DAR_EXTENSION_URL }]
+        }
+      )
+    end
 
     def build_checker
       metadata = TestMetadata.new([], "Observation", { elements: [] })

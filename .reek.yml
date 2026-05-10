@@ -59,3 +59,8 @@ exclude_paths:
   - 'test/set_by_path_test.rb'
   - 'test/create_test_update_resource_by_references_test.rb'
   - 'test/create_test_initiate_references_keeper_test.rb'
+  - 'test/ms_checker_test.rb'
+  - 'lib/inferno_suite_generator/test_utils/ms_checker.rb'
+  - 'lib/inferno_suite_generator/test_utils/ms_checker/slices.rb'
+  - 'lib/inferno_suite_generator/test_utils/ms_checker/extensions.rb'
+  - 'lib/inferno_suite_generator/core/config/getters.rb'

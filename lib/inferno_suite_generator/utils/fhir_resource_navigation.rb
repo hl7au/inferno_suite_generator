@@ -88,6 +88,8 @@ module InfernoSuiteGenerator
     def get_next_value(element, property)
       extension_url = property[/(?<=where\(url=').*(?='\))/]
       if extension_url.present?
+        return nil unless element.respond_to?(:url)
+
         element.url == extension_url ? element : nil
       elsif property.to_s.include?(":") && !property.to_s.include?("url")
         find_slice_via_discriminator(element, property)
@@ -99,8 +101,6 @@ module InfernoSuiteGenerator
         primitive_value = primitive_type_value_for(element, property, value)
         primitive_value.nil? ? value : primitive_value
       end
-    rescue NoMethodError
-      nil
     end
 
     def primitive_type_value_for(element, property, value)
@@ -146,43 +146,98 @@ module InfernoSuiteGenerator
     end
 
     def find_slice_via_discriminator(element, property)
+      return nil unless metadata.present?
+
       element_name = property.to_s.split(":")[0].gsub(/^class$/, "local_class")
       slice_name = property.to_s.split(":")[1].gsub(/^class$/, "local_class")
-      if metadata.present?
-        slice_by_name = metadata.must_supports[:slices].find { |slice| slice[:slice_name] == slice_name }
-        discriminator = slice_by_name[:discriminator]
-        slices = Array.wrap(element.send(element_name))
-        slices.find do |slice|
-          case discriminator[:type]
-          when "patternCodeableConcept"
-            slice_value = discriminator[:path].present? ? slice.send(discriminator[:path].to_s).coding : slice.coding
-            slice_value.any? { |coding| coding.code == discriminator[:code] && coding.system == discriminator[:system] }
-          when "patternCoding"
-            slice_value = discriminator[:path].present? ? slice.send(discriminator[:path]) : slice
-            slice_value.code == discriminator[:code] && slice_value.system == discriminator[:system]
-          when "patternIdentifier"
-            slice.identifier.system == discriminator[:system]
-          when "value"
-            values = discriminator[:values].map { |value| value.merge(path: value[:path].split(".")) }
-            verify_slice_by_values(slice, values)
-          when "type"
-            case discriminator[:code]
-            when "Date"
-              date_like_slice?(slice, "Date")
-            when "DateTime"
-              date_like_slice?(slice, "DateTime")
-            when "String"
-              slice.is_a? String
-            else
-              slice.is_a? FHIR.const_get(discriminator[:code])
-            end
-          when "requiredBinding"
-            discriminator[:path].present? ? slice.send(discriminator[:path].to_s).coding : slice.coding
-            slice_value { |coding| discriminator[:values].include?(coding.code) }
+      slice_configs = metadata.must_supports&.[](:slices)
+      return nil unless slice_configs
+
+      slice_by_name = slice_configs.find { |slice| slice[:slice_name] == slice_name }
+      return nil unless slice_by_name
+
+      discriminator = slice_by_name[:discriminator]
+      return nil unless discriminator
+
+      return nil unless element.respond_to?(element_name.to_sym)
+
+      slices = Array.wrap(element.send(element_name))
+      slices.find { |slice| slice_matches_discriminator?(slice, discriminator) }
+    end
+
+    def slice_matches_discriminator?(slice, discriminator)
+      case discriminator[:type]
+      when "patternCodeableConcept"
+        slice_value =
+          if discriminator[:path].present?
+            path = discriminator[:path].to_s
+            return false unless slice.respond_to?(path.to_sym)
+
+            nested = slice.send(path.to_sym)
+            return false unless nested.respond_to?(:coding)
+
+            nested.coding
+          else
+            return false unless slice.respond_to?(:coding)
+
+            slice.coding
           end
+        slice_value.any? { |coding| coding.code == discriminator[:code] && coding.system == discriminator[:system] }
+      when "patternCoding"
+        slice_value =
+          if discriminator[:path].present?
+            path = discriminator[:path].to_s
+            return false unless slice.respond_to?(path.to_sym)
+
+            slice.send(path.to_sym)
+          else
+            slice
+          end
+        return false unless slice_value.respond_to?(:code) && slice_value.respond_to?(:system)
+
+        slice_value.code == discriminator[:code] && slice_value.system == discriminator[:system]
+      when "patternIdentifier"
+        return false unless slice.respond_to?(:identifier)
+        return false unless slice.identifier.respond_to?(:system)
+
+        slice.identifier.system == discriminator[:system]
+      when "value"
+        values = discriminator[:values].map { |value| value.merge(path: value[:path].split(".")) }
+        verify_slice_by_values(slice, values)
+      when "type"
+        case discriminator[:code]
+        when "Date"
+          date_like_slice?(slice, "Date")
+        when "DateTime"
+          date_like_slice?(slice, "DateTime")
+        when "String"
+          slice.is_a? String
+        else
+          code = discriminator[:code].to_s
+          return false unless defined?(FHIR) && FHIR.const_defined?(code)
+
+          slice.is_a? FHIR.const_get(code)
         end
+      when "requiredBinding"
+        binding_coding =
+          if discriminator[:path].present?
+            path = discriminator[:path].to_s
+            return false unless slice.respond_to?(path.to_sym)
+
+            nested = slice.send(path.to_sym)
+            return false unless nested.respond_to?(:coding)
+
+            nested.coding
+          else
+            return false unless slice.respond_to?(:coding)
+
+            slice.coding
+          end
+        return false unless binding_coding.respond_to?(:any?)
+
+        binding_coding.any? { |coding| discriminator[:values].include?(coding.code) }
       else
-        # TODO: Error handling for if this file doesn't have access to metadata for some reason (begin/rescue with StandardError?)
+        false
       end
     end
 
