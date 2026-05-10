@@ -59,7 +59,8 @@ module InfernoSuiteGenerator
       end
 
       def fixed_value_search_from_config?
-        fixed_values = Registry.get(:config_keeper).fixed_values_to_search(group_metadata.profile_url, group_metadata.resource)
+        fixed_values = Registry.get(:config_keeper).fixed_values_to_search(group_metadata.profile_url,
+                                                                           group_metadata.resource)
         search_params = search_metadata[:names]
 
         fixed_values.any? { |fixed_value| search_params.include?(fixed_value) }
@@ -181,22 +182,20 @@ module InfernoSuiteGenerator
         first_search?
       end
 
-      def includes_from_config
+      def includes
         config = Registry.get(:config_keeper)
         search_names = search_metadata[:names].sort
-        include_cases = config.extra_searches(group_metadata.profile_url, group_metadata.resource).select { |search| search["type"] == "include" }
-        include_case = include_cases.find { |include_case| include_case["names"].sort == search_names }
+        include_cases = config.extra_searches(group_metadata.profile_url, group_metadata.resource)
+                              .select { |search| search["type"] == "include" }
+        include_case = include_cases.find { |ic| ic["names"].sort == search_names }
 
         return [] unless include_case
 
         [{
-           "parameter" => include_case["param"],
-           "target_resource" => include_case["target_resource"],
-           "paths" => include_case["paths"]
-         }]
-      end
-      def includes
-        includes_from_config
+          "parameter" => include_case["param"],
+          "target_resource" => include_case["target_resource"],
+          "paths" => include_case["paths"]
+        }]
       end
 
       def search_properties

@@ -64,7 +64,10 @@ module InfernoSuiteGenerator
             when "String"
               element.is_a? String
             else
-              element.is_a? FHIR.const_get(discriminator[:code])
+              code = discriminator[:code].to_s
+              next false unless defined?(FHIR) && FHIR.const_defined?(code)
+
+              element.is_a? FHIR.const_get(code)
             end
           when "requiredBinding"
             coding_path = discriminator[:path].present? ? "#{discriminator[:path]}.coding" : "coding"

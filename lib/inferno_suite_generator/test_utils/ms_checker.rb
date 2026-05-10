@@ -21,7 +21,7 @@ module InfernoSuiteGenerator
     include Extensions
     include Slices
 
-    MANDATORY_ERROR_MS_MESSAGE = "At least one mandatory Must Support elements is not populated."
+    MANDATORY_ERROR_MS_MESSAGE = "At least one mandatory Must Support element is not populated."
     OPTIONAL_MS_WARNING_MESSAGE = [
       "At least one optional Must Support element is not populated. ",
       "Further testing with data containing the missing elements or clarification ",
@@ -176,7 +176,7 @@ module InfernoSuiteGenerator
       results.any?(result_type)
     end
 
-    def results_eror?(results)
+    def results_error?(results)
       result_has?(results, "error")
     end
 
@@ -188,26 +188,21 @@ module InfernoSuiteGenerator
       element_status[:present] == present && element_status[:mandatory] == mandatory
     end
 
-    def optional_present?(element_status)
+    def optional_missing?(element_status)
       element_status_has?(element_status, false, false)
     end
 
-    def mandatory_present?(element_status)
+    def mandatory_missing?(element_status)
       element_status_has?(element_status, false, true)
     end
 
     def failed_status(elements_statuses)
-      elements_statuses.any? do |element_status|
-        mandatory_present?(element_status)
-      end
+      elements_statuses.any? { |element_status| mandatory_missing?(element_status) }
     end
 
     def warning_status(elements_statuses)
-      elements_statuses.none? do |element_status|
-        mandatory_present?(element_status)
-      end && elements_statuses.any? do |element_status|
-        optional_present?(element_status)
-      end
+      elements_statuses.none? { |element_status| mandatory_missing?(element_status) } &&
+        elements_statuses.any? { |element_status| optional_missing?(element_status) }
     end
 
     def build_element_status_text(element_status)
