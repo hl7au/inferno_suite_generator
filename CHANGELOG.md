@@ -12,12 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `skip_generation` as a generator exclusion setting, while preserving backward compatibility with existing `skip` configurations.
 - Added `exclude_slices_from_must_support` to control Must Support metadata extraction for specific slices.
 - Added support for custom generators in validation test generation.
+- Added `MSChecker` class for validating mandatory and must-support elements in FHIR resources, with configurable status messages for mandatory errors, optional warnings, and success indicators.
+- Added Data Absent Reason (DAR) presence checks in `MSChecker` for both regular and primitive-typed elements.
+- Added `Extensions` submodule in `MSChecker` to encapsulate extension presence checks.
+- Added `Slices` submodule in `MSChecker` to encapsulate slice presence checks.
+- Added configuration support in `MSChecker` to exclude USCDI-only tests via `exclude_uscdi_only`.
+- Added primitive type handling and local field name resolution in FHIR resource navigation utilities.
+- Added unit tests for `MSChecker` DAR presence checks.
 
 ### Changed
 
 - Applied resource exclusion filtering more consistently across search test generators (`include`, `chain`, `multiple AND`, and `multiple OR`).
 - Updated fixed-value search behavior to use configurable `fixed_values_to_search` definitions and better default parameter population for non-fixed inputs.
 - Improved group metadata extraction by removing `ig_id` from group payloads and compacting nil reference target resource types.
+- Refactored `MustSupportTest` to delegate element status checks to `MSChecker`, removing the `MustSupportHelpers` module.
+- Updated `inferno_core` dependency to version 1.0.6.
 
 ### Fixed
 
