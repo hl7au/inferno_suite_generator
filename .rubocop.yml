@@ -55,6 +55,7 @@ AllCops:
     - "test/set_by_path_test.rb"
     - "test/create_test_update_resource_by_references_test.rb"
     - "test/create_test_initiate_references_keeper_test.rb"
+    - "test/ms_checker_test.rb"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
