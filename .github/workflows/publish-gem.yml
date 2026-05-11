@@ -2,6 +2,7 @@ name: Publish Gem
 on:
   release:
     types: [published]
+  workflow_dispatch:
 jobs:
   checks:
     runs-on: ubuntu-latest
