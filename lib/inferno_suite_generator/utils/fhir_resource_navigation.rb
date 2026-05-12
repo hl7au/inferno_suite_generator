@@ -4,7 +4,7 @@ module InfernoSuiteGenerator
   module FHIRResourceNavigation
     DAR_EXTENSION_URL = "http://hl7.org/fhir/StructureDefinition/data-absent-reason"
 
-    def resolve_path(elements, path)
+    def resolve_path(elements, path, metadata: nil)
       elements = Array.wrap(elements)
       return elements if path.blank?
 
@@ -13,8 +13,8 @@ module InfernoSuiteGenerator
       remaining_path = paths.drop(1).join(".")
 
       elements.flat_map do |element|
-        child = get_next_value(element, segment)
-        resolve_path(child, remaining_path)
+        child = get_next_value(element, segment, metadata:)
+        resolve_path(child, remaining_path, metadata:)
       end.compact
     end
 
@@ -42,7 +42,7 @@ module InfernoSuiteGenerator
       end
     end
 
-    def find_a_value_at(element, path, include_dar: false, &block)
+    def find_a_value_at(element, path, include_dar: false, metadata: nil, &block)
       return nil if element.nil?
 
       return get_value_from_extension(element, get_extension_url(path)) if is_extension?(path)
@@ -65,19 +65,19 @@ module InfernoSuiteGenerator
       segment = path_segments.shift.delete_suffix("[x]").gsub(/^class$/, "local_class").gsub("[x]:", ":").to_sym
       no_elements_present =
         elements.none? do |element|
-          child = get_next_value(element, segment)
+          child = get_next_value(element, segment, metadata:)
           child.present? || child == false
         end
       return nil if no_elements_present
 
       remaining_path = path_segments.join(".")
       elements.each do |element|
-        child = get_next_value(element, segment)
+        child = get_next_value(element, segment, metadata:)
         element_found =
           if block_given?
-            find_a_value_at(child, remaining_path, include_dar:, &block)
+            find_a_value_at(child, remaining_path, include_dar:, metadata:, &block)
           else
-            find_a_value_at(child, remaining_path, include_dar:)
+            find_a_value_at(child, remaining_path, include_dar:, metadata:)
           end
         return element_found if element_found.present? || element_found == false
       end
@@ -85,14 +85,14 @@ module InfernoSuiteGenerator
       nil
     end
 
-    def get_next_value(element, property)
+    def get_next_value(element, property, metadata: nil)
       extension_url = property[/(?<=where\(url=').*(?='\))/]
       if extension_url.present?
         return nil unless element.respond_to?(:url)
 
         element.url == extension_url ? element : nil
       elsif property.to_s.include?(":") && !property.to_s.include?("url")
-        find_slice_via_discriminator(element, property)
+        find_slice_via_discriminator(element, property, metadata:)
       else
         local_name = local_field_name(property)
         return nil unless element.respond_to?(local_name)
@@ -145,7 +145,7 @@ module InfernoSuiteGenerator
       end
     end
 
-    def find_slice_via_discriminator(element, property)
+    def find_slice_via_discriminator(element, property, metadata: nil)
       return nil unless metadata.present?
 
       element_name = property.to_s.split(":")[0].gsub(/^class$/, "local_class")
@@ -162,10 +162,10 @@ module InfernoSuiteGenerator
       return nil unless element.respond_to?(element_name.to_sym)
 
       slices = Array.wrap(element.send(element_name))
-      slices.find { |slice| slice_matches_discriminator?(slice, discriminator) }
+      slices.find { |slice| slice_matches_discriminator?(slice, discriminator, metadata:) }
     end
 
-    def slice_matches_discriminator?(slice, discriminator)
+    def slice_matches_discriminator?(slice, discriminator, metadata: nil)
       case discriminator[:type]
       when "patternCodeableConcept"
         slice_value =
@@ -203,7 +203,7 @@ module InfernoSuiteGenerator
         slice.identifier.system == discriminator[:system]
       when "value"
         values = discriminator[:values].map { |value| value.merge(path: value[:path].split(".")) }
-        verify_slice_by_values(slice, values)
+        verify_slice_by_values(slice, values, metadata:)
       when "type"
         case discriminator[:code]
         when "Date"
@@ -273,7 +273,7 @@ module InfernoSuiteGenerator
       value_type == "Date" ? !Date.parse(value).nil? : !DateTime.parse(value).nil?
     end
 
-    def verify_slice_by_values(element, value_definitions)
+    def verify_slice_by_values(element, value_definitions, metadata: nil)
       path_prefixes = value_definitions.map { |value_definition| value_definition[:path].first }.uniq
       path_prefixes.all? do |path_prefix|
         value_definitions_for_path =
@@ -288,7 +288,7 @@ module InfernoSuiteGenerator
                         path_prefix
                       end
 
-        find_a_value_at(element, search_path) do |el_found|
+        find_a_value_at(element, search_path, metadata:) do |el_found|
           child_element_value_definitions, current_element_value_definitions =
             value_definitions_for_path.partition { |value_definition| value_definition[:path].present? }
 
@@ -298,7 +298,7 @@ module InfernoSuiteGenerator
 
           child_element_values_match =
             if child_element_value_definitions.present?
-              verify_slice_by_values(el_found, child_element_value_definitions)
+              verify_slice_by_values(el_found, child_element_value_definitions, metadata:)
             else
               true
             end

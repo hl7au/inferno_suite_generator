@@ -100,7 +100,7 @@ module InfernoSuiteGenerator
     end
 
     def dar_found?(resource, path)
-      find_a_value_at(resource, path, include_dar: true) do |value|
+      find_a_value_at(resource, path, include_dar: true, metadata: @metadata) do |value|
         value.respond_to?(:extension) &&
           value.extension.any? { |ext| ext.url == DAR_EXTENSION_URL }
       end.present? || primitive_dar_found?(resource, path)
@@ -108,7 +108,7 @@ module InfernoSuiteGenerator
 
     def primitive_dar_found?(resource, path)
       primitive_paths_with_extensions(path).any? do |primitive_path|
-        resolve_path([resource], primitive_path).any? { |ext| ext.url == DAR_EXTENSION_URL }
+        resolve_path([resource], primitive_path, metadata: @metadata).any? { |ext| ext.url == DAR_EXTENSION_URL }
       end
     end
 
@@ -139,7 +139,7 @@ module InfernoSuiteGenerator
     end
 
     def value_found?(resource, path, element_definition)
-      find_a_value_at(resource, path) do |value|
+      find_a_value_at(resource, path, metadata: @metadata) do |value|
         value_without_extensions =
           value.respond_to?(:to_hash) ? value.to_hash.except("extension") : value
 
