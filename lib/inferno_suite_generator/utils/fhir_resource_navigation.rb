@@ -4,7 +4,7 @@ module InfernoSuiteGenerator
   module FHIRResourceNavigation
     DAR_EXTENSION_URL = "http://hl7.org/fhir/StructureDefinition/data-absent-reason"
 
-    def resolve_path(elements, path, metadata: nil)
+    def resolve_path(elements, path, include_dar: false, metadata: nil)
       elements = Array.wrap(elements)
       return elements if path.blank?
 
@@ -13,8 +13,8 @@ module InfernoSuiteGenerator
       remaining_path = paths.drop(1).join(".")
 
       elements.flat_map do |element|
-        child = get_next_value(element, segment, metadata:)
-        resolve_path(child, remaining_path, metadata:)
+        child = get_next_value(element, segment, include_dar:, metadata:)
+        resolve_path(child, remaining_path, include_dar:, metadata:)
       end.compact
     end
 
@@ -65,14 +65,14 @@ module InfernoSuiteGenerator
       segment = path_segments.shift.delete_suffix("[x]").gsub(/^class$/, "local_class").gsub("[x]:", ":").to_sym
       no_elements_present =
         elements.none? do |element|
-          child = get_next_value(element, segment, metadata:)
+          child = get_next_value(element, segment, include_dar:, metadata:)
           child.present? || child == false
         end
       return nil if no_elements_present
 
       remaining_path = path_segments.join(".")
       elements.each do |element|
-        child = get_next_value(element, segment, metadata:)
+        child = get_next_value(element, segment, include_dar:, metadata:)
         element_found =
           if block_given?
             find_a_value_at(child, remaining_path, include_dar:, metadata:, &block)
@@ -85,7 +85,7 @@ module InfernoSuiteGenerator
       nil
     end
 
-    def get_next_value(element, property, metadata: nil)
+    def get_next_value(element, property, include_dar: false, metadata: nil)
       extension_url = property[/(?<=where\(url=').*(?='\))/]
       if extension_url.present?
         return nil unless element.respond_to?(:url)
@@ -98,7 +98,7 @@ module InfernoSuiteGenerator
         return nil unless element.respond_to?(local_name)
 
         value = element.send(local_name)
-        primitive_value = primitive_type_value_for(element, property, value)
+        primitive_value = include_dar ? primitive_type_value_for(element, property, value) : nil
         primitive_value.nil? ? value : primitive_value
       end
     end

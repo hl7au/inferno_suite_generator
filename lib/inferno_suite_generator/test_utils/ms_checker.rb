@@ -108,7 +108,9 @@ module InfernoSuiteGenerator
 
     def primitive_dar_found?(resource, path)
       primitive_paths_with_extensions(path).any? do |primitive_path|
-        resolve_path([resource], primitive_path, metadata: @metadata).any? { |ext| ext.url == DAR_EXTENSION_URL }
+        resolve_path([resource], primitive_path, include_dar: true, metadata: @metadata).any? do |ext|
+          ext.url == DAR_EXTENSION_URL
+        end
       end
     end
 
