@@ -1,0 +1,103 @@
+{
+  "resourceType": "Observation",
+  "status": "final",
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+          "code": "vital-signs",
+          "display": "Vital Signs"
+        }
+      ]
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "75367002",
+        "display": "Blood pressure"
+      },
+      {
+        "system": "http://loinc.org",
+        "code": "85354-9",
+        "display": "Blood pressure panel with all children optional"
+      }
+    ]
+  },
+  "subject": {
+    "reference": "Patient/test-patient"
+  },
+  "effectiveDateTime": "2000-01-01T00:00:00+00:00",
+  "performer": [
+    {
+      "reference": "Practitioner/test-practitioner"
+    }
+  ],
+  "bodySite": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "368208006",
+        "display": "Structure of left upper arm"
+      }
+    ]
+  },
+  "component": [
+    {
+      "code": {
+        "coding": [
+          {
+            "system": "http://snomed.info/sct",
+            "code": "271649006",
+            "display": "Systolic blood pressure"
+          },
+          {
+            "system": "http://loinc.org",
+            "code": "8480-6",
+            "display": "Systolic blood pressure"
+          },
+          {
+            "system": "http://snomed.info/sct",
+            "code": "400974009",
+            "display": "Standing systolic blood pressure"
+          }
+        ]
+      },
+      "valueQuantity": {
+        "value": 160,
+        "unit": "mm[Hg]",
+        "system": "http://unitsofmeasure.org",
+        "code": "mm[Hg]"
+      }
+    },
+    {
+      "code": {
+        "coding": [
+          {
+            "system": "http://snomed.info/sct",
+            "code": "271650006",
+            "display": "Diastolic blood pressure"
+          },
+          {
+            "system": "http://loinc.org",
+            "code": "8462-4",
+            "display": "Diastolic blood pressure"
+          },
+          {
+            "system": "http://snomed.info/sct",
+            "code": "400975005",
+            "display": "Standing diastolic blood pressure"
+          }
+        ]
+      },
+      "valueQuantity": {
+        "value": 85,
+        "unit": "mm[Hg]",
+        "system": "http://unitsofmeasure.org",
+        "code": "mm[Hg]"
+      }
+    }
+  ]
+}

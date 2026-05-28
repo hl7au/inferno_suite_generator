@@ -274,6 +274,7 @@ module InfernoSuiteGenerator
     end
 
     def verify_slice_by_values(element, value_definitions, metadata: nil)
+      value_definitions = value_definitions.map { |vd| vd.merge(path: vd[:path].dup) }
       path_prefixes = value_definitions.map { |value_definition| value_definition[:path].first }.uniq
       path_prefixes.all? do |path_prefix|
         value_definitions_for_path =
