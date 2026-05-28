@@ -6,7 +6,6 @@ require "ostruct"
 require "inferno_suite_generator/test_utils/ms_checker"
 require "fhir_models"
 require "json"
-require "fileutils"
 
 module InfernoSuiteGenerator
   class MSCheckerTest < Minitest::Test
