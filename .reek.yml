@@ -64,3 +64,4 @@ exclude_paths:
   - 'lib/inferno_suite_generator/test_utils/ms_checker/slices.rb'
   - 'lib/inferno_suite_generator/test_utils/ms_checker/extensions.rb'
   - 'lib/inferno_suite_generator/core/config/getters.rb'
+  - 'test/fhir_resource_navigation_test.rb'
