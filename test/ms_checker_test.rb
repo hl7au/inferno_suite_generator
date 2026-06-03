@@ -9,6 +9,7 @@ require "json"
 
 module InfernoSuiteGenerator
   class MSCheckerTest < Minitest::Test
+    include FixtureHelpers
     Extension = Struct.new(:url)
     ElementWithExtension = Struct.new(:extension)
     TestMetadata = Struct.new(:mandatory_elements, :resource, :must_supports)
@@ -82,11 +83,6 @@ module InfernoSuiteGenerator
 
     def fixture_to_resource(fixture_path, model_class)
       model_class.new(json_to_hash(fixture_path, symbolize_names: false))
-    end
-
-    def json_to_hash(file_path, symbolize_names: true)
-      json_string = File.read(file_path)
-      JSON.parse(json_string, symbolize_names:)
     end
 
     def primitive_source_hash_resource

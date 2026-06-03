@@ -273,8 +273,6 @@ module InfernoSuiteGenerator
       value_type == "Date" ? !Date.parse(value).nil? : !DateTime.parse(value).nil?
     end
 
-    # Creates a duplicate of the value_definition hash with a deep copy of the :path array.
-    # This prevents unintended mutations of the original :path array in the value_definition.
     def vd_merge_path(value_definition)
       value_definition.merge(path: value_definition[:path].dup)
     end

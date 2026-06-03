@@ -8,8 +8,8 @@ require "json"
 require "ostruct"
 
 module InfernoSuiteGenerator
-  # Tests for FHIRResourceNavigation helpers.
   class FHIRResourceNavigationTest < Minitest::Test
+    include FixtureHelpers
     METADATA_FIXTURE = "test/fixtures/metadata.json"
     OBSERVATION_FIXTURE = "test/fixtures/observation.json"
 
@@ -113,18 +113,12 @@ module InfernoSuiteGenerator
 
     def test_verify_slice_by_values_does_not_mutate_source_value_definitions
       component = component_with_loinc("8480-6")
-      source_definitions = raw_value_definitions_for(slice_named("SystolicBP"))
-      expected_paths = source_definitions.map { |definition| definition[:path] }
+      split_definitions = value_definitions_for(slice_named("SystolicBP"))
+      original_paths = split_definitions.map { |vd| vd[:path].dup }
 
-      2.times do
-        @helper.verify_slice_by_values(
-          component,
-          source_definitions.map { |definition| definition.merge(path: definition[:path].split(".")) },
-          metadata: @metadata
-        )
-      end
+      2.times { @helper.verify_slice_by_values(component, split_definitions, metadata: @metadata) }
 
-      assert_equal expected_paths, (source_definitions.map { |definition| definition[:path] })
+      assert_equal original_paths, split_definitions.map { |vd| vd[:path] }
     end
 
     private
@@ -137,20 +131,12 @@ module InfernoSuiteGenerator
       FHIR::Observation.new(json_to_hash(OBSERVATION_FIXTURE, symbolize_names: false))
     end
 
-    def json_to_hash(file_path, symbolize_names: true)
-      JSON.parse(File.read(file_path), symbolize_names:)
-    end
-
     def slice_named(name)
       @metadata.must_supports[:slices].find { |slice| slice[:slice_name] == name }
     end
 
     def value_definitions_for(slice)
       slice[:discriminator][:values].map { |definition| definition.merge(path: definition[:path].split(".")) }
-    end
-
-    def raw_value_definitions_for(slice)
-      slice[:discriminator][:values].map(&:dup)
     end
 
     def component_with_loinc(code)
