@@ -273,7 +273,12 @@ module InfernoSuiteGenerator
       value_type == "Date" ? !Date.parse(value).nil? : !DateTime.parse(value).nil?
     end
 
+    def vd_merge_path(value_definition)
+      value_definition.merge(path: value_definition[:path].dup)
+    end
+
     def verify_slice_by_values(element, value_definitions, metadata: nil)
+      value_definitions = value_definitions.map { |vd| vd_merge_path(vd) }
       path_prefixes = value_definitions.map { |value_definition| value_definition[:path].first }.uniq
       path_prefixes.all? do |path_prefix|
         value_definitions_for_path =

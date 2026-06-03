@@ -4,9 +4,11 @@ require_relative "test_helper"
 require "inferno_suite_generator"
 require "ostruct"
 require "inferno_suite_generator/test_utils/ms_checker"
+require "fhir_models"
 
 module InfernoSuiteGenerator
   class MSCheckerTest < Minitest::Test
+    include FixtureHelpers
     Extension = Struct.new(:url)
     ElementWithExtension = Struct.new(:extension)
     TestMetadata = Struct.new(:mandatory_elements, :resource, :must_supports)
@@ -60,7 +62,42 @@ module InfernoSuiteGenerator
       assert checker.send(:dar_found?, resource, "valueString")
     end
 
+    def test_independence_from_position_in_array
+      resource = fixture_to_resource("test/fixtures/observation.json", FHIR::Observation)
+      metadata = fixture_to_ostruct("test/fixtures/metadata.json")
+      ms_checker = MSChecker.new(metadata)
+      result = ms_checker.elements_present_statuses([resource])
+
+      all_exists = result.all? { |item| item[:present] == true }
+      missing_elements = result.select { |item| item[:present] == false }.map { |item| item[:path] }
+
+      assert all_exists, "Expected all elements to be present, but missing #{missing_elements.count} items: #{missing_elements.join(', ')}"
+    end
+
+    def test_find_slice_by_values_does_not_mutate_source_value_definitions
+      resource = fixture_to_resource("test/fixtures/observation.json", FHIR::Observation)
+      metadata = fixture_to_ostruct("test/fixtures/metadata.json")
+      checker = MSChecker.new(metadata)
+
+      component = resource.component.find { |c| c.code.coding.any? { |coding| coding.code == "8480-6" } }
+      slice = metadata.must_supports[:slices].find { |s| s[:slice_name] == "SystolicBP" }
+      split_definitions = slice[:discriminator][:values].map { |vd| vd.merge(path: vd[:path].split(".")) }
+      original_paths = split_definitions.map { |vd| vd[:path].dup }
+
+      2.times { checker.send(:find_slice_by_values, component, split_definitions) }
+
+      assert_equal original_paths, split_definitions.map { |vd| vd[:path] }
+    end
+
     private
+
+    def fixture_to_ostruct(fixture_path)
+      OpenStruct.new(json_to_hash(fixture_path))
+    end
+
+    def fixture_to_resource(fixture_path, model_class)
+      model_class.new(json_to_hash(fixture_path, symbolize_names: false))
+    end
 
     def primitive_source_hash_resource
       ResourceWithPrimitiveSourceHash.new(

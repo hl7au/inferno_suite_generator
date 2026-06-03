@@ -15,3 +15,10 @@ end
 require "minitest/autorun"
 
 require "inferno_suite_generator/version"
+require "json"
+
+module FixtureHelpers
+  def json_to_hash(file_path, symbolize_names: true)
+    JSON.parse(File.read(file_path), symbolize_names:)
+  end
+end

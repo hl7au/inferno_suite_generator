@@ -84,6 +84,7 @@ module InfernoSuiteGenerator
       end
 
       def find_slice_by_values(element, value_definitions)
+        value_definitions = value_definitions.map { |vd| vd_merge_path(vd) }
         path_prefixes = value_definitions.map { |value_definition| value_definition[:path].first }.uniq
         Array.wrap(element).find do |el|
           path_prefixes.all? do |path_prefix|
