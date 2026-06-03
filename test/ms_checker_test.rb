@@ -5,7 +5,6 @@ require "inferno_suite_generator"
 require "ostruct"
 require "inferno_suite_generator/test_utils/ms_checker"
 require "fhir_models"
-require "json"
 
 module InfernoSuiteGenerator
   class MSCheckerTest < Minitest::Test
@@ -69,10 +68,25 @@ module InfernoSuiteGenerator
       ms_checker = MSChecker.new(metadata)
       result = ms_checker.elements_present_statuses([resource])
 
-      all_exists = result.all? { |result| result[:present] == true }
-      missing_elements = result.select { |result| result[:present] == false }.map { |result| result[:path] }
+      all_exists = result.all? { |item| item[:present] == true }
+      missing_elements = result.select { |item| item[:present] == false }.map { |item| item[:path] }
 
       assert all_exists, "Expected all elements to be present, but missing #{missing_elements.count} items: #{missing_elements.join(', ')}"
+    end
+
+    def test_find_slice_by_values_does_not_mutate_source_value_definitions
+      resource = fixture_to_resource("test/fixtures/observation.json", FHIR::Observation)
+      metadata = fixture_to_ostruct("test/fixtures/metadata.json")
+      checker = MSChecker.new(metadata)
+
+      component = resource.component.find { |c| c.code.coding.any? { |coding| coding.code == "8480-6" } }
+      slice = metadata.must_supports[:slices].find { |s| s[:slice_name] == "SystolicBP" }
+      split_definitions = slice[:discriminator][:values].map { |vd| vd.merge(path: vd[:path].split(".")) }
+      original_paths = split_definitions.map { |vd| vd[:path].dup }
+
+      2.times { checker.send(:find_slice_by_values, component, split_definitions) }
+
+      assert_equal original_paths, split_definitions.map { |vd| vd[:path] }
     end
 
     private
