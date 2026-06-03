@@ -38,10 +38,10 @@ module InfernoSuiteGenerator
     end
 
     def apply_create_overrides(resource)
-      return resource if resource_create_overrides.empty?
+      return resource if create_resource_overrides.empty?
 
       resource_data = resource.to_hash
-      resource_create_overrides.each do |path, value|
+      create_resource_overrides.each do |path, value|
         resource_data = SetByPath.set_by_path(resource_data, path, resolve_dynamic_values(value))
       end
       FHIR.from_contents(resource_data.to_json)

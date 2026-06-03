@@ -48,7 +48,7 @@ module <%= suite_module_name %>
         <% end %>
       end
 
-      def resource_create_overrides
+      def create_resource_overrides
         <% if create_resource_overrides.any? %>
         {
           <% create_resource_overrides.each do |path, value| %>

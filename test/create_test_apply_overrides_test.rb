@@ -20,7 +20,7 @@ module InfernoSuiteGenerator
         @overrides = overrides
       end
 
-      def resource_create_overrides
+      def create_resource_overrides
         @overrides
       end
 
