@@ -46,9 +46,6 @@ module InfernoSuiteGenerator
       def prepare_config_hash: () -> void
 
       module DynamicValueResolver
-        TOKEN_PATTERN: Regexp
-        TOKEN_RESOLVERS: Hash[String, ^() -> String]
-
         def resolve_dynamic_values: (untyped value) -> untyped
       end
 

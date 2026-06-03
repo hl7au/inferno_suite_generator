@@ -8,9 +8,6 @@ module InfernoSuiteGenerator
       # Provides methods for resolving dynamic values in the generator configuration
       module DynamicValueResolver
         include InfernoSuiteGenerator::DynamicValueResolver
-
-        TOKEN_PATTERN = InfernoSuiteGenerator::DynamicValueResolver::TOKEN_PATTERN
-        TOKEN_RESOLVERS = InfernoSuiteGenerator::DynamicValueResolver::TOKEN_RESOLVERS
       end
     end
   end

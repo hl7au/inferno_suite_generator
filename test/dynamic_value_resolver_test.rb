@@ -3,6 +3,7 @@
 require_relative "test_helper"
 require "date"
 require "inferno_suite_generator/core/config/dynamic_value_resolver"
+require "inferno_suite_generator/core/config/utils"
 
 module InfernoSuiteGenerator
   class Generator
@@ -75,6 +76,43 @@ module InfernoSuiteGenerator
 
         def test_empty_array_passes_through_unchanged
           assert_equal [], @resolver.resolve_dynamic_values([])
+        end
+      end
+
+      class ResolveFromConstantsTest < Minitest::Test
+        class UtilsHost
+          include Utils
+
+          def initialize(config)
+            @config = config
+          end
+        end
+
+        def test_resolves_time_now_token_in_constant_string
+          host = UtilsHost.new("constants" => { "search_default_values.date" => "ge${Time.now}" })
+          assert_equal "ge#{Date.today.iso8601}", host.resolve_from_constants("search_default_values.date")
+        end
+
+        def test_resolves_datetime_now_token_in_constant_string
+          host = UtilsHost.new("constants" => { "search_default_values.dt" => "${DateTime.now}" })
+          result = host.resolve_from_constants("search_default_values.dt")
+          assert_match(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\z/, result)
+        end
+
+        def test_resolves_time_now_token_in_constant_array
+          host = UtilsHost.new("constants" => { "search_default_values.date" => ["ge${Time.now}", "le2050-01-01"] })
+          assert_equal ["ge#{Date.today.iso8601}", "le2050-01-01"],
+                       host.resolve_from_constants("search_default_values.date")
+        end
+
+        def test_passes_through_static_constant_unchanged
+          host = UtilsHost.new("constants" => { "search_default_values.code" => "active" })
+          assert_equal "active", host.resolve_from_constants("search_default_values.code")
+        end
+
+        def test_resolves_token_in_literal_value_when_no_constant_match
+          host = UtilsHost.new("constants" => {})
+          assert_equal "ge#{Date.today.iso8601}", host.resolve_from_constants("ge${Time.now}")
         end
       end
     end

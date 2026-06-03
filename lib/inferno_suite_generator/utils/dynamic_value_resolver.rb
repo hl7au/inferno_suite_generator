@@ -12,7 +12,6 @@ module InfernoSuiteGenerator
     }.freeze
 
     # :reek:FeatureEnvy
-    # :reek:TooManyStatements
     def resolve_dynamic_values(value)
       case value
       when String

@@ -56,7 +56,7 @@ module InfernoSuiteGenerator
       end
 
       def create_resource_overrides
-        config.create_resource_overrides(group_metadata.profile_url, group_metadata.resource) || {}
+        config.create_resource_overrides(group_metadata.profile_url, group_metadata.resource)
       end
 
       private

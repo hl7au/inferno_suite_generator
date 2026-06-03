@@ -143,6 +143,7 @@ At a high level, a config file contains:
 - **`patch_ids.<resource>`**: Default IDs for patch tests
 - **`search_default_values.*`**: Named sets of default values for date/datetime/code search params.
   Values may embed `${Time.now}` (resolves to today as `YYYY-MM-DD`) or `${DateTime.now}` (resolves to the current datetime as `YYYY-MM-DDThh:mm:ss+hh:mm`, local TZ), e.g. `"ge${Time.now}"`.
+  **Note:** tokens in `search_default_values` are resolved at **generator time** (when the generator produces Ruby files), so the resolved value is baked into the generated code. For values that must be fresh on every test run, use `create_resource_overrides` instead.
 - **`search.comparators`**: Allowed comparators for date/datetime params (`gt`, `lt`, `ge`, `le`, etc.)
 
 These constants can be referred to from profile/resource configs, allowing you to centralise and reuse values.
