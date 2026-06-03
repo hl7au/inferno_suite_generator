@@ -18,7 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Slices` submodule in `MSChecker` to encapsulate slice presence checks.
 - Added configuration support in `MSChecker` to exclude USCDI-only tests via `exclude_uscdi_only`.
 - Added primitive type handling and local field name resolution in FHIR resource navigation utilities.
+- Added metadata parameter support to `FHIRResourceNavigation` methods for improved element resolution and value retrieval.
 - Added unit tests for `MSChecker` DAR presence checks.
+- Added unit tests for `FHIRResourceNavigation` methods.
 
 ### Changed
 
@@ -26,11 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated fixed-value search behavior to use configurable `fixed_values_to_search` definitions and better default parameter population for non-fixed inputs.
 - Improved group metadata extraction by removing `ig_id` from group payloads and compacting nil reference target resource types.
 - Refactored `MustSupportTest` to delegate element status checks to `MSChecker`, removing the `MustSupportHelpers` module.
+- Refactored `resolve_path` and `get_next_value` in `FHIRResourceNavigation` to include DAR handling and improve element resolution logic.
 - Updated `inferno_core` dependency to version 1.0.6.
 
 ### Fixed
 
 - Fixed include-search test generation to follow configured `extra_searches` entries with `type: include` and correct search-name matching.
+- Fixed must-support slice validation failing for resources with repeated array elements by duplicating value definitions to ensure independence from array positions.
 - Removed debug output from search test module execution.
 
 ## [0.1.0] - 2025-03-18
