@@ -9,6 +9,13 @@ end
 module InfernoSuiteGenerator
   VERSION: String
 
+  module DynamicValueResolver
+    TOKEN_PATTERN: Regexp
+    TOKEN_RESOLVERS: Hash[String, ^() -> String]
+
+    def resolve_dynamic_values: (untyped value) -> untyped
+  end
+
   class Generator
     class GeneratorConfigKeeper
       include Getters
@@ -87,6 +94,7 @@ module InfernoSuiteGenerator
         def extra_imports: () -> Array[String]
         def rewrite_igs: () -> String
         def resource_to_create_filter: (String resource_type, String profile_url) -> String
+        def create_resource_overrides: (String profile_url, String resource_type) -> Hash[String, untyped]
       end
 
       module Extractors

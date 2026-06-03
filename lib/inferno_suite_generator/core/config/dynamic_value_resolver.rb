@@ -1,29 +1,16 @@
 # frozen_string_literal: true
 
-require "date"
+require_relative "../../utils/dynamic_value_resolver"
 
 module InfernoSuiteGenerator
   class Generator
     class GeneratorConfigKeeper
       # Provides methods for resolving dynamic values in the generator configuration
       module DynamicValueResolver
-        TOKEN_PATTERN = /\$\{(Time\.now|DateTime\.now)\}/
-        TOKEN_RESOLVERS = {
-          "Time.now" => -> { Date.today.iso8601 },
-          "DateTime.now" => -> { DateTime.now.strftime("%Y-%m-%dT%H:%M:%S%:z") }
-        }.freeze
+        include InfernoSuiteGenerator::DynamicValueResolver
 
-        # :reek:FeatureEnvy
-        # :reek:TooManyStatements
-        def resolve_dynamic_values(value)
-          case value
-          when String
-            value.gsub(TOKEN_PATTERN) { TOKEN_RESOLVERS[Regexp.last_match(1)]&.call }
-          when Array then value.map { |element| resolve_dynamic_values(element) }
-          else
-            value
-          end
-        end
+        TOKEN_PATTERN = InfernoSuiteGenerator::DynamicValueResolver::TOKEN_PATTERN
+        TOKEN_RESOLVERS = InfernoSuiteGenerator::DynamicValueResolver::TOKEN_RESOLVERS
       end
     end
   end

@@ -48,6 +48,18 @@ module <%= suite_module_name %>
         <% end %>
       end
 
+      def resource_create_overrides
+        <% if create_resource_overrides.any? %>
+        {
+          <% create_resource_overrides.each do |path, value| %>
+          <%= path.inspect %> => <%= value.inspect %>,
+          <% end %>
+        }
+        <% else %>
+        {}
+        <% end %>
+      end
+
       run do
         perform_create_test
       end

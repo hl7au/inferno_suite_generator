@@ -3,6 +3,7 @@
 require_relative "basic_test"
 require_relative "../utils/set_by_path"
 require_relative "../utils/create_test_helpers"
+require_relative "../utils/dynamic_value_resolver"
 require_relative "../decorators/capability_statement_decorator"
 require_relative "../decorators/fhir_search_response"
 require "json"
@@ -19,6 +20,7 @@ module InfernoSuiteGenerator
     include BasicTest
     include SetByPath
     include CreateTestHelpers
+    include DynamicValueResolver
 
     EXPECTED_CREATE_STATUS = 201
 
@@ -31,7 +33,18 @@ module InfernoSuiteGenerator
 
     def prepare_resource_for_create
       initiate_references_keeper
-      update_resource_by_references(resource_payload_for_input)
+      resource = update_resource_by_references(resource_payload_for_input)
+      apply_create_overrides(resource)
+    end
+
+    def apply_create_overrides(resource)
+      return resource if resource_create_overrides.empty?
+
+      resource_data = resource.to_hash
+      resource_create_overrides.each do |path, value|
+        resource_data = SetByPath.set_by_path(resource_data, path, resolve_dynamic_values(value))
+      end
+      FHIR.from_contents(resource_data.to_json)
     end
 
     def send_create_and_register(resource)

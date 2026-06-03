@@ -55,6 +55,10 @@ module InfernoSuiteGenerator
         config.resource_to_create_filter(group_metadata.resource, group_metadata.profile_url) || nil
       end
 
+      def create_resource_overrides
+        config.create_resource_overrides(group_metadata.profile_url, group_metadata.resource) || {}
+      end
+
       private
 
       def read_input_data
