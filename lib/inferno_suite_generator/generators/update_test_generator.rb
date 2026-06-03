@@ -63,7 +63,7 @@ module InfernoSuiteGenerator
       end
 
       def resource_to_create_filter
-        config.resource_to_create_filter(group_metadata.resource, group_metadata.profile_url) || nil
+        config.resource_to_create_filter(group_metadata.profile_url, group_metadata.resource) || nil
       end
 
       private
