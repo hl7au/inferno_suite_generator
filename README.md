@@ -178,6 +178,11 @@ Keyed by **profile URL**; lets you tune or override behavior for specific profil
     - `multiple_and_expectation` / `multiple_or_expectation`
     - `comparators`
     - `expectation_change` (e.g. `{ "from": "SHALL", "to": "SHOULD" }`)
+- **`create_resource_overrides`**: Map of FHIRPath → value applied to the resource body before a create request is sent.
+  Values support `${Time.now}` and `${DateTime.now}` tokens (resolved at test runtime), e.g.:
+  ```json
+  "create_resource_overrides": { "dateAsserted": "${Time.now}" }
+  ```
 - **`must_support.remove_elements`**: Optional rules for trimming must‑support elements
 - **`slice_discriminator_default_value`**: Defaults for value‑type slice discriminators; an array of objects with:
     - `slice_id`

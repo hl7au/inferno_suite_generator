@@ -86,8 +86,12 @@ module InfernoSuiteGenerator
           resolve_value(profile_url, resource_type, "extra_searches", EMPTY_ARRAY)
         end
 
-        def resource_to_create_filter(resource_type, profile_url)
+        def resource_to_create_filter(profile_url, resource_type)
           resolve_value(profile_url, resource_type, "resources_to_create_filter")
+        end
+
+        def create_resource_overrides(profile_url, resource_type)
+          resolve_value(profile_url, resource_type, "create_resource_overrides", EMPTY_HASH)
         end
 
         def fixed_values_to_search(profile_url, resource_type)

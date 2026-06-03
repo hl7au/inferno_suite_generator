@@ -188,6 +188,9 @@
         "forced_initial_search": ["name"]
       },
       "http://hl7.org.au/fhir/core/StructureDefinition/au-core-medicationstatement": {
+        "create_resource_overrides": {
+          "dateAsserted": "${Time.now}"
+        },
         "extra_searches": [
           {
             "type": "search",

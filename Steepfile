@@ -9,6 +9,7 @@ target :lib do
   check "lib/inferno_suite_generator/core/config/"
 
   library "json"
+  library "date"
 end
 #   ignore_signature "sig/test"
 #
