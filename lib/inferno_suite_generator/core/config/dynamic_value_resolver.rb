@@ -18,10 +18,7 @@ module InfernoSuiteGenerator
         def resolve_dynamic_values(value)
           case value
           when String
-            value.gsub(TOKEN_PATTERN) do
-              token = Regexp.last_match(1)
-              TOKEN_RESOLVERS[token]&.call if token
-            end
+            value.gsub(TOKEN_PATTERN) { TOKEN_RESOLVERS[Regexp.last_match(1)]&.call }
           when Array then value.map { |element| resolve_dynamic_values(element) }
           else
             value
