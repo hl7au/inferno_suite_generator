@@ -66,3 +66,4 @@ exclude_paths:
   - 'lib/inferno_suite_generator/core/config/getters.rb'
   - 'test/fhir_resource_navigation_test.rb'
   - 'test/test_helper.rb'
+  - 'test/dynamic_value_resolver_test.rb'

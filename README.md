@@ -141,7 +141,8 @@ At a high level, a config file contains:
 - **`default_fhir_server`**: Default FHIR server URL used in inputs
 - **`read_ids.<resource>`**: Default IDs for first‑class read/search tests (e.g. `read_ids.patient`)
 - **`patch_ids.<resource>`**: Default IDs for patch tests
-- **`search_default_values.*`**: Named sets of default values for date/datetime/code search params
+- **`search_default_values.*`**: Named sets of default values for date/datetime/code search params.
+  Values may embed `${Time.now}` (resolves to today as `YYYY-MM-DD`) or `${DateTime.now}` (resolves to the current datetime as `YYYY-MM-DDThh:mm:ss+hh:mm`, local TZ), e.g. `"ge${Time.now}"`.
 - **`search.comparators`**: Allowed comparators for date/datetime params (`gt`, `lt`, `ge`, `le`, etc.)
 
 These constants can be referred to from profile/resource configs, allowing you to centralise and reuse values.

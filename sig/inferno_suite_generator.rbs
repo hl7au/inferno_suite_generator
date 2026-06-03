@@ -38,7 +38,16 @@ module InfernoSuiteGenerator
       def main_file_path: () -> String
       def prepare_config_hash: () -> void
 
+      module DynamicValueResolver
+        TOKEN_PATTERN: Regexp
+        TOKEN_RESOLVERS: Hash[String, ^() -> String]
+
+        def resolve_dynamic_values: (untyped value) -> untyped
+      end
+
       module Utils
+        include DynamicValueResolver
+
         def get: (String path, ?untyped default) -> untyped
         def get_new: (String path, ?untyped default) -> untyped
         def resolve_profile_resource_value: (String profile_path, String resource_path, ?untyped default_value) -> untyped

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "constants"
+require_relative "dynamic_value_resolver"
 
 module InfernoSuiteGenerator
   class Generator
@@ -8,6 +9,7 @@ module InfernoSuiteGenerator
       # Provides utility methods for handling configuration values in the generator
       module Utils
         include Constants
+        include DynamicValueResolver
 
         def get(path, default = nil)
           # TODO: Remove
@@ -34,7 +36,8 @@ module InfernoSuiteGenerator
         end
 
         def resolve_from_constants(value)
-          constants[value] || value
+          value_to_resolve = constants[value] || value
+          resolve_dynamic_values(value_to_resolve)
         end
 
         def constants
