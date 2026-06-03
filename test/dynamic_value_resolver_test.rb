@@ -74,5 +74,10 @@ module InfernoSuiteGenerator
     def test_empty_array_passes_through_unchanged
       assert_equal [], @resolver.resolve_dynamic_values([])
     end
+
+    def test_hash_with_dynamic_and_static_values
+      result = @resolver.resolve_dynamic_values({ "date" => "${Time.now}", "static" => "foo" })
+      assert_equal({ "date" => Date.today.iso8601, "static" => "foo" }, result)
+    end
   end
 end
