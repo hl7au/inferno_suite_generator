@@ -642,7 +642,11 @@ module InfernoSuiteGenerator
     end
 
     def references_to_save(resource_type = nil)
-      reference_metadata = resource_type == "Provenance" ? provenance_metadata : metadata
+      reference_metadata = if resource_type == "Provenance" && self.class.respond_to?(:provenance_metadata)
+                             provenance_metadata
+                           else
+                             metadata
+                           end
       reference_metadata.delayed_references
     end
 
