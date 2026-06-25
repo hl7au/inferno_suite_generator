@@ -33,7 +33,11 @@ module <%= suite_module_name %>
       end
 
       run do
-        perform_reference_resolution_test(<%= resource_collection_string %>, <%= rewrite_profile_url_hash %>)
+        perform_reference_resolution_test(
+          <%= resource_collection_string %>,
+          <%= rewrite_profile_url_hash %>,
+          [<%= readable_resource_types_string %>]
+        )
       end
     end
   end

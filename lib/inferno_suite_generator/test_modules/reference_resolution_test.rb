@@ -11,10 +11,10 @@ module InfernoSuiteGenerator
 
     def_delegators "self.class", :metadata
 
-    def perform_reference_resolution_test(resources, rewrite_profile_url = {})
+    def perform_reference_resolution_test(resources, rewrite_profile_url = {}, readable_resource_types = [])
       conditional_skip_with_msg resources.blank?, no_resources_skip_message
 
-      pass if unresolved_references(resources, rewrite_profile_url).empty?
+      pass if unresolved_references(resources, rewrite_profile_url, readable_resource_types).empty?
 
       skip_with_msg "Could not resolve and validate any Must Support references for #{unresolved_references_strings.join(", ")}"
     end
@@ -83,7 +83,7 @@ module InfernoSuiteGenerator
       end.flatten
     end
 
-    def unresolved_references(resources = [], rewrite_profile_url = {})
+    def unresolved_references(resources = [], rewrite_profile_url = {}, readable_resource_types = [])
       @unresolved_references ||=
         must_support_references_with_target_profile.select do |reference_path_profile_pair|
           path = reference_path_profile_pair[:path]
@@ -95,9 +95,17 @@ module InfernoSuiteGenerator
             value_found = resolve_path(resource, path)
             next if value_found.empty?
 
+            resolvable = if readable_resource_types.present?
+                           value_found.select { |ref| readable_resource_types.include?(ref.resource_type) }
+                         else
+                           value_found
+                         end
+
+            next if resolvable.empty?
+
             found_one_reference = true
 
-            value_found.any? do |reference|
+            resolvable.any? do |reference|
               validate_reference_resolution(resource, reference, target_profile, rewrite_profile_url)
             end
           end
