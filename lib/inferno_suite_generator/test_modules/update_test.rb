@@ -74,12 +74,14 @@ module InfernoSuiteGenerator
     end
 
     def normalized_data
+      initiate_references_keeper
       result = []
       available_resource_id_list.uniq.each do |resource_id|
         idx = 0
         resource_payload_arr_for_input.each do |resource|
-          resource.id = resource_id
-          result << prepare_normalized_data_item(resource_id, resource, idx)
+          resolved = update_resource_by_references(resource)
+          resolved.id = resource_id
+          result << prepare_normalized_data_item(resource_id, resolved, idx)
           idx += 1
         end
       end
