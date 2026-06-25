@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require_relative "basic_test"
+require_relative "../utils/set_by_path"
+require_relative "../utils/create_test_helpers"
+require_relative "../utils/reference_initializer"
 require "securerandom"
 
 module InfernoSuiteGenerator
@@ -13,6 +16,9 @@ module InfernoSuiteGenerator
   # - Handling update operation success scenarios
   module UpdateTest
     include BasicTest
+    include SetByPath
+    include CreateTest::CreateTestHelpers
+    include ReferenceInitializer
 
     EXPECTED_UPDATE_STATUS = 200
     EXPECTED_UPDATE_NEW_STATUS = 201
@@ -51,7 +57,7 @@ module InfernoSuiteGenerator
     end
 
     def perform_update_new_test
-      resource_to_update = resource_payload_for_input
+      resource_to_update = prepare_resource_for_update_new
       resource_id = SecureRandom.uuid
       resource_to_update.id = resource_id
       fhir_update(resource_to_update, resource_id)
@@ -61,6 +67,11 @@ module InfernoSuiteGenerator
     end
 
     private
+
+    def prepare_resource_for_update_new
+      initiate_references_keeper
+      update_resource_by_references(resource_payload_for_input)
+    end
 
     def normalized_data
       result = []

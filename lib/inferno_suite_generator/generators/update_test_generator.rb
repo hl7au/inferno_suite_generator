@@ -62,6 +62,10 @@ module InfernoSuiteGenerator
         current_update_test_data["executor"] if current_update_test_data
       end
 
+      def references_mapping_should_be_shown?
+        test_type == "NEW_UPDATE" && group_metadata.references.present?
+      end
+
       def resource_to_create_filter
         config.resource_to_create_filter(group_metadata.profile_url, group_metadata.resource) || nil
       end
