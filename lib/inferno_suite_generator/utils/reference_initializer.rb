@@ -12,7 +12,9 @@ module InfernoSuiteGenerator
       return if references_keeper.references.keys.any?
 
       add_references_from_server
-      references_keeper.add_references_from_input(references_mapping_input) if references_mapping_input.present?
+      if respond_to?(:references_mapping_input, true) && references_mapping_input.present?
+        references_keeper.add_references_from_input(references_mapping_input)
+      end
     end
 
     private

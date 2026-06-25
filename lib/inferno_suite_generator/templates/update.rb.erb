@@ -1,7 +1,5 @@
 require 'inferno_suite_generator/test_modules/update_test'
-<% if references_mapping_should_be_shown? %>
 require 'inferno_suite_generator/utils/references_keeper'
-<% end %>
 
 module <%= suite_module_name %>
   module <%= module_name %>
@@ -38,11 +36,9 @@ module <%= suite_module_name %>
         @metadata ||= InfernoSuiteGenerator::Generator::GroupMetadata.new(YAML.load_file(File.join(__dir__, 'metadata.yml'), aliases: true))
       end
 
-      <% if references_mapping_should_be_shown? %>
       def references_keeper
         @references_keeper ||= InfernoSuiteGenerator::ReferencesKeeper.get_or_create_instance(url)
       end
-      <% end %>
 
       def resource_to_create_filter
         <% if resource_to_create_filter %>
