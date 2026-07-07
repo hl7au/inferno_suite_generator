@@ -92,7 +92,7 @@ module InfernoSuiteGenerator
           found_one_reference = false
 
           resolve_one_reference = resources.any? do |resource|
-            value_found = resolve_path(resource, path)
+            value_found = resolve_path(resource, path, metadata:)
             next if value_found.empty?
 
             resolvable = if readable_resource_types.present?

@@ -71,7 +71,7 @@ module InfernoSuiteGenerator
           properties[:resource_type] = "'#{resource_type}'"
           properties[:saves_delayed_references] = "true" if saves_delayed_references?
           properties[:search_param_names] = search_param_names_array
-          properties[:includes] = includes if group_metadata.include_params.present?
+          properties[:includes] = includes if includes.present?
           properties[:use_any_data_for_search] = true
         end
       end
