@@ -19,7 +19,7 @@ module InfernoSuiteGenerator
     end
 
     def add_references_from_bundle(bundle)
-      bundle.entry.map(&:resource).each { |r| add_reference("#{r.resourceType}/#{r.id}") }
+      bundle.entry.map(&:resource).each { |resource| add_reference("#{resource.resourceType}/#{resource.id}") }
     end
 
     def add_references_from_input(input)
@@ -119,10 +119,11 @@ module InfernoSuiteGenerator
     end
 
     def capability_resource(resource_type)
-      r = FHIR::R4::CapabilityStatement::Rest::Resource.new
-      r.type = resource_type
-      r.interaction = [FHIR::R4::CapabilityStatement::Rest::Resource::Interaction.new("code" => "search-type")]
-      r
+      capability = FHIR::R4::CapabilityStatement::Rest::Resource.new
+      capability.type = resource_type
+      capability.interaction =
+        [FHIR::R4::CapabilityStatement::Rest::Resource::Interaction.new("code" => "search-type")]
+      capability
     end
   end
 

@@ -53,7 +53,7 @@ module InfernoSuiteGenerator
 
       def readable_resource_types
         ig_metadata.groups
-                   .select { |g| g.interactions.any? { |i| i[:code] == "read" } }
+                   .select { |group| group.interactions.any? { |interaction| interaction[:code] == "read" } }
                    .map(&:resource)
                    .uniq
                    .sort
