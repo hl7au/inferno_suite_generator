@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - 2026-03-24
+## [0.1.1] - 2026-07-07
 
 ### Added
 
@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added metadata parameter support to `FHIRResourceNavigation` methods for improved element resolution and value retrieval.
 - Added unit tests for `MSChecker` DAR presence checks.
 - Added unit tests for `FHIRResourceNavigation` methods.
+- Added dynamic value resolution for configuration, supporting create-resource overrides with dynamic tokens (#20).
+- Added references mapping to update tests, with a references keeper for tracking resolved references.
+- Added readable resource type support to reference resolution tests.
 
 ### Changed
 
@@ -29,12 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved group metadata extraction by removing `ig_id` from group payloads and compacting nil reference target resource types.
 - Refactored `MustSupportTest` to delegate element status checks to `MSChecker`, removing the `MustSupportHelpers` module.
 - Refactored `resolve_path` and `get_next_value` in `FHIRResourceNavigation` to include DAR handling and improve element resolution logic.
+- Refactored `available_resource_id_list` and update-test data normalization for consistent resource ID handling.
 - Updated `inferno_core` dependency to version 1.0.6.
 
 ### Fixed
 
 - Fixed include-search test generation to follow configured `extra_searches` entries with `type: include` and correct search-name matching.
 - Fixed must-support slice validation failing for resources with repeated array elements by duplicating value definitions to ensure independence from array positions.
+- Fixed reference metadata retrieval for the `Provenance` resource type to work correctly with class methods.
 - Removed debug output from search test module execution.
 
 ## [0.1.0] - 2025-03-18
