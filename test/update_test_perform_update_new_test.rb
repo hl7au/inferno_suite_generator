@@ -28,9 +28,9 @@ module InfernoSuiteGenerator
 
     def add_reference(reference)
       resource_type, resource_id = reference.split("/", 2)
-      @references[resource_type] ||= []
-      @references[resource_type] << resource_id
-      @references[resource_type].uniq!
+      references_for_type = (@references[resource_type] ||= [])
+      references_for_type << resource_id
+      references_for_type.uniq!
     end
   end
 
@@ -76,11 +76,13 @@ module InfernoSuiteGenerator
       result = search_results[resource_type]
       return unless result
 
-      @response = { status: result[:status] }
-      @resource = result[:bundle]
-      response_body = result[:bundle]&.to_json
-      @requests << { status: result[:status], response_body: }
-      Struct.new(:status, :response_body).new(result[:status], response_body)
+      status = result[:status]
+      bundle = result[:bundle]
+      @response = { status: }
+      @resource = bundle
+      response_body = bundle&.to_json
+      @requests << { status:, response_body: }
+      Struct.new(:status, :response_body).new(status, response_body)
     end
 
     def info(message) = info_messages << message
@@ -91,10 +93,11 @@ module InfernoSuiteGenerator
     end
 
     def evaluate_fhirpath(resource:, path:)
-      matches = JsonPath.new("$.#{path}").on(resource.to_hash)
+      resource_hash = resource.to_hash
+      matches = JsonPath.new("$.#{path}").on(resource_hash)
       return matches if matches.present?
 
-      settable?(resource.to_hash, path) ? [true] : []
+      settable?(resource_hash, path) ? [true] : []
     end
 
     private
@@ -166,8 +169,8 @@ module InfernoSuiteGenerator
                               keeper: references_keeper_double({}),
                               resource_payload: build_questionnaire_response)
       subject.perform_update_new_test
-      refute_nil subject.last_updated_resource.id
-      refute_equal "original-id", subject.last_updated_resource.id
+      refute_nil(updated_id = subject.last_updated_resource.id)
+      refute_equal "original-id", updated_id
     end
 
     def test_uses_references_from_mapping_input_when_keeper_is_empty
