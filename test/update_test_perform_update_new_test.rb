@@ -40,8 +40,8 @@ module InfernoSuiteGenerator
     include UpdateTest
 
     attr_reader :metadata, :references_keeper, :demodata, :requests,
-                :resource, :last_updated_resource
-    attr_accessor :references_mapping_input, :info_messages, :search_results
+                :resource, :last_updated_resource, :references_mapping_input,
+                :info_messages, :search_results
 
     def initialize(metadata:, references_keeper:, demodata:, resource_payload:)
       @metadata = metadata
@@ -52,6 +52,14 @@ module InfernoSuiteGenerator
       @info_messages = []
       @search_results = {}
       @references_mapping_input = nil
+    end
+
+    def stub_references_mapping_input(value)
+      @references_mapping_input = value
+    end
+
+    def stub_search_results(value)
+      @search_results = value
     end
 
     def resource_type = @resource_payload.resourceType
@@ -180,7 +188,7 @@ module InfernoSuiteGenerator
         keeper: references_keeper_double({}),
         resource_payload: resource
       )
-      subject.references_mapping_input = '["Patient/from-input"]'
+      subject.stub_references_mapping_input('["Patient/from-input"]')
       subject.perform_update_new_test
       assert_equal "Patient/from-input", subject.last_updated_resource.subject.reference
     end
@@ -188,7 +196,7 @@ module InfernoSuiteGenerator
     def test_populates_references_from_server_bundle
       bundle = build_bundle("Patient", "server-patient")
       subject = build_subject_with_patient_ref(demodata: demodata_double(["Patient"]))
-      subject.search_results = { "Patient" => { status: 200, bundle: } }
+      subject.stub_search_results("Patient" => { status: 200, bundle: })
       subject.perform_update_new_test
       assert_equal "Patient/server-patient", subject.last_updated_resource.subject.reference
     end
@@ -199,7 +207,7 @@ module InfernoSuiteGenerator
         keeper: references_keeper_double("Patient" => ["pre-loaded"]),
         demodata: demodata_double(["Patient"])
       )
-      subject.search_results = { "Patient" => { status: 200, bundle: } }
+      subject.stub_search_results("Patient" => { status: 200, bundle: })
       subject.perform_update_new_test
       assert_equal "Patient/pre-loaded", subject.last_updated_resource.subject.reference
       assert subject.info_messages.empty?, "should not search server when keeper already has references"
