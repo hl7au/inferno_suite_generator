@@ -68,3 +68,4 @@ exclude_paths:
   - 'test/test_helper.rb'
   - 'test/dynamic_value_resolver_test.rb'
   - 'test/create_test_apply_overrides_test.rb'
+  - 'test/update_test_perform_update_new_test.rb'

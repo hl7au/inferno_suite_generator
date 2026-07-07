@@ -19,7 +19,7 @@ module InfernoSuiteGenerator
     end
 
     def add_references_from_bundle(bundle)
-      bundle.entry.map(&:resource).each { |r| add_reference("#{r.resourceType}/#{r.id}") }
+      bundle.entry.map(&:resource).each { |resource| add_reference("#{resource.resourceType}/#{resource.id}") }
     end
 
     def add_references_from_input(input)
@@ -28,9 +28,9 @@ module InfernoSuiteGenerator
 
     def add_reference(reference)
       resource_type, resource_id = reference.split("/", 2)
-      @references[resource_type] ||= []
-      @references[resource_type] << resource_id
-      @references[resource_type].uniq!
+      references_for_type = (@references[resource_type] ||= [])
+      references_for_type << resource_id
+      references_for_type.uniq!
     end
   end
 
@@ -39,9 +39,12 @@ module InfernoSuiteGenerator
   class TestableUpdateNewTest
     include UpdateTest
 
+    UNSETTABLE = Object.new.freeze
+    private_constant :UNSETTABLE
+
     attr_reader :metadata, :references_keeper, :demodata, :requests,
-                :resource, :last_updated_resource
-    attr_accessor :references_mapping_input, :info_messages, :search_results
+                :resource, :last_updated_resource, :references_mapping_input,
+                :info_messages, :search_results
 
     def initialize(metadata:, references_keeper:, demodata:, resource_payload:)
       @metadata = metadata
@@ -52,6 +55,14 @@ module InfernoSuiteGenerator
       @info_messages = []
       @search_results = {}
       @references_mapping_input = nil
+    end
+
+    def stub_references_mapping_input(value)
+      @references_mapping_input = value
+    end
+
+    def stub_search_results(value)
+      @search_results = value
     end
 
     def resource_type = @resource_payload.resourceType
@@ -76,11 +87,7 @@ module InfernoSuiteGenerator
       result = search_results[resource_type]
       return unless result
 
-      @response = { status: result[:status] }
-      @resource = result[:bundle]
-      response_body = result[:bundle]&.to_json
-      @requests << { status: result[:status], response_body: }
-      Struct.new(:status, :response_body).new(result[:status], response_body)
+      record_search_result(result[:status], result[:bundle])
     end
 
     def info(message) = info_messages << message
@@ -91,25 +98,49 @@ module InfernoSuiteGenerator
     end
 
     def evaluate_fhirpath(resource:, path:)
-      matches = JsonPath.new("$.#{path}").on(resource.to_hash)
+      resource_hash = resource.to_hash
+      matches = JsonPath.new("$.#{path}").on(resource_hash)
       return matches if matches.present?
 
-      settable?(resource.to_hash, path) ? [true] : []
+      settable?(resource_hash, path) ? [true] : []
     end
 
     private
 
-    def settable?(hash, path)
-      segs = path.split(".")
-      cur = hash
-      segs[0..-2].each do |seg|
-        key, idx = seg.include?("[") ? seg.split(/\[|\]/) : [seg, nil]
-        return false unless cur.is_a?(Hash) && cur.key?(key)
+    def record_search_result(status, bundle)
+      @response = { status: }
+      @resource = bundle
+      response_body = bundle&.to_json
+      @requests << { status:, response_body: }
+      Struct.new(:status, :response_body).new(status, response_body)
+    end
 
-        cur = cur[key]
-        cur = cur[idx.to_i] if idx && cur.is_a?(Array)
+    def settable?(hash, path)
+      segments = path.split(".")[0..-2]
+      navigate(hash, segments) != UNSETTABLE
+    end
+
+    def navigate(hash, segments)
+      segments.reduce(hash) do |cur, seg|
+        break UNSETTABLE if cur == UNSETTABLE
+
+        advance(cur, seg)
       end
-      true
+    end
+
+    def advance(cur, seg)
+      key, idx = parse_segment(seg)
+      return UNSETTABLE unless cur.is_a?(Hash) && cur.key?(key)
+
+      step_into(cur[key], idx)
+    end
+
+    def parse_segment(seg)
+      seg.include?("[") ? seg.split(/\[|\]/) : [seg, nil]
+    end
+
+    def step_into(value, idx)
+      idx && value.is_a?(Array) ? value[idx.to_i] : value
     end
 
     def build_capability_statement_for_types(types)
@@ -119,22 +150,23 @@ module InfernoSuiteGenerator
     end
 
     def capability_resource(resource_type)
-      r = FHIR::R4::CapabilityStatement::Rest::Resource.new
-      r.type = resource_type
-      r.interaction = [FHIR::R4::CapabilityStatement::Rest::Resource::Interaction.new("code" => "search-type")]
-      r
+      capability = FHIR::R4::CapabilityStatement::Rest::Resource.new
+      capability.type = resource_type
+      capability.interaction =
+        [FHIR::R4::CapabilityStatement::Rest::Resource::Interaction.new("code" => "search-type")]
+      capability
     end
   end
 
   class UpdateTestPerformUpdateNewTest < Minitest::Test
     def test_replaces_subject_encounter_and_author_references
-      qr = build_questionnaire_response(subject: { "reference" => "Patient/old" },
-                                        encounter: { "reference" => "Encounter/old" },
-                                        author: { "reference" => "Practitioner/old" })
-      subject = build_subject(metadata: all_three_refs_metadata,
-                              keeper: all_three_refs_keeper, resource_payload: qr)
-      subject.perform_update_new_test
-      updated = subject.last_updated_resource
+      subject = build_subject(
+        metadata: all_three_refs_metadata, keeper: all_three_refs_keeper,
+        resource_payload: build_questionnaire_response(subject: { "reference" => "Patient/old" },
+                                                       encounter: { "reference" => "Encounter/old" },
+                                                       author: { "reference" => "Practitioner/old" })
+      )
+      updated = subject.tap(&:perform_update_new_test).last_updated_resource
       assert_equal "Patient/p1", updated.subject.reference
       assert_equal "Encounter/e1", updated.encounter.reference
       assert_equal "Practitioner/pr1", updated.author.reference
@@ -165,8 +197,8 @@ module InfernoSuiteGenerator
                               keeper: references_keeper_double({}),
                               resource_payload: build_questionnaire_response)
       subject.perform_update_new_test
-      refute_nil subject.last_updated_resource.id
-      refute_equal "original-id", subject.last_updated_resource.id
+      refute_nil(updated_id = subject.last_updated_resource.id)
+      refute_equal "original-id", updated_id
     end
 
     def test_uses_references_from_mapping_input_when_keeper_is_empty
@@ -176,7 +208,7 @@ module InfernoSuiteGenerator
         keeper: references_keeper_double({}),
         resource_payload: resource
       )
-      subject.references_mapping_input = '["Patient/from-input"]'
+      subject.stub_references_mapping_input('["Patient/from-input"]')
       subject.perform_update_new_test
       assert_equal "Patient/from-input", subject.last_updated_resource.subject.reference
     end
@@ -184,18 +216,15 @@ module InfernoSuiteGenerator
     def test_populates_references_from_server_bundle
       bundle = build_bundle("Patient", "server-patient")
       subject = build_subject_with_patient_ref(demodata: demodata_double(["Patient"]))
-      subject.search_results = { "Patient" => { status: 200, bundle: } }
+      subject.stub_search_results("Patient" => { status: 200, bundle: })
       subject.perform_update_new_test
       assert_equal "Patient/server-patient", subject.last_updated_resource.subject.reference
     end
 
     def test_skips_server_search_when_keeper_already_has_references
-      bundle = build_bundle("Patient", "from-server")
-      subject = build_subject_with_patient_ref(
-        keeper: references_keeper_double("Patient" => ["pre-loaded"]),
-        demodata: demodata_double(["Patient"])
-      )
-      subject.search_results = { "Patient" => { status: 200, bundle: } }
+      subject = build_subject_with_patient_ref(keeper: references_keeper_double("Patient" => ["pre-loaded"]),
+                                               demodata: demodata_double(["Patient"]))
+      subject.stub_search_results("Patient" => { status: 200, bundle: build_bundle("Patient", "from-server") })
       subject.perform_update_new_test
       assert_equal "Patient/pre-loaded", subject.last_updated_resource.subject.reference
       assert subject.info_messages.empty?, "should not search server when keeper already has references"

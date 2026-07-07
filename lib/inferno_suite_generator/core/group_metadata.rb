@@ -58,6 +58,10 @@ module InfernoSuiteGenerator
         end.present?
       end
 
+      def readable?
+        interactions.any? { |interaction| interaction[:code] == "read" }
+      end
+
       def delayed?
         return false if resource == "Patient"
 
