@@ -53,14 +53,14 @@ module InfernoSuiteGenerator
 
       def readable_resource_types
         ig_metadata.groups
-                   .select { |g| g.interactions.any? { |i| i[:code] == 'read' } }
+                   .select { |g| g.interactions.any? { |i| i[:code] == "read" } }
                    .map(&:resource)
                    .uniq
                    .sort
       end
 
       def readable_resource_types_string
-        readable_resource_types.map { |rt| "'#{rt}'" }.join(', ')
+        readable_resource_types.map { |rt| "'#{rt}'" }.join(", ")
       end
 
       def rewrite_profile_url_hash
