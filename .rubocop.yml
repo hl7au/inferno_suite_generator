@@ -74,3 +74,6 @@ Metrics/ModuleLength:
 Metrics/MethodLength:
   Exclude:
     - lib/inferno_suite_generator/utils/set_by_path.rb
+
+Gemspec/RequireMFA:
+  Enabled: false
