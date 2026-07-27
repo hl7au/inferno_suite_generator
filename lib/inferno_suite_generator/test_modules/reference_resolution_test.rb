@@ -187,22 +187,13 @@ module InfernoSuiteGenerator
     def resource_is_valid_with_target_profile?(resource, target_profile, rewrite_profile_url)
       return true if target_profile.blank?
 
-      # Only need to know if the resource is valid.
-      # Calling resource_is_valid? causes validation errors to be logged.
       validator = find_validator(:default)
 
       target_profile_with_version = get_target_profile_with_version(target_profile, rewrite_profile_url)
       begin
-        validator_response = validator.validate(resource, target_profile_with_version)
-        outcome = validator.operation_outcome_from_hl7_wrapped_response(validator_response)
-
-        message_hashes = outcome.issue&.map { |issue| validator.message_hash_from_issue(issue, resource) } || []
-
-        message_hashes.concat(validator.additional_validation_messages(resource, target_profile_with_version))
-
-        validator.filter_messages(message_hashes)
-
-        message_hashes.none? { |message_hash| message_hash[:type] == "error" }
+        # add_messages_to_runnable is false because we only need to know if the resource is valid;
+        # logging every failed reference target as an error would be noisy.
+        validator.resource_is_valid?(resource, target_profile_with_version, self, add_messages_to_runnable: false)
       rescue StandardError => e
         error_message = "Can't validate resource #{resource.resourceType} with profile #{target_profile}. Got error #{e.message}"
 
