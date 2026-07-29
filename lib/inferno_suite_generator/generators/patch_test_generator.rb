@@ -62,6 +62,10 @@ module InfernoSuiteGenerator
         self.class.patch_interaction(group_metadata)
       end
 
+      def patch_checks
+        config.patch_checks
+      end
+
       def conformance_expectation
         patch_interaction[:expectation]
       end

@@ -53,6 +53,7 @@ exclude_paths:
   - 'lib/inferno_suite_generator/extractors/ig_demodata_extractor.rb'
   - 'lib/inferno_suite_generator/decorators/parameters_parameter_decorator.rb'
   - 'lib/inferno_suite_generator/generators/update_test_generator.rb'
+  - 'lib/inferno_suite_generator/generators/patch_test_generator.rb'
   - 'lib/inferno_suite_generator/test_modules/basic_test.rb'
   - 'lib/inferno_suite_generator/test_modules/patch_test.rb'
   - 'lib/inferno_suite_generator/test_modules/update_test.rb'
@@ -69,3 +70,4 @@ exclude_paths:
   - 'test/dynamic_value_resolver_test.rb'
   - 'test/create_test_apply_overrides_test.rb'
   - 'test/update_test_perform_update_new_test.rb'
+  - 'test/patch_test_assert_patch_success_test.rb'

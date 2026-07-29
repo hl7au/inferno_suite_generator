@@ -2,6 +2,7 @@
 
 require_relative "constants"
 require_relative "utils"
+require_relative "../../patch_checks"
 
 module InfernoSuiteGenerator
   class Generator
@@ -64,6 +65,10 @@ module InfernoSuiteGenerator
 
         def search_params_to_ignore
           get("configs.generic.search_params_to_ignore", EMPTY_ARRAY)
+        end
+
+        def patch_checks
+          get("configs.generic.patch_checks", InfernoSuiteGenerator::PATCH_CHECKS)
         end
 
         def search_params_expectation

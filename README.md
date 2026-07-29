@@ -150,6 +150,13 @@ These constants can be referred to from profile/resource configs, allowing you t
 
 - **`expectation`**: Allowed expectation levels (e.g. `["SHALL", "SHOULD", "MAY"]`)
 - **`search_params_to_ignore`**: Search parameters to ignore when generating tests (e.g. `["_sort"]`)
+- **`patch_checks`**: Narrows which checks generated PATCH tests run after a successful patch request. Defaults to
+  all of `["status", "version", "diff"]`:
+    - `status`: response status is `200` or `204`
+    - `version`: `resource.meta.versionId` was bumped to `2` (only checked when the profile's CREATE interaction is
+      SHALL, since that's what guarantees the resource started at version 1; resource versioning is not itself a
+      conformance requirement)
+    - `diff`: the resource returned by the server actually reflects the JSON Patch operations that were sent
 - **`register_generators`**: Custom generators to load, each with:
     - `path_to_generator`
     - `generator_class`

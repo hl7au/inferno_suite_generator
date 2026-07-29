@@ -57,6 +57,7 @@
     "generic": {
       "expectation": ["SHALL", "SHOULD", "MAY"],
       "search_params_to_ignore": ["count", "_sort", "_include"],
+      "patch_checks": ["status", "version", "diff"],
       "register_generators": [
         {
           "path_to_generator": "lib/au_core_test_kit/generators/custom_identifier_search/generator.rb",

@@ -8,6 +8,7 @@ end
 
 module InfernoSuiteGenerator
   VERSION: String
+  PATCH_CHECKS: Array[String]
 
   module DynamicValueResolver
     TOKEN_PATTERN: Regexp
@@ -77,6 +78,7 @@ module InfernoSuiteGenerator
         def package_archive_path: () -> String
         def extra_json_paths: () -> Array[String]
         def search_params_to_ignore: () -> Array[String]
+        def patch_checks: () -> Array[String]
         def search_params_expectation: () -> (Array["SHOULD" | "SHALL" | "MAY"] | Array[untyped])
         def outer_groups: () -> (Array[Hash[String, untyped]] | Array[untyped])
         def extra_searches: (String profile_url, String resource_type) -> (Array[Hash[String, untyped]] | Array[untyped])

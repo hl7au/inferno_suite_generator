@@ -32,6 +32,10 @@ module <%= suite_module_name %>
         '<%= resource_type %>'
       end
 
+      def patch_checks
+        <%= patch_checks.inspect %>
+      end
+
       run do
         <%= executor %>
       end

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../patch_checks"
 require_relative "../utils/generic"
 require_relative "basic_test"
 
@@ -25,6 +26,11 @@ module InfernoSuiteGenerator
       "FHIRPathPatchXML" => "application/fhir+xml"
     }.freeze
 
+    # Overridden by generated tests when `configs.generic.patch_checks` narrows the default set.
+    def patch_checks
+      PATCH_CHECKS
+    end
+
     def perform_json_patch_test
       patchset = patch_body_list_by_patch_type_and_resource_type("JSONPatch", resource_type)
       skip skip_message(resource_type) if patchset.nil?
@@ -36,7 +42,7 @@ module InfernoSuiteGenerator
         info "Resource with id #{resource_id} not found. Waiting other ID..."
         next
       end
-      assert_patch_success
+      assert_patch_success(patchset)
     end
 
     def perform_xml_patch_test
@@ -123,38 +129,59 @@ module InfernoSuiteGenerator
       payload
     end
 
-    def assert_patch_success
-      # NOTE: If CREATE interaction is present in the IG for the current profile,
-      # then we should check only that a version is 2. We can be sure that a version will be 2, because
-      # we created the resource with version 1 while CREATE interaction testing.
+    def assert_patch_success(patchset = nil)
+      checks = enabled_patch_checks
 
-      if create_interaction_exists?(metadata)
-        assert_patch_status_and_version
-      else
-        assert_patch_status
-      end
+      assert_patch_status if checks.include?("status")
+      assert_patch_version if checks.include?("version")
+      assert_patch_diff(patchset) if checks.include?("diff")
     end
 
-    def assert_patch_status_and_version
-      info "The CREATE interaction is present. Checking version of the resource and status of the response..."
-
-      response_status = response[:status]
-      status_okay = [SUCCESS, SUCCESS_NO_CONTENT].include?(response_status)
-      puts "RESPONSE RESOURCE IS: #{resource}"
-      resource_version = resource&.meta&.versionId
-      version_okay = resource_version == "2"
-
-      assert status_okay, error_message_status(response_status)
-      assert version_okay, error_message_version(resource_version)
+    def enabled_patch_checks
+      Array(patch_checks) & PATCH_CHECKS
     end
 
     def assert_patch_status
-      info "The CREATE interaction is not present. Checking status of the response..."
-
       response_status = response[:status]
       status_okay = [SUCCESS, SUCCESS_NO_CONTENT].include?(response_status)
 
       assert status_okay, error_message_status(response_status)
+    end
+
+    def assert_patch_version
+      # NOTE: We can only assert on the version when the CREATE interaction is present in the IG
+      # for the current profile, since that is what guarantees the resource started at version 1.
+      # Resource versioning is not itself a conformance requirement, so this check is skipped
+      # (rather than failed) when that guarantee doesn't hold.
+      return unless create_interaction_exists?(metadata)
+
+      resource_version = resource&.meta&.versionId
+      version_okay = resource_version == "2"
+
+      assert version_okay, error_message_version(resource_version)
+    end
+
+    def assert_patch_diff(patchset)
+      return if patchset.blank?
+
+      resource_hash = resource&.to_hash
+      diff_ok = resource_hash.is_a?(Hash) &&
+                patchset.all? { |patch_operation| patch_operation_applied?(resource_hash, patch_operation) }
+
+      assert diff_ok, error_message_diff
+    end
+
+    def patch_operation_applied?(resource_hash, patch_operation)
+      actual_value = resource_hash[patch_operation[:path].to_s.delete_prefix("/")]
+
+      case patch_operation[:op]
+      when "add", "replace"
+        actual_value == patch_operation[:value]
+      when "remove"
+        actual_value.nil?
+      else
+        true
+      end
     end
 
     def skip_message(resource_type)
@@ -167,6 +194,10 @@ module InfernoSuiteGenerator
 
     def error_message_version(resource_version)
       "Resource version is #{resource_version}. Expected 2"
+    end
+
+    def error_message_diff
+      "Resource does not reflect the applied patch"
     end
 
     def fhir_fhirpath_patch_json(resource_type, id, parameters_resource_hash, client: :default, name: nil, tags: [])
