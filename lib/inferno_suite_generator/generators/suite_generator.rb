@@ -28,6 +28,10 @@ module InfernoSuiteGenerator
         []
       end
 
+      def validation_message_exclusion_patterns
+        config_keeper.validation_message_exclusions
+      end
+
       def generator_version
         VERSION
       end

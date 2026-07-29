@@ -79,6 +79,8 @@ module InfernoSuiteGenerator
         def extra_json_paths: () -> Array[String]
         def search_params_to_ignore: () -> Array[String]
         def patch_checks: () -> Array[String]
+        def validation_message_exclusions: () -> Array[String]
+        def validation_message_level_overrides: () -> (Array[Hash[String, untyped]] | Array[untyped])
         def search_params_expectation: () -> (Array["SHOULD" | "SHALL" | "MAY"] | Array[untyped])
         def outer_groups: () -> (Array[Hash[String, untyped]] | Array[untyped])
         def extra_searches: (String profile_url, String resource_type) -> (Array[Hash[String, untyped]] | Array[untyped])

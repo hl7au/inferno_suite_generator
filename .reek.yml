@@ -71,3 +71,4 @@ exclude_paths:
   - 'test/create_test_apply_overrides_test.rb'
   - 'test/update_test_perform_update_new_test.rb'
   - 'test/patch_test_assert_patch_success_test.rb'
+  - 'test/validation_test_message_level_overrides_test.rb'

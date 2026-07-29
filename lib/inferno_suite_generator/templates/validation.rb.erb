@@ -16,6 +16,10 @@ module <%= suite_module_name %>
         '<%= resource_type %>'
       end
 
+      def validation_message_level_overrides
+        <%= validation_message_level_overrides.inspect %>
+      end
+
       def scratch_resources
         scratch[:<%= profile_identifier %>_resources] ||= {}
       end

@@ -24,6 +24,7 @@ module <%= suite_module_name %>
       version VERSION
 
       VERSION_SPECIFIC_MESSAGE_FILTERS = <%=version_specific_message_filters%>.freeze
+      VALIDATION_MESSAGE_EXCLUSION_PATTERNS = <%= validation_message_exclusion_patterns.inspect %>.freeze
 
       def self.metadata
         @metadata ||= YAML.load_file(File.join(__dir__, 'metadata.yml'), aliases: true)[:groups].map do |raw_metadata|
@@ -45,7 +46,8 @@ module <%= suite_module_name %>
         end
 
         exclude_message do |message|
-          Helpers.is_message_exist_in_list(message_filters, message.message)
+          Helpers.is_message_exist_in_list(message_filters, message.message) ||
+            Helpers.message_matches_any_pattern?(VALIDATION_MESSAGE_EXCLUSION_PATTERNS, message.message)
         end
 
         perform_additional_validation do |resource, profile_url|

@@ -157,6 +157,13 @@ These constants can be referred to from profile/resource configs, allowing you t
       SHALL, since that's what guarantees the resource started at version 1; resource versioning is not itself a
       conformance requirement)
     - `diff`: the resource returned by the server actually reflects the JSON Patch operations that were sent
+- **`validation_message_exclusions`**: List of regexes. Any FHIR validator message matching one of these is dropped
+  entirely, on top of the built‑in MIME‑type filters and any `version_specific_message_filters` a test kit defines.
+  Applied via the [validator's `exclude_message` hook](https://inferno-framework.github.io/docs/writing-tests/fhir-validation.html#filtering-validation-messages).
+- **`validation_message_level_overrides`**: List of `{ "regex": "...", "level": "error" | "warning" | "info" }`.
+  Any FHIR validator message matching `regex` has its severity replaced with `level` before the generated
+  Resource Validation test decides pass/fail (e.g. downgrade a noisy `error` to a `warning` so it no longer fails
+  the test, or upgrade a `warning` to an `error`). Checked in order; the first match wins.
 - **`register_generators`**: Custom generators to load, each with:
     - `path_to_generator`
     - `generator_class`

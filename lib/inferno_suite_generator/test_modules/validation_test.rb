@@ -2,6 +2,7 @@
 
 require_relative "../utils/assert_helpers"
 require_relative "../utils/filter_set"
+require_relative "../utils/helpers"
 
 module InfernoSuiteGenerator
   # @!group ValidationTest
@@ -54,8 +55,25 @@ module InfernoSuiteGenerator
 
     def validate_and_check_dar(resources, profile_url)
       resources.each do |resource|
+        messages_count_before_validation = messages.size
         resource_is_valid?(resource:, profile_url:)
+        apply_validation_message_level_overrides(messages_count_before_validation)
         check_for_dar(resource)
+      end
+    end
+
+    # Overridden by generated tests when `configs.generic.validation_message_level_overrides` is configured.
+    def validation_message_level_overrides
+      []
+    end
+
+    def apply_validation_message_level_overrides(from_index)
+      overrides = validation_message_level_overrides
+      return if overrides.blank?
+
+      messages[from_index..].each do |message|
+        override_level = Helpers.message_level_override(overrides, message[:message])
+        message[:type] = override_level if override_level
       end
     end
 

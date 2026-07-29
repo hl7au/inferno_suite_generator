@@ -239,4 +239,13 @@ module Helpers
   def self.is_message_exist_in_list(message_list, message)
     message_list.any? { |list_message| message.include? list_message }
   end
+
+  def self.message_matches_any_pattern?(patterns, message)
+    patterns.any? { |pattern| Regexp.new(pattern).match?(message) }
+  end
+
+  def self.message_level_override(level_overrides, message)
+    override = level_overrides.find { |item| Regexp.new(item["regex"]).match?(message) }
+    override && override["level"]
+  end
 end

@@ -71,6 +71,14 @@ module InfernoSuiteGenerator
           get("configs.generic.patch_checks", InfernoSuiteGenerator::PATCH_CHECKS)
         end
 
+        def validation_message_exclusions
+          get("configs.generic.validation_message_exclusions", EMPTY_ARRAY)
+        end
+
+        def validation_message_level_overrides
+          get("configs.generic.validation_message_level_overrides", EMPTY_ARRAY)
+        end
+
         def search_params_expectation
           get("configs.generic.expectation", EMPTY_ARRAY)
         end

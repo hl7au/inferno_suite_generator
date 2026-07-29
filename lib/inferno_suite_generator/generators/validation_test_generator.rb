@@ -61,6 +61,10 @@ module InfernoSuiteGenerator
         resource_type != "Medication"
       end
 
+      def validation_message_level_overrides
+        Registry.get(:config_keeper).validation_message_level_overrides
+      end
+
       def generate
         FileUtils.mkdir_p(output_file_directory)
         File.write(output_file_name, output)
