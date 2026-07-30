@@ -41,6 +41,7 @@ module <%= suite_module_name %>
 
         cli_context do
           txServer ENV.fetch('TX_SERVER_URL', '<%= tx_server_url %>')
+          snomedCT ENV.fetch('SNOMED_EDITION', '<%= snomed_edition %>')
           disableDefaultResourceFetcher false
         end
 

@@ -40,6 +40,10 @@ module InfernoSuiteGenerator
         config_keeper.tx_server_url
       end
 
+      def snomed_edition
+        config_keeper.snomed_edition
+      end
+
       def module_name
         "#{ig_metadata.ig_module_name_prefix}#{ig_metadata.reformatted_version.upcase}"
       end

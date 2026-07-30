@@ -18,6 +18,22 @@ module InfernoSuiteGenerator
           get("suite.tx_server_url")
         end
 
+        # SNOMED CT edition the validator resolves version-less http://snomed.info/sct
+        # codes against, as a cliContext.snomedCT value (an edition SCTID, or one of the
+        # aliases in SnomedUtilities.getCodeFromAlias such as "au", "us", "uk", "intl").
+        #
+        # The validator defaults this to the International edition
+        # (900000000000207008) and turns it into the expansion parameter
+        # "system-version=http://snomed.info/sct|http://snomed.info/sct/<edition>". A
+        # terminology server that does not carry that edition then fails every SNOMED
+        # lookup with "A definition for CodeSystem 'http://snomed.info/sct' version
+        # 'null' could not be found", after which the validator reports valid codes as
+        # absent from their value sets. Set this to match what suite.tx_server_url
+        # actually carries.
+        def snomed_edition
+          get("suite.snomed_edition", "au")
+        end
+
         def resources_configs
           get("configs.resources", EMPTY_HASH)
         end
