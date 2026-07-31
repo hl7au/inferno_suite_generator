@@ -16,7 +16,17 @@ module InfernoSuiteGenerator
 
       pass if unresolved_references(resources, rewrite_profile_url, readable_resource_types).empty?
 
-      skip_with_msg "Could not resolve and validate any Must Support references for #{unresolved_references_strings.join(", ")}"
+      # Distinguish the two ways a target can fail. A reference that was read
+      # successfully but whose target does not conform to its profile is a
+      # finding about the data, not an absence of data, and reporting it as a
+      # skip hides it. Only a genuinely unreachable reference is a skip.
+      if nonconformant_reference_targets.any?
+        assert false,
+               "Resolved Must Support references whose targets do not conform to their profile: " \
+               "#{nonconformant_reference_targets.join(", ")}"
+      end
+
+      skip_with_msg "Could not resolve any Must Support references for #{unresolved_references_strings.join(", ")}"
     end
 
     def unresolved_references_strings
@@ -58,6 +68,13 @@ module InfernoSuiteGenerator
 
     def resolved_references
       scratch[:resolved_references] ||= Set.new
+    end
+
+    # References that were read successfully but whose target failed validation
+    # against its declared profile. Kept per test rather than in scratch, since
+    # it describes this test's findings rather than session-wide state.
+    def nonconformant_reference_targets
+      @nonconformant_reference_targets ||= Set.new
     end
 
     def no_resources_skip_message
@@ -170,18 +187,29 @@ module InfernoSuiteGenerator
 
       return false unless resolved_resource&.resourceType == reference_type && resolved_resource&.id == reference_id
 
-      return false unless resource_is_valid_with_target_profile?(resolved_resource, target_profile, rewrite_profile_url)
+      unless resource_is_valid_with_target_profile?(resolved_resource, target_profile, rewrite_profile_url)
+        # The read succeeded, so the reference is reachable. The target simply
+        # does not conform. Remember that so the caller can report it as a
+        # finding rather than as missing data.
+        nonconformant_reference_targets << "#{reference.reference} (#{target_profile})"
+        return false
+      end
 
       record_resolved_reference(reference, target_profile)
       true
     end
 
     def get_target_profile_with_version(target_profile, rewrite_profile_url)
-      if rewrite_profile_url.key?(target_profile)
-        rewrite_profile_url[target_profile]
-      else
-        "#{target_profile}|#{metadata.profile_version}"
-      end
+      return rewrite_profile_url[target_profile] if rewrite_profile_url.key?(target_profile)
+
+      # Reference targets are frequently profiles from a dependency rather than
+      # from the IG being generated, so the IG's own version does not apply to
+      # them. Asking the validator for au-core-patient|<this IG's version>
+      # requests a profile that was never published, which the validator
+      # rejects outright, and resource_is_valid_with_target_profile? turns that
+      # into a failed assertion. Leave the canonical unversioned and let the
+      # validator resolve whichever version the loaded packages supply.
+      target_profile
     end
 
     def resource_is_valid_with_target_profile?(resource, target_profile, rewrite_profile_url)
