@@ -23,6 +23,14 @@ module <%= suite_module_name %>
       )
       version VERSION
 
+      # `id` MUST be declared before `fhir_resource_validator`. The validator captures the
+      # suite id eagerly as its `test_suite_id`, and Inferno keys validator sessions on it.
+      # If `id` comes after, the capture falls back to the base-class name
+      # "Inferno::Entities::TestSuite", which every affected suite then shares as a single
+      # validator session, collapsing separate IG versions onto one validator engine and
+      # causing intermittent "Unable to resolve profile ...|<version>" errors.
+      id :<%= suite_id %>
+
       VERSION_SPECIFIC_MESSAGE_FILTERS = <%=version_specific_message_filters%>.freeze
 
       def self.metadata
@@ -55,8 +63,6 @@ module <%= suite_module_name %>
       end
 
       links <%= links %>
-
-      id :<%= suite_id %>
 
       input :url,
         title: 'FHIR Endpoint',
