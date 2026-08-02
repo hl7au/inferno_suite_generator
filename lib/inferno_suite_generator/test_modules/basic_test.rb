@@ -72,12 +72,14 @@ module InfernoSuiteGenerator
     def register_resource_id_from_bundle(bundle)
       return unless bundle
 
-      bundle.entry&.map do |entry|
+      bundle.entry&.each do |entry|
         resource = entry&.resource
+        next if resource.nil?
+        # `return` here abandoned the whole bundle at the first already-known
+        # id, so every later entry went unregistered. Skip the entry instead.
+        next if existing_demo_resources.include? resource.id
 
         info "Registering #{resource.id} of #{resource.resourceType} for resource IDs registry"
-        return if existing_demo_resources.include? resource.id
-
         existing_demo_resources << resource.id
       end
     end
