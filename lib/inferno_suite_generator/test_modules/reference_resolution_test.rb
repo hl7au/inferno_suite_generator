@@ -176,12 +176,14 @@ module InfernoSuiteGenerator
       true
     end
 
-    def get_target_profile_with_version(target_profile, rewrite_profile_url)
-      if rewrite_profile_url.key?(target_profile)
-        rewrite_profile_url[target_profile]
-      else
-        "#{target_profile}|#{metadata.profile_version}"
-      end
+    def resolve_target_profile_canonical(target_profile, rewrite_profile_url)
+      return rewrite_profile_url[target_profile] if rewrite_profile_url.key?(target_profile)
+
+      # Reference targets are usually profiles from a dependency rather than
+      # from the IG being generated, so the IG's own version does not apply to
+      # them. Leave the canonical unversioned and let the validator resolve
+      # whichever version the loaded packages supply.
+      target_profile
     end
 
     def resource_is_valid_with_target_profile?(resource, target_profile, rewrite_profile_url)
@@ -189,11 +191,11 @@ module InfernoSuiteGenerator
 
       validator = find_validator(:default)
 
-      target_profile_with_version = get_target_profile_with_version(target_profile, rewrite_profile_url)
+      target_profile_canonical = resolve_target_profile_canonical(target_profile, rewrite_profile_url)
       begin
         # add_messages_to_runnable is false because we only need to know if the resource is valid;
         # logging every failed reference target as an error would be noisy.
-        validator.resource_is_valid?(resource, target_profile_with_version, self, add_messages_to_runnable: false)
+        validator.resource_is_valid?(resource, target_profile_canonical, self, add_messages_to_runnable: false)
       rescue StandardError => e
         error_message = "Can't validate resource #{resource.resourceType} with profile #{target_profile}. Got error #{e.message}"
 
