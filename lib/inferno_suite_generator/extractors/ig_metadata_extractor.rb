@@ -16,12 +16,19 @@ module InfernoSuiteGenerator
       end
 
       def extract
-        add_metadata_from_ig
-        add_metadata_from_resources
+        add_config_metadata 
+        add_groups_metadata
         metadata
       end
 
-      def add_metadata_from_ig
+      def add_groups_metadata
+        metadata.groups = resources_in_capability_statement.flat_map(&method(:extract_metadata_for_cs_resource)).compact
+        metadata.postprocess_groups(ig_resources)
+      end
+
+      private
+
+      def add_config_metadata
         metadata.ig_version = "v#{config_keeper.version}"
         metadata.ig_id = config_keeper.id
         metadata.ig_title = config_keeper.title
@@ -53,10 +60,7 @@ module InfernoSuiteGenerator
         end.compact
       end
 
-      def add_metadata_from_resources
-        metadata.groups = resources_in_capability_statement.flat_map(&method(:extract_metadata_for_cs_resource)).compact
-        metadata.postprocess_groups(ig_resources)
-      end
+
     end
   end
 end

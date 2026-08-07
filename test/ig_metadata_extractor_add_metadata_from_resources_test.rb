@@ -51,7 +51,7 @@ module InfernoSuiteGenerator
       subject = build_subject([resource])
 
       with_stubbed_extractor do
-        subject.add_metadata_from_resources
+        subject.add_groups_metadata
       end
 
       assert_equal(
@@ -73,7 +73,7 @@ module InfernoSuiteGenerator
       subject = build_subject([resource])
 
       with_stubbed_extractor do
-        subject.add_metadata_from_resources
+        subject.add_groups_metadata
       end
 
       assert_equal(
@@ -96,7 +96,7 @@ module InfernoSuiteGenerator
       subject = build_subject([resource_a, resource_b])
 
       with_stubbed_extractor do
-        subject.add_metadata_from_resources
+        subject.add_groups_metadata
       end
 
       assert_equal(
@@ -125,7 +125,7 @@ module InfernoSuiteGenerator
       )
 
       with_stubbed_extractor do
-        subject.add_metadata_from_resources
+        subject.add_groups_metadata
       end
 
       assert_equal(
@@ -146,7 +146,7 @@ module InfernoSuiteGenerator
       )
 
       with_stubbed_extractor do
-        subject.add_metadata_from_resources
+        subject.add_groups_metadata
       end
 
       assert_empty subject.metadata.groups
@@ -158,7 +158,7 @@ module InfernoSuiteGenerator
       subject = build_subject([resource])
 
       with_stubbed_extractor do
-        subject.add_metadata_from_resources
+        subject.add_groups_metadata
       end
 
       assert_empty subject.metadata.groups
@@ -174,7 +174,7 @@ module InfernoSuiteGenerator
       subject = build_subject([resource])
 
       with_stubbed_extractor do
-        subject.add_metadata_from_resources
+        subject.add_groups_metadata
       end
 
       assert_equal(
@@ -197,7 +197,7 @@ module InfernoSuiteGenerator
 
       _, stderr = capture_io do
         with_stubbed_extractor do
-          subject.add_metadata_from_resources
+          subject.add_groups_metadata
         end
       end
 
@@ -225,7 +225,7 @@ module InfernoSuiteGenerator
 
       _, stderr = capture_io do
         with_stubbed_extractor do
-          subject.add_metadata_from_resources
+          subject.add_groups_metadata
         end
       end
 
@@ -249,7 +249,7 @@ module InfernoSuiteGenerator
       subject = build_subject([resource], ig_resources:)
 
       with_stubbed_extractor do
-        subject.add_metadata_from_resources
+        subject.add_groups_metadata
       end
 
       # delayed_references is populated by IGMetadata#postprocess_groups, which
