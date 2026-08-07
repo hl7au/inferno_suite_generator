@@ -156,6 +156,13 @@ These constants can be referred to from profile/resource configs, allowing you t
     - `generator_class`
     - `path_to_template`
     - `test_type` (e.g. `"search"`)
+- **`target_profiles`**: Fallback list of profile URLs used to build groups when the IG has **no CapabilityStatement** (e.g. AU PS, IPS). Each URL must resolve to a `StructureDefinition` present in the loaded IG resources; URLs that don't resolve are skipped with a warning. This is only consulted when `ig_resources.cs_resources` is empty — IGs that publish a CapabilityStatement are unaffected. Because there's no CapabilityStatement to source them from, groups built this way have no interactions, operations, or searches — only must‑support elements, mandatory elements, terminology bindings, and references, e.g.:
+  ```json
+  "target_profiles": [
+    "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-patient",
+    "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-medication"
+  ]
+  ```
 
 ### Configs – profiles section
 

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fhir_models"
 require_relative "../core/ig_metadata"
 require_relative "group_metadata_extractor"
 require_relative "../utils/registry"
@@ -37,7 +38,36 @@ module InfernoSuiteGenerator
       end
 
       def resources_in_capability_statement
-        ig_resources.cs_resources
+        cs_resources = ig_resources.cs_resources
+        return cs_resources if cs_resources.present?
+
+        target_profile_resources
+      end
+
+      def target_profile_resources
+        profile_urls = config_keeper.target_profiles
+
+        if profile_urls.blank?
+          warn "No CapabilityStatement found in the IG and no configs.generic.target_profiles " \
+               "configured — no groups will be generated."
+          return []
+        end
+
+        profile_urls_by_resource_type(profile_urls).map do |resource_type, urls|
+          FHIR::CapabilityStatement::Rest::Resource.new(
+            "type" => resource_type,
+            "supportedProfile" => urls
+          )
+        end
+      end
+
+      def profile_urls_by_resource_type(profile_urls)
+        profile_urls.each_with_object({}) do |url, grouped|
+          resource_type = ig_resources.resource_for_profile(url)
+          next if resource_type.nil?
+
+          (grouped[resource_type] ||= []) << url
+        end
       end
 
       def extract_group_metadata(resource, profile, metadata, ig_resources)

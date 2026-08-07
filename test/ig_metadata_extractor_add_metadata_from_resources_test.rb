@@ -12,21 +12,31 @@ module InfernoSuiteGenerator
     FakeExtractorResult = Struct.new(:group_metadata)
 
     class FakeConfigKeeper
-      def initialize(skip_profiles: [])
+      def initialize(skip_profiles: [], target_profiles: [])
         @skip_profiles = skip_profiles
+        @target_profiles = target_profiles
       end
 
       def skip_metadata_extraction?(profile_url, _resource_type)
         @skip_profiles.include?(profile_url)
       end
+
+      def target_profiles
+        @target_profiles
+      end
     end
 
     class FakeIGResources
-      def initialize(cs_resources)
+      def initialize(cs_resources, resource_types_by_profile: {})
         @cs_resources = cs_resources
+        @resource_types_by_profile = resource_types_by_profile
       end
 
       attr_reader :cs_resources
+
+      def resource_for_profile(url)
+        @resource_types_by_profile[url]
+      end
     end
 
     def setup
@@ -255,6 +265,81 @@ module InfernoSuiteGenerator
       # delayed_references is populated by IGMetadata#postprocess_groups, which
       # only runs after metadata.groups has been assigned.
       refute_nil subject.metadata.groups.first.delayed_references
+    end
+
+    def test_falls_back_to_target_profiles_when_no_capability_statement_present
+      ig_resources = FakeIGResources.new(
+        [],
+        resource_types_by_profile: {
+          "http://example.org/StructureDefinition/patient-a" => "Patient",
+          "http://example.org/StructureDefinition/patient-b" => "Patient",
+          "http://example.org/StructureDefinition/observation-a" => "Observation"
+        }
+      )
+      config_keeper = FakeConfigKeeper.new(
+        target_profiles: [
+          "http://example.org/StructureDefinition/patient-a",
+          "http://example.org/StructureDefinition/patient-b",
+          "http://example.org/StructureDefinition/observation-a"
+        ]
+      )
+      subject = build_subject([], ig_resources:, config_keeper:)
+
+      with_stubbed_extractor do
+        subject.add_groups_metadata
+      end
+
+      assert_equal(
+        [
+          "http://example.org/StructureDefinition/patient-a",
+          "http://example.org/StructureDefinition/patient-b",
+          "http://example.org/StructureDefinition/observation-a"
+        ].sort,
+        subject.metadata.groups.map(&:profile_url).sort
+      )
+      assert_equal(
+        ["Observation", "Patient", "Patient"].sort,
+        @calls.map { |call| call[:resource].type }.sort
+      )
+    end
+
+    def test_skips_target_profiles_with_no_matching_structure_definition
+      ig_resources = FakeIGResources.new(
+        [],
+        resource_types_by_profile: {
+          "http://example.org/StructureDefinition/known" => "Patient"
+        }
+      )
+      config_keeper = FakeConfigKeeper.new(
+        target_profiles: [
+          "http://example.org/StructureDefinition/known",
+          "http://example.org/StructureDefinition/unknown"
+        ]
+      )
+      subject = build_subject([], ig_resources:, config_keeper:)
+
+      with_stubbed_extractor do
+        subject.add_groups_metadata
+      end
+
+      assert_equal(
+        ["http://example.org/StructureDefinition/known"],
+        subject.metadata.groups.map(&:profile_url)
+      )
+    end
+
+    def test_warns_and_produces_no_groups_when_no_capability_statement_and_no_target_profiles
+      subject = build_subject([])
+
+      _, stderr = capture_io do
+        with_stubbed_extractor do
+          subject.add_groups_metadata
+        end
+      end
+
+      assert_empty subject.metadata.groups
+      assert_empty @calls
+      assert_match(/No CapabilityStatement found/, stderr)
     end
 
     private
