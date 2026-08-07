@@ -82,7 +82,7 @@ module InfernoSuiteGenerator
       )
     end
 
-    def test_orders_all_supported_profile_groups_before_any_primary_profile_groups
+    def test_orders_each_resources_supported_profile_groups_before_its_own_primary_profile_group
       resource_a = fhir_resource(
         type: "Patient",
         profile: "http://example.org/StructureDefinition/primary-a",
@@ -102,8 +102,8 @@ module InfernoSuiteGenerator
       assert_equal(
         [
           "http://example.org/StructureDefinition/supported-a",
-          "http://example.org/StructureDefinition/supported-b",
           "http://example.org/StructureDefinition/primary-a",
+          "http://example.org/StructureDefinition/supported-b",
           "http://example.org/StructureDefinition/primary-b"
         ],
         subject.metadata.groups.map(&:profile_url)
@@ -209,7 +209,7 @@ module InfernoSuiteGenerator
         subject.metadata.groups.map(&:profile_url)
       )
       assert_match(
-        /Error extracting metadata for supported profile http:\/\/example\.org\/StructureDefinition\/broken of resource Patient: boom/,
+        /Error extracting metadata for profile http:\/\/example\.org\/StructureDefinition\/broken of resource Patient: boom/,
         stderr
       )
     end
