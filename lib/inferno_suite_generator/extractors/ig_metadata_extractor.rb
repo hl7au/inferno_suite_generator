@@ -41,19 +41,20 @@ module InfernoSuiteGenerator
         cs_resources = ig_resources.cs_resources
         return cs_resources if cs_resources.present?
 
-        target_profile_resources
+        auto_detected_profile_resources
       end
 
-      def target_profile_resources
-        profile_urls = config_keeper.target_profiles
+      def auto_detected_profile_resources
+        profiles = ig_resources.profile_structure_definitions
 
-        if profile_urls.blank?
-          warn "No CapabilityStatement found in the IG and no configs.generic.target_profiles " \
-               "configured — no groups will be generated."
+        if profiles.blank?
+          warn "No CapabilityStatement found in the IG and no profile StructureDefinitions " \
+               "(kind=resource, derivation=constraint) were found to build one from — no groups " \
+               "will be generated."
           return []
         end
 
-        profile_urls_by_resource_type(profile_urls).map do |resource_type, urls|
+        profile_urls_by_resource_type(profiles).map do |resource_type, urls|
           FHIR::CapabilityStatement::Rest::Resource.new(
             "type" => resource_type,
             "supportedProfile" => urls
@@ -61,12 +62,9 @@ module InfernoSuiteGenerator
         end
       end
 
-      def profile_urls_by_resource_type(profile_urls)
-        profile_urls.each_with_object({}) do |url, grouped|
-          resource_type = ig_resources.resource_for_profile(url)
-          next if resource_type.nil?
-
-          (grouped[resource_type] ||= []) << url
+      def profile_urls_by_resource_type(profiles)
+        profiles.each_with_object({}) do |profile, grouped|
+          (grouped[profile.type] ||= []) << profile.url
         end
       end
 

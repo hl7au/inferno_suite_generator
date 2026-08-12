@@ -26,10 +26,6 @@ module InfernoSuiteGenerator
           get("configs.resources", EMPTY_HASH)
         end
 
-        def target_profiles
-          get("configs.generic.target_profiles", EMPTY_ARRAY)
-        end
-
         def ig_link
           get("ig.link")
         end

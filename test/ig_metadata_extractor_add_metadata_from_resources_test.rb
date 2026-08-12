@@ -12,30 +12,27 @@ module InfernoSuiteGenerator
     FakeExtractorResult = Struct.new(:group_metadata)
 
     class FakeConfigKeeper
-      def initialize(skip_profiles: [], target_profiles: [])
+      def initialize(skip_profiles: [])
         @skip_profiles = skip_profiles
-        @target_profiles = target_profiles
       end
 
       def skip_metadata_extraction?(profile_url, _resource_type)
         @skip_profiles.include?(profile_url)
       end
-
-      def target_profiles
-        @target_profiles
-      end
     end
 
+    FakeStructureDefinition = Struct.new(:type, :url)
+
     class FakeIGResources
-      def initialize(cs_resources, resource_types_by_profile: {})
+      def initialize(cs_resources, profile_structure_definitions: [])
         @cs_resources = cs_resources
-        @resource_types_by_profile = resource_types_by_profile
+        @profile_structure_definitions = profile_structure_definitions
       end
 
-      attr_reader :cs_resources
+      attr_reader :cs_resources, :profile_structure_definitions
 
       def resource_for_profile(url)
-        @resource_types_by_profile[url]
+        profile_structure_definitions.find { |sd| sd.url == url }&.type
       end
     end
 
@@ -267,23 +264,16 @@ module InfernoSuiteGenerator
       refute_nil subject.metadata.groups.first.delayed_references
     end
 
-    def test_falls_back_to_target_profiles_when_no_capability_statement_present
+    def test_falls_back_to_auto_detected_profiles_when_no_capability_statement_present
       ig_resources = FakeIGResources.new(
         [],
-        resource_types_by_profile: {
-          "http://example.org/StructureDefinition/patient-a" => "Patient",
-          "http://example.org/StructureDefinition/patient-b" => "Patient",
-          "http://example.org/StructureDefinition/observation-a" => "Observation"
-        }
-      )
-      config_keeper = FakeConfigKeeper.new(
-        target_profiles: [
-          "http://example.org/StructureDefinition/patient-a",
-          "http://example.org/StructureDefinition/patient-b",
-          "http://example.org/StructureDefinition/observation-a"
+        profile_structure_definitions: [
+          FakeStructureDefinition.new("Patient", "http://example.org/StructureDefinition/patient-a"),
+          FakeStructureDefinition.new("Patient", "http://example.org/StructureDefinition/patient-b"),
+          FakeStructureDefinition.new("Observation", "http://example.org/StructureDefinition/observation-a")
         ]
       )
-      subject = build_subject([], ig_resources:, config_keeper:)
+      subject = build_subject([], ig_resources:)
 
       with_stubbed_extractor do
         subject.add_groups_metadata
@@ -303,32 +293,7 @@ module InfernoSuiteGenerator
       )
     end
 
-    def test_skips_target_profiles_with_no_matching_structure_definition
-      ig_resources = FakeIGResources.new(
-        [],
-        resource_types_by_profile: {
-          "http://example.org/StructureDefinition/known" => "Patient"
-        }
-      )
-      config_keeper = FakeConfigKeeper.new(
-        target_profiles: [
-          "http://example.org/StructureDefinition/known",
-          "http://example.org/StructureDefinition/unknown"
-        ]
-      )
-      subject = build_subject([], ig_resources:, config_keeper:)
-
-      with_stubbed_extractor do
-        subject.add_groups_metadata
-      end
-
-      assert_equal(
-        ["http://example.org/StructureDefinition/known"],
-        subject.metadata.groups.map(&:profile_url)
-      )
-    end
-
-    def test_warns_and_produces_no_groups_when_no_capability_statement_and_no_target_profiles
+    def test_warns_and_produces_no_groups_when_no_capability_statement_and_no_profile_structure_definitions
       subject = build_subject([])
 
       _, stderr = capture_io do
