@@ -46,6 +46,12 @@ module InfernoSuiteGenerator
         end
       end
 
+      def profile_structure_definitions
+        resources_by_type["StructureDefinition"].select do |profile|
+          profile.kind == "resource" && profile.derivation == "constraint" && profile.type.present?
+        end
+      end
+
       def value_set_by_url(url)
         resources_by_type["ValueSet"].find { |profile| profile.url == url }
       end
