@@ -128,6 +128,7 @@ At a high level, a config file contains:
 - **`extra_json_paths`**: Additional JSON configs to merge
 - **`tx_server_url`**: Terminology server URL used by generated tests
 - **`snomed_edition`**: SNOMED CT edition the validator resolves version-less `http://snomed.info/sct` codes against, emitted as `cliContext.snomedCT`. An edition SCTID, or an alias such as `au`, `us`, `uk`, `intl`. Defaults to `au`. Must match an edition the configured `tx_server_url` actually carries: the validator otherwise fails every SNOMED lookup with "A definition for CodeSystem 'http://snomed.info/sct' version 'null' could not be found" and then reports valid codes as absent from their value sets.
+- **`resource_keeper_url`**: Base URL of an [`inferno_resources_keeper`](https://github.com/projkov/inferno_resources_keeper) service. Unset by default (saving disabled). When set, the generated suite automatically copies every resource it reads to this service, keyed by test session. Overridable per deployment via the `RESOURCE_KEEPER_URL` env var.
 - **`links`**: Links shown in the Inferno UI (e.g. “Report Issue”, “IG Documentation”)
 - **`outer_groups`**: Extra groups to include before/after generated groups:
     - `import_type`
@@ -200,6 +201,14 @@ Keyed by FHIR **resource type** (e.g. `"Observation"`, `"MedicationRequest"`). O
 - **`search.test_medication_inclusion`**: Enable special include tests for Medication where applicable
 
 See `config.example.json` and `config.example2.json` for a fully worked example.
+
+---
+
+## Saving fetched resources (Resource Keeper)
+
+Every generated suite defines a `RESOURCE_KEEPER_URL` constant, sourced from `suite.resource_keeper_url` in the config (overridable per deployment via the `RESOURCE_KEEPER_URL` env var, same pattern as `TX_SERVER_URL`/`SNOMED_EDITION`). Whenever that URL is present, every FHIR resource the suite reads (via `read`, `search`, or reference resolution) is automatically copied to that [`inferno_resources_keeper`](https://github.com/projkov/inferno_resources_keeper) service, keyed by the current test session — no tester interaction required. Leaving `suite.resource_keeper_url` unset (the default) disables saving entirely.
+
+The keeper is an optional, best‑effort side‑channel: if it's unreachable or misconfigured, saving fails silently and never affects test results.
 
 ---
 

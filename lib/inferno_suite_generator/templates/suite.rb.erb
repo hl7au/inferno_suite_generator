@@ -33,6 +33,11 @@ module <%= suite_module_name %>
 
       VERSION_SPECIFIC_MESSAGE_FILTERS = <%=version_specific_message_filters%>.freeze
 
+      # Base URL of an inferno_resources_keeper service (https://github.com/projkov/inferno_resources_keeper).
+      # When present, every resource this suite reads via read/search/reference resolution is copied there,
+      # keyed by the test session. Blank/nil disables saving entirely.
+      RESOURCE_KEEPER_URL = ENV.fetch('RESOURCE_KEEPER_URL', '<%= resource_keeper_url %>').presence
+
       def self.metadata
         @metadata ||= YAML.load_file(File.join(__dir__, 'metadata.yml'), aliases: true)[:groups].map do |raw_metadata|
             Generator::GroupMetadata.new(raw_metadata)

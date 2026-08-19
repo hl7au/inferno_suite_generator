@@ -2,6 +2,7 @@
 
 require_relative "../decorators/parameters_parameter_decorator"
 require_relative "../utils/basic_test_helpers"
+require_relative "../utils/resource_keeper_client"
 
 module InfernoSuiteGenerator
   # Module provides shared utility methods for FHIR test modules.
@@ -86,6 +87,31 @@ module InfernoSuiteGenerator
 
     def teardown_candidates
       scratch[:teardown_candidates] ||= []
+    end
+
+    def keep_resource(resource)
+      return unless resource
+      return unless resource_keeper_enabled?
+
+      resource_keeper_client.save(session_id: test_session_id, resource:)
+    end
+
+    def keep_resources(resources)
+      Array(resources).compact.each { |resource| keep_resource(resource) }
+    end
+
+    def resource_keeper_enabled?
+      resource_keeper_url.present?
+    end
+
+    def resource_keeper_url
+      self.class.suite::RESOURCE_KEEPER_URL
+    rescue NameError
+      nil
+    end
+
+    def resource_keeper_client
+      @resource_keeper_client ||= ResourceKeeperClient.new(resource_keeper_url)
     end
 
     def demo_resources

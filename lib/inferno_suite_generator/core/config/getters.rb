@@ -18,6 +18,10 @@ module InfernoSuiteGenerator
           get("suite.tx_server_url")
         end
 
+        def resource_keeper_url
+          get("suite.resource_keeper_url")
+        end
+
         def snomed_edition
           get("suite.snomed_edition", "au")
         end
