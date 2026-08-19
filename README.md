@@ -129,6 +129,7 @@ At a high level, a config file contains:
 - **`tx_server_url`**: Terminology server URL used by generated tests
 - **`snomed_edition`**: SNOMED CT edition the validator resolves version-less `http://snomed.info/sct` codes against, emitted as `cliContext.snomedCT`. An edition SCTID, or an alias such as `au`, `us`, `uk`, `intl`. Defaults to `au`. Must match an edition the configured `tx_server_url` actually carries: the validator otherwise fails every SNOMED lookup with "A definition for CodeSystem 'http://snomed.info/sct' version 'null' could not be found" and then reports valid codes as absent from their value sets.
 - **`resource_keeper_url`**: Base URL of an [`inferno_resources_keeper`](https://github.com/projkov/inferno_resources_keeper) service. Unset by default (saving disabled). When set, the generated suite automatically copies every resource it reads to this service, keyed by test session. Overridable per deployment via the `RESOURCE_KEEPER_URL` env var.
+- **`fhirpathlab_url`**: Base URL of a [FHIRPath Lab](https://fhirpath-lab.com/) instance used to turn FHIRPath locations in result messages into interactive debugging links (see [Linking FHIRPath locations to FHIRPath Lab](#linking-fhirpath-locations-to-fhirpath-lab)). Defaults to `https://fhirpath-lab.com/`. Overridable per deployment via the `FHIRPATHLAB_URL` env var. Linking only happens when `resource_keeper_url` is also set.
 - **`links`**: Links shown in the Inferno UI (e.g. “Report Issue”, “IG Documentation”)
 - **`outer_groups`**: Extra groups to include before/after generated groups:
     - `import_type`
@@ -209,6 +210,26 @@ See `config.example.json` and `config.example2.json` for a fully worked example.
 Every generated suite defines a `RESOURCE_KEEPER_URL` constant, sourced from `suite.resource_keeper_url` in the config (overridable per deployment via the `RESOURCE_KEEPER_URL` env var, same pattern as `TX_SERVER_URL`/`SNOMED_EDITION`). Whenever that URL is present, every FHIR resource the suite reads (via `read`, `search`, or reference resolution) is automatically copied to that [`inferno_resources_keeper`](https://github.com/projkov/inferno_resources_keeper) service, keyed by the current test session — no tester interaction required. Leaving `suite.resource_keeper_url` unset (the default) disables saving entirely.
 
 The keeper is an optional, best‑effort side‑channel: if it's unreachable or misconfigured, saving fails silently and never affects test results.
+
+---
+
+## Linking FHIRPath locations to FHIRPath Lab
+
+Validation messages that inferno-core adds to a result generally look like this:
+
+```
+Patient/123: Patient.name[0].given: Minimum required = 1, but only found 0
+```
+
+i.e. `<ResourceType>/<resource_id>: <path>: <detail>`. Every generated suite monkeypatches `Inferno::DSL::Messages#add_message` (see `InfernoSuiteGenerator::MessagesFhirpathLabPatch` in [`fhirpath_lab_message_linker.rb`](lib/inferno_suite_generator/utils/fhirpath_lab_message_linker.rb)) so that whenever a message matches this shape, `<path>` is rewritten into a link to [FHIRPath Lab](https://fhirpath-lab.com/), pre-loaded with the failing expression and the resource it was evaluated against:
+
+```
+Patient/123: [Patient.name[0].given](https://fhirpath-lab.com?expression=...&engine=fhirpath.js&resource=...): Minimum required = 1, but only found 0
+```
+
+This is a general-purpose patch: it applies to any message text passing through `add_message` (validator issues, `perform_additional_validation` results, custom test messages, etc.) — not just a specific validator code path — so long as the text matches the `<ResourceType>/<resource_id>: <path>: <detail>` pattern.
+
+The `resource=` link points at the resource's entry in the [Resource Keeper](#saving-fetched-resources-resource-keeper), so linking is only applied when **both** `resource_keeper_url` and `fhirpathlab_url` are configured and a resource was actually saved for the current test session — otherwise messages are left untouched.
 
 ---
 

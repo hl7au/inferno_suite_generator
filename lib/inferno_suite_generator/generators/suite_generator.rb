@@ -48,6 +48,10 @@ module InfernoSuiteGenerator
         config_keeper.resource_keeper_url
       end
 
+      def fhirpathlab_url
+        config_keeper.fhirpathlab_url
+      end
+
       def module_name
         "#{ig_metadata.ig_module_name_prefix}#{ig_metadata.reformatted_version.upcase}"
       end

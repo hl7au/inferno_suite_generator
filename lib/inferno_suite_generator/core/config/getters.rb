@@ -22,6 +22,10 @@ module InfernoSuiteGenerator
           get("suite.resource_keeper_url")
         end
 
+        def fhirpathlab_url
+          get("suite.fhirpathlab_url", "https://fhirpath-lab.com/")
+        end
+
         def snomed_edition
           get("suite.snomed_edition", "au")
         end
