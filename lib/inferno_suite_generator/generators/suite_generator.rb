@@ -44,10 +44,6 @@ module InfernoSuiteGenerator
         config_keeper.snomed_edition
       end
 
-      def resource_keeper_url
-        config_keeper.resource_keeper_url
-      end
-
       def fhirpathlab_url
         config_keeper.fhirpathlab_url
       end

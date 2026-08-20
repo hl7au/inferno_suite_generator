@@ -18,10 +18,6 @@ module InfernoSuiteGenerator
           get("suite.tx_server_url")
         end
 
-        def resource_keeper_url
-          get("suite.resource_keeper_url")
-        end
-
         def fhirpathlab_url
           get("suite.fhirpathlab_url", "https://fhirpath-lab.com/")
         end

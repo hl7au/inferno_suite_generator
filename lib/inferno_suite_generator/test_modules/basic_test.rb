@@ -2,7 +2,7 @@
 
 require_relative "../decorators/parameters_parameter_decorator"
 require_relative "../utils/basic_test_helpers"
-require_relative "../utils/resource_keeper_client"
+require_relative "../utils/kept_resources_repository"
 
 module InfernoSuiteGenerator
   # Module provides shared utility methods for FHIR test modules.
@@ -19,7 +19,7 @@ module InfernoSuiteGenerator
     def_delegators "self.class", :demodata, :metadata
 
     NOT_FOUND_STATUS = 404
-    ATTEMPTS_TO_GET_ENTRIES = 10.freeze
+    ATTEMPTS_TO_GET_ENTRIES = 10
 
     def resource_payload_for_input
       payload = resource_body_by_resource_type(resource_type).detect do |resource|
@@ -91,27 +91,16 @@ module InfernoSuiteGenerator
 
     def keep_resource(resource)
       return unless resource
-      return unless resource_keeper_enabled?
 
-      resource_keeper_client.save(session_id: test_session_id, resource:)
+      kept_resources_repository.save(session_id: test_session_id, resource:)
     end
 
     def keep_resources(resources)
       Array(resources).compact.each { |resource| keep_resource(resource) }
     end
 
-    def resource_keeper_enabled?
-      resource_keeper_url.present?
-    end
-
-    def resource_keeper_url
-      self.class.suite::RESOURCE_KEEPER_URL
-    rescue NameError
-      nil
-    end
-
-    def resource_keeper_client
-      @resource_keeper_client ||= ResourceKeeperClient.new(resource_keeper_url)
+    def kept_resources_repository
+      @kept_resources_repository ||= InfernoSuiteGenerator::KeptResourcesRepository.new
     end
 
     def demo_resources

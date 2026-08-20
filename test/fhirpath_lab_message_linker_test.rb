@@ -27,9 +27,9 @@ module InfernoSuiteGenerator
       assert_equal message, linkify(message, base_url: nil)
     end
 
-    def test_linkify_leaves_message_untouched_when_resource_keeper_url_missing
+    def test_linkify_leaves_message_untouched_when_resource_base_url_missing
       message = "Patient/123: Patient.name[0].given: detail"
-      assert_equal message, linkify(message, resource_keeper_url: nil)
+      assert_equal message, linkify(message, resource_base_url: nil)
     end
 
     def test_linkify_leaves_message_untouched_when_session_id_missing
@@ -54,16 +54,37 @@ module InfernoSuiteGenerator
 
     private
 
-    def linkify(message, base_url: "https://fhirpath-lab.com/", resource_keeper_url: "http://keeper.example",
+    def linkify(message, base_url: "https://fhirpath-lab.com/", resource_base_url: "http://keeper.example",
                 session_id: "session-1")
-      FhirpathLabMessageLinker.linkify(message, base_url:, resource_keeper_url:, session_id:)
+      FhirpathLabMessageLinker.linkify(message, base_url:, resource_base_url:, session_id:)
     end
   end
 
   class MessagesFhirpathLabPatchTest < Minitest::Test
+    # `resource_base_url_for_message_linker` reads `Inferno::Application['base_url']`,
+    # which is only defined once the full inferno_core gem boots (it requires a host
+    # app's `config/database.yml`). This gem's own tests don't boot inferno_core, so
+    # stand in a minimal fake here rather than pulling that in. Reopening `::Inferno`
+    # explicitly (instead of a bare `module Inferno`) avoids shadowing the real
+    # top-level `Inferno` constant for the `Inferno::DSL::Messages` reference below.
+    unless defined?(::Inferno::Application)
+      module ::Inferno
+        class Application
+          FAKE_CONFIG = { "base_url" => "http://localhost:4567" }.freeze
+
+          def self.[](key)
+            FAKE_CONFIG.fetch(key)
+          end
+        end
+      end
+    end
+
     class FakeSuite
       FHIRPATHLAB_URL = "https://fhirpath-lab.com/"
-      RESOURCE_KEEPER_URL = "http://keeper.example"
+
+      def self.id
+        :fake_suite
+      end
     end
 
     class FakeRunnable
@@ -92,7 +113,10 @@ module InfernoSuiteGenerator
       runnable = FakeRunnable.new
       runnable.add_message("error", "Patient/123: Patient.name[0].given: Minimum required = 1, but only found 0")
 
-      assert_includes runnable.messages.first[:message], "[Patient.name[0].given](https://fhirpath-lab.com?"
+      message = runnable.messages.first[:message]
+      assert_includes message, "[Patient.name[0].given](https://fhirpath-lab.com?"
+      assert_includes message,
+                      CGI.escape("http://localhost:4567/custom/fake_suite/resources/session-1/Patient/123")
     end
 
     def test_add_message_leaves_message_untouched_without_session_id
