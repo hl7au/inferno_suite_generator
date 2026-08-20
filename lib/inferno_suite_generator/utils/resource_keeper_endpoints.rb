@@ -18,6 +18,14 @@ module InfernoSuiteGenerator
     rescue StandardError => e
       halt 500, e.full_message
     end
+
+    def persist_request?
+      false
+    end
+
+    def kept_resources_repository
+      @kept_resources_repository ||= InfernoSuiteGenerator::KeptResourcesRepository.new
+    end
   end
 
   # Custom suite endpoints (registered via `suite_endpoint` in the generated
@@ -28,21 +36,16 @@ module InfernoSuiteGenerator
     include StatelessSuiteEndpoint
 
     def make_response
-      save_resource
-      response.status = 204
+      response.status = save_resource ? 204 : 422
     rescue StandardError
       response.status = 422
-    end
-
-    def persist_request?
-      false
     end
 
     private
 
     def save_resource
       resource = FHIR.from_contents(request.body.read)
-      InfernoSuiteGenerator::KeptResourcesRepository.new.save(session_id: request.params[:session_id], resource:)
+      kept_resources_repository.save(session_id: request.params[:session_id], resource:)
     end
   end
 
@@ -62,14 +65,10 @@ module InfernoSuiteGenerator
       end
     end
 
-    def persist_request?
-      false
-    end
-
     private
 
     def kept_resource
-      InfernoSuiteGenerator::KeptResourcesRepository.new.find(
+      kept_resources_repository.find(
         session_id: request.params[:session_id],
         resource_type: request.params[:resource_type],
         resource_id: request.params[:resource_id]
@@ -82,14 +81,8 @@ module InfernoSuiteGenerator
     include StatelessSuiteEndpoint
 
     def make_response
-      InfernoSuiteGenerator::KeptResourcesRepository.new.delete_session(
-        session_id: request.params[:session_id]
-      )
+      kept_resources_repository.delete_session(session_id: request.params[:session_id])
       response.status = 204
-    end
-
-    def persist_request?
-      false
     end
   end
 end

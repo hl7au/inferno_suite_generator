@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "cgi"
+require "dry/container/error"
 require "inferno/dsl/messages"
 
 module InfernoSuiteGenerator
@@ -13,11 +14,15 @@ module InfernoSuiteGenerator
     # The middle `echo` segment is optional and, when present, must repeat
     # `resource_type` exactly — that's what distinguishes it from a path that
     # genuinely starts with the bare resource type (e.g. a root-level issue).
+    #
+    # `path` allows colons (a FHIRPath expression may embed one, e.g. a URL in
+    # `system='http://...'`), stopping only at the specific ": " sequence that
+    # separates it from `detail`.
     MESSAGE_PATTERN = %r{
       \A
       (?<resource_type>[A-Za-z][A-Za-z0-9]*)/(?<resource_id>[^\s:]+):\x20
       (?:(?<echo>\k<resource_type>):\x20)?
-      (?<path>[^:\n]+):\x20
+      (?<path>(?:(?!:\x20)[^\n])+):\x20
       (?<detail>.*)
       \z
     }mx
@@ -62,17 +67,23 @@ module InfernoSuiteGenerator
     private
 
     def fhirpathlab_url_for_message_linker
-      self.class.suite::FHIRPATHLAB_URL
-    rescue NameError
-      nil
+      safely_for_message_linker { self.class.suite::FHIRPATHLAB_URL }
     end
 
     # A resource kept by this suite is reachable at this suite's own
     # `/custom/<suite_id>/resources` route (see resource_keeper_endpoints.rb)
     # rather than an externally configured URL.
     def resource_base_url_for_message_linker
-      "#{Inferno::Application["base_url"]}/custom/#{self.class.suite.id}/resources"
-    rescue NameError
+      safely_for_message_linker { "#{Inferno::Application["base_url"]}/custom/#{self.class.suite.id}/resources" }
+    end
+
+    # `self.class.suite` raises NameError/NoMethodError for a runnable with no
+    # suite, and `Inferno::Application[...]` raises Dry::Container::Error for
+    # an unregistered key (e.g. before the host app finishes booting) — both
+    # mean "can't build a link right now", so leave the message untouched.
+    def safely_for_message_linker
+      yield
+    rescue NameError, Dry::Container::Error
       nil
     end
 

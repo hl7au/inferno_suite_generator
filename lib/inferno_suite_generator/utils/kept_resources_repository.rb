@@ -28,8 +28,11 @@ module InfernoSuiteGenerator
     end
 
     def self.ensure_tables!
+      return if @tables_ensured_for.equal?(db)
+
       ensure_bodies_table!
       ensure_refs_table!
+      @tables_ensured_for = db
     end
 
     def self.ensure_bodies_table!
@@ -52,13 +55,31 @@ module InfernoSuiteGenerator
       end
     end
 
+    # A single save is just a batch of one: same transaction, same multi-row
+    # (here, single-row) `ON CONFLICT` statements as `save_all`.
     def save(session_id:, resource:)
       return false if session_id.blank? || resource.nil?
 
       self.class.ensure_tables!
-      self.class.db.transaction { save_body_and_ref(session_id:, resource:) }
+      self.class.db.transaction { save_batch(session_id, rows_for([resource])) }
       true
-    rescue StandardError
+    rescue StandardError => e
+      log_save_failure(:save, e)
+      false
+    end
+
+    # Saves several resources in one transaction/round trip instead of one
+    # `save` call per resource (e.g. for a whole search bundle's results).
+    def save_all(session_id:, resources:)
+      resources = Array(resources).compact
+      return true if resources.empty?
+      return false if session_id.blank?
+
+      self.class.ensure_tables!
+      self.class.db.transaction { save_batch(session_id, rows_for(resources)) }
+      true
+    rescue StandardError => e
+      log_save_failure(:save_all, e)
       false
     end
 
@@ -83,29 +104,44 @@ module InfernoSuiteGenerator
 
     private
 
-    def save_body_and_ref(session_id:, resource:)
-      body = resource.to_json
-      hash = Digest::SHA256.hexdigest(body)
-      save_body(hash, body)
-      save_ref(session_id:, resource:, hash:)
+    def log_save_failure(method_name, error)
+      Inferno::Application["logger"].error("KeptResourcesRepository##{method_name} failed: #{error.full_message}")
     end
 
-    def save_body(hash, body)
-      self.class.db[self.class::BODIES_TABLE]
-          .insert_conflict(target: :content_hash) # already-stored body: no-op
-          .insert(content_hash: hash, resource_json: body, created_at: Time.now)
-    end
-
-    def save_ref(session_id:, resource:, hash:)
-      attrs = { session_id:, resource_type: resource.resourceType, resource_id: resource.id,
-                content_hash: hash, updated_at: Time.now }
-      self.class.db[self.class::REFS_TABLE]
-          .insert_conflict(target: %i[session_id resource_type resource_id], update: ref_conflict_update)
-          .insert(attrs)
+    def save_batch(session_id, rows)
+      now = Time.now
+      save_bodies(rows, now)
+      save_refs(session_id, rows, now)
     end
 
     def ref_conflict_update
       { content_hash: Sequel[:excluded][:content_hash], updated_at: Sequel[:excluded][:updated_at] }
+    end
+
+    def rows_for(resources)
+      rows = resources.map do |resource|
+        body = resource.to_json
+        { resource_type: resource.resourceType, resource_id: resource.id,
+          content_hash: Digest::SHA256.hexdigest(body), resource_json: body }
+      end
+      # A multi-row `ON CONFLICT ... DO UPDATE` can't affect the same row
+      # twice in one statement (Postgres raises on this) -- collapse
+      # duplicate refs within this batch, keeping the most current copy.
+      rows.reverse.uniq { |row| [row[:resource_type], row[:resource_id]] }.reverse
+    end
+
+    def save_bodies(rows, now)
+      self.class.db[self.class::BODIES_TABLE]
+          .insert_conflict(target: :content_hash)
+          .import(%i[content_hash resource_json created_at],
+                  rows.map { |row| [row[:content_hash], row[:resource_json], now] })
+    end
+
+    def save_refs(session_id, rows, now)
+      self.class.db[self.class::REFS_TABLE]
+          .insert_conflict(target: %i[session_id resource_type resource_id], update: ref_conflict_update)
+          .import(%i[session_id resource_type resource_id content_hash updated_at],
+                  rows.map { |row| [session_id, row[:resource_type], row[:resource_id], row[:content_hash], now] })
     end
 
     def expired?(updated_at)

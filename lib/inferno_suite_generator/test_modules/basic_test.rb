@@ -96,7 +96,7 @@ module InfernoSuiteGenerator
     end
 
     def keep_resources(resources)
-      Array(resources).compact.each { |resource| keep_resource(resource) }
+      kept_resources_repository.save_all(session_id: test_session_id, resources:)
     end
 
     def kept_resources_repository

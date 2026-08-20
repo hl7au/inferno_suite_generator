@@ -77,6 +77,18 @@ module InfernoSuiteGenerator
       assert_nil linkify(nil)
     end
 
+    def test_linkify_handles_a_colon_embedded_in_the_path
+      path = "Patient.identifier.where(system='http://hl7.org.au/id/medicare-number').value"
+      message = "Patient/123: #{path}: code is invalid"
+
+      result = linkify(message)
+
+      expected_link = "[#{path}](https://fhirpath-lab.com?" \
+                      "expression=#{CGI.escape(path)}" \
+                      "&engine=fhirpath.js&resource=http%3A%2F%2Fkeeper.example%2Fsession-1%2FPatient%2F123)"
+      assert_equal "Patient/123: #{expected_link}: code is invalid", result
+    end
+
     private
 
     def linkify(message, base_url: "https://fhirpath-lab.com/", resource_base_url: "http://keeper.example",
@@ -89,21 +101,8 @@ module InfernoSuiteGenerator
     # `resource_base_url_for_message_linker` reads `Inferno::Application['base_url']`,
     # which is only defined once the full inferno_core gem boots (it requires a host
     # app's `config/database.yml`). This gem's own tests don't boot inferno_core, so
-    # stand in a minimal fake here rather than pulling that in. Reopening `::Inferno`
-    # explicitly (instead of a bare `module Inferno`) avoids shadowing the real
-    # top-level `Inferno` constant for the `Inferno::DSL::Messages` reference below.
-    unless defined?(::Inferno::Application)
-      module ::Inferno
-        class Application
-          FAKE_CONFIG = { "base_url" => "http://localhost:4567" }.freeze
-
-          def self.[](key)
-            FAKE_CONFIG.fetch(key)
-          end
-        end
-      end
-    end
-
+    # `test_helper` stands in a minimal fake `Inferno::Application` rather than
+    # pulling that in.
     class FakeSuite
       FHIRPATHLAB_URL = "https://fhirpath-lab.com/"
 
@@ -156,6 +155,17 @@ module InfernoSuiteGenerator
       runnable = FakeRunnableWithoutSuite.new
       original = "Patient/123: Patient.name[0].given: detail"
       runnable.add_message("error", original)
+
+      assert_equal original, runnable.messages.first[:message]
+    end
+
+    def test_add_message_leaves_message_untouched_when_base_url_lookup_raises_dry_container_error
+      runnable = FakeRunnable.new
+      original = "Patient/123: Patient.name[0].given: detail"
+
+      Inferno::Application.stub(:[], ->(_key) { raise Dry::Container::Error, "Nothing registered with the key" }) do
+        runnable.add_message("error", original)
+      end
 
       assert_equal original, runnable.messages.first[:message]
     end
