@@ -5,9 +5,18 @@ require "inferno/dsl/messages"
 
 module InfernoSuiteGenerator
   module FhirpathLabMessageLinker
+    # Some validators (e.g. the Java validator's terminology errors) repeat the
+    # resource type as its own segment before the path:
+    #   "Patient/pat-sf: Patient: Patient.extension[0]: Internal validator error..."
+    # while others go straight from the id to the path:
+    #   "Patient/123: Patient.name[0].given: Minimum required = 1, but only found 0"
+    # The middle `echo` segment is optional and, when present, must repeat
+    # `resource_type` exactly — that's what distinguishes it from a path that
+    # genuinely starts with the bare resource type (e.g. a root-level issue).
     MESSAGE_PATTERN = %r{
       \A
       (?<resource_type>[A-Za-z][A-Za-z0-9]*)/(?<resource_id>[^\s:]+):\x20
+      (?:(?<echo>\k<resource_type>):\x20)?
       (?<path>[^:\n]+):\x20
       (?<detail>.*)
       \z
@@ -23,8 +32,13 @@ module InfernoSuiteGenerator
       return message unless match
 
       "#{match[:resource_type]}/#{match[:resource_id]}: " \
+        "#{echo_prefix(match)}" \
         "#{link_for(match, base_url:, resource_base_url:, session_id:)}: " \
         "#{match[:detail]}"
+    end
+
+    def echo_prefix(match)
+      match[:echo] ? "#{match[:echo]}: " : ""
     end
 
     def link_for(match, base_url:, resource_base_url:, session_id:)

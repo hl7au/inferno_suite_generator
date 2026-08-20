@@ -22,6 +22,31 @@ module InfernoSuiteGenerator
       assert_equal message, linkify(message)
     end
 
+    def test_linkify_rewrites_message_with_echoed_resource_type_segment
+      message = "Patient/pat-sf: Patient: Patient.extension[0]: Internal validator error occurred: " \
+                "Could not find value set https://healthterminologies.gov.au/fhir/ValueSet/foo and version null."
+
+      result = linkify(message)
+
+      expected_link = "[Patient.extension[0]](https://fhirpath-lab.com?" \
+                      "expression=Patient.extension%5B0%5D&engine=fhirpath.js&" \
+                      "resource=http%3A%2F%2Fkeeper.example%2Fsession-1%2FPatient%2Fpat-sf)"
+      assert_equal "Patient/pat-sf: Patient: #{expected_link}: Internal validator error occurred: " \
+                   "Could not find value set https://healthterminologies.gov.au/fhir/ValueSet/foo and version null.",
+                   result
+    end
+
+    def test_linkify_treats_bare_type_as_path_when_no_further_segment_follows
+      message = "Patient/123: Patient: Minimum required = 1, but only found 0"
+
+      result = linkify(message)
+
+      expected_link = "[Patient](https://fhirpath-lab.com?" \
+                      "expression=Patient&engine=fhirpath.js&" \
+                      "resource=http%3A%2F%2Fkeeper.example%2Fsession-1%2FPatient%2F123)"
+      assert_equal "Patient/123: #{expected_link}: Minimum required = 1, but only found 0", result
+    end
+
     def test_linkify_leaves_message_untouched_when_base_url_missing
       message = "Patient/123: Patient.name[0].given: detail"
       assert_equal message, linkify(message, base_url: nil)
