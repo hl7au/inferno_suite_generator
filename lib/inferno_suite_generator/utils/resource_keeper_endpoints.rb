@@ -4,11 +4,29 @@ require "inferno/dsl/suite_endpoint"
 require_relative "kept_resources_repository"
 
 module InfernoSuiteGenerator
+  # `Inferno::DSL::SuiteEndpoint#handle` always looks up a *waiting* test run
+  # via `test_run_identifier` before calling `make_response`, halting with a
+  # 500 if none is found. That machinery exists for the "pause a test until
+  # an external callback arrives" pattern (e.g. OAuth redirects); the
+  # resource-keeper endpoints below are plain session-scoped CRUD against
+  # `KeptResourcesRepository` and aren't tied to any waiting test, so skip it.
+  module StatelessSuiteEndpoint
+    def handle(req, res)
+      @req = req
+      @res = res
+      make_response
+    rescue StandardError => e
+      halt 500, e.full_message
+    end
+  end
+
   # Custom suite endpoints (registered via `suite_endpoint` in the generated
   # suite class) exposing the in-process resource keeper at
   # `/custom/<suite_id>/resources/...`. These replace the external
   # inferno_resources_keeper service.
   class SaveResourceEndpoint < Inferno::DSL::SuiteEndpoint
+    include StatelessSuiteEndpoint
+
     def make_response
       save_resource
       response.status = 204
@@ -30,6 +48,8 @@ module InfernoSuiteGenerator
 
   # Fetches a resource previously saved via SaveResourceEndpoint.
   class FetchResourceEndpoint < Inferno::DSL::SuiteEndpoint
+    include StatelessSuiteEndpoint
+
     def make_response
       record = kept_resource
 
@@ -59,6 +79,8 @@ module InfernoSuiteGenerator
 
   # Deletes all resources kept for a session (e.g. once a test run ends).
   class DeleteSessionResourcesEndpoint < Inferno::DSL::SuiteEndpoint
+    include StatelessSuiteEndpoint
+
     def make_response
       InfernoSuiteGenerator::KeptResourcesRepository.new.delete_session(
         session_id: request.params[:session_id]
