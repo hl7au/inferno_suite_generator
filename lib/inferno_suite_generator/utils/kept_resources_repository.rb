@@ -24,7 +24,7 @@ module InfernoSuiteGenerator
     end
 
     def self.expiration_ms
-      ENV.fetch("RESOURCE_KEEPER_EXPIRATION_MS", DEFAULT_EXPIRATION_MS).to_i
+      ENV.fetch("RESOURCE_KEEPER_EXPIRATION_MS") { DEFAULT_EXPIRATION_MS }.to_i
     end
 
     def self.ensure_tables!

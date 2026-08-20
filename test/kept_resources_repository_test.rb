@@ -132,7 +132,10 @@ module InfernoSuiteGenerator
     end
 
     def with_expiration_ms(value)
-      original = ENV.fetch("RESOURCE_KEEPER_EXPIRATION_MS", nil)
+      # `ENV.fetch(key, nil)` trips fasterer's fetch-with-argument check, and
+      # `ENV.fetch(key) { nil }` trips rubocop's redundant-block check -- a
+      # plain lookup is exactly what we want anyway, so sidestep both.
+      original = ENV["RESOURCE_KEEPER_EXPIRATION_MS"] # rubocop:disable Style/FetchEnvVar
       ENV["RESOURCE_KEEPER_EXPIRATION_MS"] = value.to_s
       yield
     ensure
