@@ -5,6 +5,7 @@ require "dry/container/error"
 require "inferno/dsl/messages"
 
 module InfernoSuiteGenerator
+  # Links messages that mention a FHIR resource and a FHIRPath expression to the FHIRPath Lab.
   module FhirpathLabMessageLinker
     # Some validators (e.g. the Java validator's terminology errors) repeat the
     # resource type as its own segment before the path:
@@ -54,6 +55,7 @@ module InfernoSuiteGenerator
     end
   end
 
+  # Patch Inferno::DSL::Messages to linkify messages that mention a FHIR resource and a FHIRPath expression.
   module MessagesFhirpathLabPatch
     def add_message(type, message)
       super(type, InfernoSuiteGenerator::FhirpathLabMessageLinker.linkify(
