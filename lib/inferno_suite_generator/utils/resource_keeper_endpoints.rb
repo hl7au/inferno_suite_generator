@@ -32,24 +32,9 @@ module InfernoSuiteGenerator
   # suite class) exposing the in-process resource keeper at
   # `/custom/<suite_id>/resources/...`. These replace the external
   # inferno_resources_keeper service.
-  class SaveResourceEndpoint < Inferno::DSL::SuiteEndpoint
-    include StatelessSuiteEndpoint
 
-    def make_response
-      response.status = save_resource ? 204 : 422
-    rescue StandardError
-      response.status = 422
-    end
-
-    private
-
-    def save_resource
-      resource = FHIR.from_contents(request.body.read)
-      kept_resources_repository.save(session_id: request.params[:session_id], resource:)
-    end
-  end
-
-  # Fetches a resource previously saved via SaveResourceEndpoint.
+  # Fetches a resource previously saved via KeptResourcesRepository#save
+  # (called directly from test runtime, not over HTTP).
   class FetchResourceEndpoint < Inferno::DSL::SuiteEndpoint
     include StatelessSuiteEndpoint
 

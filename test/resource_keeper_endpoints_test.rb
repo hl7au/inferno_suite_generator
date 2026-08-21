@@ -16,39 +16,6 @@ module InfernoSuiteGenerator
       @db = Sequel.sqlite
     end
 
-    def test_save_resource_endpoint_returns_204_and_persists_a_valid_resource
-      resource = FHIR::Patient.new(id: "patient-1", gender: "male")
-      endpoint = SaveResourceEndpoint.new
-      req = build_request(params: { session_id: "session-1" }, body: resource.to_json)
-      res = FakeResponse.new
-
-      with_repository_db { endpoint.handle(req, res) }
-
-      assert_equal 204, res.status
-      found = with_repository_db { kept_resource(endpoint, resource_type: "Patient", resource_id: "patient-1") }
-      assert_equal resource.to_json, found[:resource_json]
-    end
-
-    def test_save_resource_endpoint_returns_422_instead_of_204_for_an_unparseable_resource
-      endpoint = SaveResourceEndpoint.new
-      req = build_request(params: { session_id: "session-1" }, body: '{"resourceType":"Bogus"}')
-      res = FakeResponse.new
-
-      with_repository_db { endpoint.handle(req, res) }
-
-      assert_equal 422, res.status
-    end
-
-    def test_save_resource_endpoint_returns_422_instead_of_204_when_the_resource_has_no_id
-      endpoint = SaveResourceEndpoint.new
-      req = build_request(params: { session_id: "session-1" }, body: FHIR::Patient.new(gender: "male").to_json)
-      res = FakeResponse.new
-
-      with_repository_db { endpoint.handle(req, res) }
-
-      assert_equal 422, res.status
-    end
-
     def test_fetch_resource_endpoint_returns_200_and_the_body_when_found
       resource = FHIR::Patient.new(id: "patient-1", gender: "male")
       endpoint = FetchResourceEndpoint.new
@@ -105,13 +72,13 @@ module InfernoSuiteGenerator
     end
 
     def test_all_resource_keeper_endpoints_skip_request_persistence
-      [SaveResourceEndpoint, FetchResourceEndpoint, DeleteSessionResourcesEndpoint].each do |klass|
+      [FetchResourceEndpoint, DeleteSessionResourcesEndpoint].each do |klass|
         refute klass.new.persist_request?, "#{klass} should not persist requests"
       end
     end
 
     def test_kept_resources_repository_is_memoized_per_endpoint_instance
-      endpoint = SaveResourceEndpoint.new
+      endpoint = FetchResourceEndpoint.new
       assert_same endpoint.kept_resources_repository, endpoint.kept_resources_repository
     end
 
