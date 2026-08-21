@@ -3,38 +3,18 @@
 require "cgi"
 require "dry/container/error"
 require "inferno/dsl/messages"
+require_relative "fhirpath_lab_message_patterns"
 
 module InfernoSuiteGenerator
   # Links messages that mention a FHIR resource and a FHIRPath expression to the FHIRPath Lab.
   module FhirpathLabMessageLinker
-    # Some validators (e.g. the Java validator's terminology errors) repeat the
-    # resource type as its own segment before the path:
-    #   "Patient/pat-sf: Patient: Patient.extension[0]: Internal validator error..."
-    # while others go straight from the id to the path:
-    #   "Patient/123: Patient.name[0].given: Minimum required = 1, but only found 0"
-    # The middle `echo` segment is optional and, when present, must repeat
-    # `resource_type` exactly — that's what distinguishes it from a path that
-    # genuinely starts with the bare resource type (e.g. a root-level issue).
-    #
-    # `path` allows colons (a FHIRPath expression may embed one, e.g. a URL in
-    # `system='http://...'`), stopping only at the specific ": " sequence that
-    # separates it from `detail`.
-    MESSAGE_PATTERN = %r{
-      \A
-      (?<resource_type>[A-Za-z][A-Za-z0-9]*)/(?<resource_id>[^\s:]+):\x20
-      (?:(?<echo>\k<resource_type>):\x20)?
-      (?<path>(?:(?!:\x20)[^\n])+):\x20
-      (?<detail>.*)
-      \z
-    }mx
-
     module_function
 
     def linkify(message, base_url:, resource_base_url:, session_id:)
       return message unless message.is_a?(String)
       return message if base_url.blank? || resource_base_url.blank? || session_id.blank?
 
-      match = MESSAGE_PATTERN.match(message)
+      match = FhirpathLabMessagePatterns.match(message)
       return message unless match
 
       "#{match[:resource_type]}/#{match[:resource_id]}: " \
