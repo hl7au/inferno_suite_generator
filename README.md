@@ -128,6 +128,7 @@ At a high level, a config file contains:
 - **`extra_json_paths`**: Additional JSON configs to merge
 - **`tx_server_url`**: Terminology server URL used by generated tests
 - **`snomed_edition`**: SNOMED CT edition the validator resolves version-less `http://snomed.info/sct` codes against, emitted as `cliContext.snomedCT`. An edition SCTID, or an alias such as `au`, `us`, `uk`, `intl`. Defaults to `au`. Must match an edition the configured `tx_server_url` actually carries: the validator otherwise fails every SNOMED lookup with "A definition for CodeSystem 'http://snomed.info/sct' version 'null' could not be found" and then reports valid codes as absent from their value sets.
+- **`fhirpathlab_url`**: Base URL of a [FHIRPath Lab](https://fhirpath-lab.com/) instance used to turn FHIRPath locations in result messages into interactive debugging links (see [Linking FHIRPath locations to FHIRPath Lab](#linking-fhirpath-locations-to-fhirpath-lab)). Defaults to `https://fhirpath-lab.com/`. Overridable per deployment via the `FHIRPATHLAB_URL` env var.
 - **`links`**: Links shown in the Inferno UI (e.g. “Report Issue”, “IG Documentation”)
 - **`outer_groups`**: Extra groups to include before/after generated groups:
     - `import_type`
@@ -200,6 +201,36 @@ Keyed by FHIR **resource type** (e.g. `"Observation"`, `"MedicationRequest"`). O
 - **`search.test_medication_inclusion`**: Enable special include tests for Medication where applicable
 
 See `config.example.json` and `config.example2.json` for a fully worked example.
+
+---
+
+## Saving fetched resources (Resource Keeper)
+
+Every generated suite automatically keeps a copy of every FHIR resource it reads (via `read`, `search`, or reference resolution), keyed by the current test session — no configuration or tester interaction required. Saving happens in-process, directly from test runtime (`KeptResourcesRepository#save`/`#save_all`, called from `basic_test.rb`), not over HTTP. Storage is in-process: resources live in two tables in the same database inferno-core already uses (`kept_resource_bodies` and `kept_fhir_resources`, created on first use — see `InfernoSuiteGenerator::KeptResourcesRepository`), and reads/deletes are exposed at `/custom/<suite_id>/resources/...` (see `InfernoSuiteGenerator::FetchResourceEndpoint`/`DeleteSessionResourcesEndpoint` in [`resource_keeper_endpoints.rb`](lib/inferno_suite_generator/utils/resource_keeper_endpoints.rb)). Saving is best‑effort and never affects test results.
+
+Kept resources expire after `RESOURCE_KEEPER_EXPIRATION_MS` milliseconds (env var, default `604800000` / 7 days) — an expired resource is served as a 404, but its row is not deleted. `DELETE /custom/<suite_id>/resources/:session_id` removes a session's *references* to its resources (rows in `kept_fhir_resources`), which is enough to make them unreachable via this API; it does **not** purge the underlying resource bodies from `kept_resource_bodies` — those are content-addressed and shared across sessions (see below), so they're left in place indefinitely rather than garbage-collected. This endpoint is not a data-erasure mechanism.
+
+Storage is deduplicated by content hash: identical resource bodies (e.g. the same resource fetched across many sessions against a stable test server) share a single row in `kept_resource_bodies` instead of being stored once per session.
+
+---
+
+## Linking FHIRPath locations to FHIRPath Lab
+
+Validation messages that inferno-core adds to a result generally look like this:
+
+```
+Patient/123: Patient.name[0].given: Minimum required = 1, but only found 0
+```
+
+i.e. `<ResourceType>/<resource_id>: <path>: <detail>`. Every generated suite monkeypatches `Inferno::DSL::Messages#add_message` (see `InfernoSuiteGenerator::MessagesFhirpathLabPatch` in [`fhirpath_lab_message_linker.rb`](lib/inferno_suite_generator/utils/fhirpath_lab_message_linker.rb)) so that whenever a message matches this shape, `<path>` is rewritten into a link to [FHIRPath Lab](https://fhirpath-lab.com/), pre-loaded with the failing expression and the resource it was evaluated against:
+
+```
+Patient/123: [Patient.name[0].given](https://fhirpath-lab.com?expression=...&engine=fhirpath.js&resource=...): Minimum required = 1, but only found 0
+```
+
+This is a general-purpose patch: it applies to any message text passing through `add_message` (validator issues, `perform_additional_validation` results, custom test messages, etc.) — not just a specific validator code path — so long as the text matches the `<ResourceType>/<resource_id>: <path>: <detail>` pattern.
+
+The `resource=` link points at the resource's entry in the [Resource Keeper](#saving-fetched-resources-resource-keeper), so linking is only applied when `fhirpathlab_url` is configured and a resource was actually saved for the current test session — otherwise messages are left untouched.
 
 ---
 

@@ -820,6 +820,8 @@ module InfernoSuiteGenerator
              "This is unusual but allowed if the server believes additional resource types are relevant."
       end
 
+      keep_resources(resources)
+
       resources
     end
 
