@@ -48,6 +48,11 @@ module InfernoSuiteGenerator
       generate_read_tests
       generate_provenance_revinclude_search_tests
       generate_include_search_tests
+      # After the _include tests, which are what populate the scratch a chained search draws its
+      # candidate identifiers from. A chain onto a type that is not the patient compartment (for
+      # example practitioner:Practitioner.identifier on PractitionerRole) has nothing to search on
+      # until those have run, because a group's tests execute in the order they are generated.
+      generate_chain_search_tests
       generate_validation_tests
       generate_must_support_tests
       generate_reference_resolution_tests
@@ -104,7 +109,6 @@ module InfernoSuiteGenerator
       SearchTestGenerator.generate(ig_metadata, base_output_dir)
       generate_multiple_or_search_tests
       generate_multiple_and_search_tests
-      generate_chain_search_tests
       generate_custom_tests_with_type("search")
     end
 
