@@ -43,11 +43,32 @@ module InfernoSuiteGenerator
       end.flatten
     end
 
+    # Scratch keys that may hold the resources a chained search draws its identifiers from.
+    #
+    # Chained parameters are written as "<param>:<TargetType>.<element>", so the type being chained
+    # to is whatever the search parameter names, and resource scratch is keyed by type. Two naming
+    # conventions are in play and they only agree for single-word types: a generated test declares
+    # its own scratch in snake_case (:practitioner_role_resources), while find_include_resources
+    # keys included resources by downcase (:practitionerrole_resources). Both are checked rather
+    # than guessing, since a chain target can be populated by either path.
+    #
+    # This used to be hardcoded to :patient_resources, which is right for a chain onto Patient and
+    # empty for every other target, producing a test that could never find a candidate.
+    def chain_target_scratch_keys(chain_target)
+      [:"#{chain_target.underscore}_resources", :"#{chain_target.downcase}_resources"].uniq
+    end
+
+    def chain_target_resources(chain_target)
+      chain_target_scratch_keys(chain_target).filter_map { |key| scratch[key] }.first
+    end
+
     def run_chain_search_test
+      chain_target = extract_target_resource_from_chained_search_parameter(search_param_names[0])
+
       run_chain_search_test_clean(
         search_param_names[0],
         patient_id_list,
-        scratch[:patient_resources],
+        chain_target_resources(chain_target),
         attr_paths,
         target_identifier
       )
@@ -76,12 +97,22 @@ module InfernoSuiteGenerator
                                     target_identifier)
       passed = false
 
+      chain_target = extract_target_resource_from_chained_search_parameter(search_param)
+
       identifiers_to_test = all_chain_identifier_values(
         patient_id_list,
         all_patients_resources,
-        extract_target_resource_from_chained_search_parameter(search_param),
+        chain_target,
         target_identifier
       )
+
+      # Without a candidate identifier there is nothing to search on, so no request is made. The
+      # assertion below describes a response, so reporting it here would blame the server for a
+      # result it was never asked to produce. Omit instead, and say which scratch was empty.
+      if identifiers_to_test.compact.empty?
+        omit "No #{chain_target} resource with a usable identifier was available to build the " \
+             "#{search_param} search. Nothing was requested from the server."
+      end
 
       identifiers_to_test.each do |identifier_to_test|
         next if identifier_to_test.nil?
