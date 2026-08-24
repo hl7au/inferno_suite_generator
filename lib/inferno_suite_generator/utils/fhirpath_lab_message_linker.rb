@@ -14,13 +14,18 @@ module InfernoSuiteGenerator
       return message unless message.is_a?(String)
       return message if base_url.blank? || resource_base_url.blank? || session_id.blank?
 
-      match = FhirpathLabMessagePatterns.match(message)
-      return message unless match
+      message.each_line.map { |line| linkify_line(line, base_url:, resource_base_url:, session_id:) }.join
+    end
+
+    def linkify_line(line, base_url:, resource_base_url:, session_id:)
+      newline = line.end_with?("\n") ? "\n" : ""
+      match = FhirpathLabMessagePatterns.match(line.chomp)
+      return line unless match
 
       "#{match[:resource_type]}/#{match[:resource_id]}: " \
         "#{echo_prefix(match)}" \
         "#{link_for(match, base_url:, resource_base_url:, session_id:)}: " \
-        "#{match[:detail]}"
+        "#{match[:detail]}#{newline}"
     end
 
     def echo_prefix(match)

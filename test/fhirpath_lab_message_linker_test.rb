@@ -73,6 +73,26 @@ module InfernoSuiteGenerator
       assert result.end_with?("line one\nline two")
     end
 
+    def test_linkify_rewrites_only_matching_lines_in_a_multiline_message
+      message = "Validation results:\n\n" \
+                "Patient/123: Patient.name[0].given: Minimum required = 1, but only found 0\n\n" \
+                "Patient/123: Patient.birthDate: is required\n\n" \
+                "See the report for details."
+
+      lines = linkify(message).split("\n", -1)
+
+      assert_equal message.split("\n", -1).length, lines.length
+      assert_equal ["Validation results:", "", "", "", "See the report for details."],
+                   lines.values_at(0, 1, 3, 5, 6)
+      assert_includes lines[2], "[Patient.name[0].given](https://fhirpath-lab.com?"
+      assert_includes lines[4], "[Patient.birthDate](https://fhirpath-lab.com?"
+    end
+
+    def test_linkify_leaves_multiline_message_untouched_when_no_lines_match
+      message = "Validation results:\n\nSomething went wrong\n\nSee the report for details."
+      assert_equal message, linkify(message)
+    end
+
     def test_linkify_returns_non_string_untouched
       assert_nil linkify(nil)
     end
