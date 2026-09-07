@@ -4,11 +4,14 @@ require_relative "test_helper"
 require "inferno_suite_generator/utils/fhirpath_lab_message_patterns"
 
 module InfernoSuiteGenerator
+  # Verifies the message formats registered in `FhirpathLabMessagePatterns` expose
+  # the named captures `FhirpathLabMessageLinker` relies on.
   class FhirpathLabMessagePatternsTest < Minitest::Test
     def test_every_registered_pattern_defines_the_required_named_captures
       FhirpathLabMessagePatterns::PATTERNS.each do |pattern|
-        missing = FhirpathLabMessagePatterns::REQUIRED_CAPTURES - pattern.names
-        assert_empty missing, "#{pattern.inspect} is missing required named captures: #{missing.join(", ")}"
+        missing_captures = FhirpathLabMessagePatterns::REQUIRED_CAPTURES - pattern.names
+        assert_empty missing_captures,
+                     "a registered pattern is missing required named captures: #{missing_captures.join(", ")}"
       end
     end
 
@@ -27,26 +30,25 @@ module InfernoSuiteGenerator
 
       match = FhirpathLabMessagePatterns.match(message)
 
-      assert_equal "Patient", match[:resource_type]
-      assert_equal "123", match[:resource_id]
-      assert_nil match[:echo]
-      assert_equal "Patient.name[0].given", match[:path]
-      assert_equal "Minimum required = 1, but only found 0", match[:detail]
+      assert_equal(
+        { "resource_type" => "Patient", "resource_id" => "123", "echo" => nil,
+          "path" => "Patient.name[0].given", "detail" => "Minimum required = 1, but only found 0" },
+        match.named_captures
+      )
     end
 
     def test_java_validator_pattern_matches_message_with_echoed_resource_type_segment
-      message = "Patient/pat-sf: Patient: Patient.extension[0]: Internal validator error occurred: " \
-                "Could not find value set https://healthterminologies.gov.au/fhir/ValueSet/foo and version null."
+      detail = "Internal validator error occurred: " \
+               "Could not find value set https://healthterminologies.gov.au/fhir/ValueSet/foo and version null."
+      message = "Patient/pat-sf: Patient: Patient.extension[0]: #{detail}"
 
       match = FhirpathLabMessagePatterns.match(message)
 
-      assert_equal "Patient", match[:resource_type]
-      assert_equal "pat-sf", match[:resource_id]
-      assert_equal "Patient", match[:echo]
-      assert_equal "Patient.extension[0]", match[:path]
-      assert_equal "Internal validator error occurred: " \
-                   "Could not find value set https://healthterminologies.gov.au/fhir/ValueSet/foo and version null.",
-                   match[:detail]
+      assert_equal(
+        { "resource_type" => "Patient", "resource_id" => "pat-sf", "echo" => "Patient",
+          "path" => "Patient.extension[0]", "detail" => detail },
+        match.named_captures
+      )
     end
 
     def test_java_validator_pattern_treats_bare_type_as_path_when_no_further_segment_follows
