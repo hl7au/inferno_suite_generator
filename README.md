@@ -134,6 +134,7 @@ At a high level, a config file contains:
     - `import_path`
     - `group_position` (`before` / `after`)
     - `group_id`
+- **`groups_order`**: Optional list that controls the order of the generated groups in the suite. Each entry matches a group by its `name` (e.g. `au_core_bodyweight`) or by its `resource` type (e.g. `Observation`, which moves every group of that type). Listed groups come first, in the given order; unlisted groups keep their existing relative order (strict CapabilityStatement `rest.first.resource` declaration order) and follow. The Patient group stays pinned first and delayed (referenced-only) resource groups stay pinned last regardless of this setting.
 
 > **Note**: Module names and paths are derived from `suite.title`. You do **not** need to set `suite_module_name`, `module_name_prefix`, `test_id_prefix` or explicit code paths.
 

@@ -26,6 +26,18 @@
         "group_id": "au_core_missing_data_group"
       }
     ],
+    "groups_order": [
+      "au_core_bodyweight",
+      "au_core_bloodpressure",
+      "au_core_bodyheight",
+      "au_core_diagnosticresult_path",
+      "au_core_bodytemp",
+      "au_core_heartrate",
+      "au_core_waistcircum",
+      "au_core_resprate",
+      "au_core_diagnosticresult",
+      "au_core_smokingstatus"
+    ],
     "links": [
       {
         "label": "Report Issue",

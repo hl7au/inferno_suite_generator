@@ -78,6 +78,10 @@ module InfernoSuiteGenerator
           get("suite.outer_groups", EMPTY_ARRAY)
         end
 
+        def groups_order
+          get("suite.groups_order", EMPTY_ARRAY)
+        end
+
         def extra_imports
           get("suite.extra_imports", EMPTY_ARRAY)
         end

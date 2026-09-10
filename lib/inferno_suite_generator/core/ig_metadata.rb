@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../utils/registry"
+
 module InfernoSuiteGenerator
   class Generator
     class IGMetadata
@@ -11,7 +13,7 @@ module InfernoSuiteGenerator
 
       def ordered_groups
         @ordered_groups ||=
-          [patient_group] + non_delayed_groups + delayed_groups
+          [patient_group] + reorder(non_delayed_groups) + delayed_groups
       end
 
       def patient_group
@@ -54,13 +56,29 @@ module InfernoSuiteGenerator
           groups: groups.map(&:to_hash)
         }
       end
-      
+
       def search_groups
         groups.select { |group| group.searches.present? }
       end
 
       def resource_types_for_references
         groups.flat_map { |group| group.references.map { |reference| reference[:resource_types] } }.flatten.uniq.compact
+      end
+
+      private
+
+      # Stable-sorts groups by their position in `suite.groups_order`. An entry
+      # matches a group by its `name` (e.g. "au_core_bodyweight") or its
+      # `resource` (e.g. "Observation"). Unlisted groups keep their existing
+      # relative order and follow the listed ones.
+      def reorder(groups_to_order)
+        order = Registry.get(:config_keeper)&.groups_order
+        return groups_to_order if order.blank?
+
+        groups_to_order.compact.each_with_index.sort_by do |group, original_index|
+          key_index = order.index { |key| key == group.name || key == group.resource }
+          [key_index || order.length, original_index]
+        end.map(&:first)
       end
     end
   end
