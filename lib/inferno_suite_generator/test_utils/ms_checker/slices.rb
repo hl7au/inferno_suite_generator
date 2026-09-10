@@ -3,7 +3,7 @@
 module InfernoSuiteGenerator
   class MSChecker
     # Slice-related Must Support checks. Mixed into MSChecker.
-    # rubocop:disable Metrics/ModuleLength
+    # rubocop:disable-next Metrics/ModuleLength
     module Slices
       def slices_present_statuses(resources = [], all_present: false)
         must_support_slices.map do |slice|
@@ -134,6 +134,5 @@ module InfernoSuiteGenerator
       end
       # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/BlockLength
     end
-    # rubocop:enable Metrics/ModuleLength
   end
 end

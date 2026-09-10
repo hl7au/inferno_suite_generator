@@ -2,6 +2,7 @@
 
 require_relative "search_definition_metadata_extractor"
 require_relative "../core/generator_config_keeper"
+require_relative "../core/fhirpath_expressions"
 
 module InfernoSuiteGenerator
   class Generator
@@ -17,6 +18,7 @@ module InfernoSuiteGenerator
         self.profile_elements = profile_elements
         self.group_metadata = group_metadata
         self.config = Registry.get(:config_keeper)
+        self.search_params_raw = FhirpathExpressions.cs_search_params.call(resource_capabilities)
       end
 
       def searches
@@ -29,26 +31,21 @@ module InfernoSuiteGenerator
 
       def conformance_expectation(search_param)
         # TODO: fix expectation extension finding
-        search_param&.extension&.first&.valueCode || "SHALL"
+        FhirpathExpressions.search_param_expectation.call(search_param) || "SHALL"
       end
 
-      def no_search_params?
-        resource_capabilities.searchParam.blank?
+      def search_param_raw_to_metadata(search_param)
+        {
+          name: search_param.name,
+          expectation: conformance_expectation(search_param)
+        }
       end
 
       def basic_searches
-        return [] if no_search_params?
-
-        search_parameters = resource_capabilities.searchParam
-        filtered_search_parameters = filter_search_params_with_expectation(search_parameters)
-        filtered_search_parameters = remove_excluded_search_params(filtered_search_parameters)
-
-        filtered_search_parameters.map do |search_param|
-          {
-            names: [search_param.name],
-            expectation: conformance_expectation(search_param)
-          }
-        end
+        search_params_raw
+          .select(&:search_param_expectation_available?)
+          .reject(&:search_param_shall_be_excluded?)
+          .map(&:search_param_raw_to_metadata)
       end
 
       def search_extensions
@@ -96,16 +93,12 @@ module InfernoSuiteGenerator
 
       private
 
-      def filter_search_params_with_expectation(search_params)
-        search_params.select do |search_param|
-          config.search_params_expectation.include? conformance_expectation(search_param)
-        end
+      def search_param_expectation_available?(search_param)
+        config.search_params_expectation.include? conformance_expectation(search_param)
       end
-
-      def remove_excluded_search_params(search_params)
-        search_params.reject do |search_param|
-          config.search_params_to_ignore.include? search_param.name
-        end
+      
+      def search_param_shall_be_excluded?(search_param)
+        config.search_params_to_ignore.include? search_param.name
       end
 
       def remove_params_to_ignore(combo_search_params)

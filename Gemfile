@@ -7,6 +7,7 @@ ruby "3.3.6"
 gemspec
 
 gem "deep_merge", "~> 1.2", ">= 1.2.2"
+gem "fhirpath-rb", ">= 0.1.7"
 gem "inferno_core", "~> 1.4.1"
 gem "jsonpath", "~> 1.1", ">= 1.1.5"
 gem "minitest", "~> 5.25"

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "fhir_models"
 require "inferno_suite_generator/utils/registry"
 require "inferno_suite_generator/extractors/ig_metadata_extractor"
 
@@ -8,7 +9,13 @@ module InfernoSuiteGenerator
   class IGMetadataExtractorExtractResourceProfilesTest < Minitest::Test
     IGMetadataExtractor = InfernoSuiteGenerator::Generator::IGMetadataExtractor
 
-    CSResource = Struct.new(:type, :profile, :supportedProfile, keyword_init: true)
+    def build_cs_resource(type:, profile: nil, supportedProfile: nil) # rubocop:disable Naming/MethodParameterName
+      FHIR::CapabilityStatement::Rest::Resource.new(
+        "type" => type,
+        "profile" => profile,
+        "supportedProfile" => supportedProfile
+      )
+    end
 
     class FakeConfigKeeper
       attr_reader :calls
@@ -33,7 +40,7 @@ module InfernoSuiteGenerator
     end
 
     def test_returns_supported_profiles_followed_by_the_primary_profile
-      cs_resource = CSResource.new(
+      cs_resource = build_cs_resource(
         type: "Patient",
         profile: "http://example.org/StructureDefinition/primary",
         supportedProfile: [
@@ -53,7 +60,7 @@ module InfernoSuiteGenerator
     end
 
     def test_returns_only_the_primary_profile_when_there_are_no_supported_profiles
-      cs_resource = CSResource.new(
+      cs_resource = build_cs_resource(
         type: "Patient",
         profile: "http://example.org/StructureDefinition/primary",
         supportedProfile: nil
@@ -63,7 +70,7 @@ module InfernoSuiteGenerator
     end
 
     def test_returns_only_the_supported_profiles_when_there_is_no_primary_profile
-      cs_resource = CSResource.new(
+      cs_resource = build_cs_resource(
         type: "Patient",
         profile: nil,
         supportedProfile: ["http://example.org/StructureDefinition/supported"]
@@ -73,13 +80,13 @@ module InfernoSuiteGenerator
     end
 
     def test_returns_an_empty_array_when_the_resource_declares_no_profiles
-      cs_resource = CSResource.new(type: "Patient", profile: nil, supportedProfile: nil)
+      cs_resource = build_cs_resource(type: "Patient", profile: nil, supportedProfile: nil)
 
       assert_empty extract(cs_resource)
     end
 
     def test_accepts_a_scalar_supported_profile
-      cs_resource = CSResource.new(
+      cs_resource = build_cs_resource(
         type: "Patient",
         profile: nil,
         supportedProfile: "http://example.org/StructureDefinition/supported"
@@ -89,7 +96,7 @@ module InfernoSuiteGenerator
     end
 
     def test_strips_the_pipe_delimited_version_from_every_profile
-      cs_resource = CSResource.new(
+      cs_resource = build_cs_resource(
         type: "Patient",
         profile: "http://example.org/StructureDefinition/primary|2.0.0",
         supportedProfile: ["http://example.org/StructureDefinition/supported|1.2.3"]
@@ -106,13 +113,13 @@ module InfernoSuiteGenerator
 
     def test_deduplicates_a_profile_listed_as_both_supported_and_primary
       url = "http://example.org/StructureDefinition/shared"
-      cs_resource = CSResource.new(type: "Patient", profile: url, supportedProfile: [url])
+      cs_resource = build_cs_resource(type: "Patient", profile: url, supportedProfile: [url])
 
       assert_equal([url], extract(cs_resource))
     end
 
     def test_deduplicates_profiles_that_differ_only_by_version
-      cs_resource = CSResource.new(
+      cs_resource = build_cs_resource(
         type: "Patient",
         profile: nil,
         supportedProfile: [
@@ -125,7 +132,7 @@ module InfernoSuiteGenerator
     end
 
     def test_rejects_profiles_flagged_for_skipping_by_the_config_keeper
-      cs_resource = CSResource.new(
+      cs_resource = build_cs_resource(
         type: "Patient",
         profile: "http://example.org/StructureDefinition/primary",
         supportedProfile: [
@@ -144,7 +151,7 @@ module InfernoSuiteGenerator
     end
 
     def test_asks_the_config_keeper_about_each_version_stripped_profile_with_the_resource_type
-      cs_resource = CSResource.new(
+      cs_resource = build_cs_resource(
         type: "Observation",
         profile: "http://example.org/StructureDefinition/primary",
         supportedProfile: ["http://example.org/StructureDefinition/supported|1.2.3"]
@@ -162,7 +169,7 @@ module InfernoSuiteGenerator
     end
 
     def test_drops_a_blank_profile_string
-      cs_resource = CSResource.new(
+      cs_resource = build_cs_resource(
         type: "Patient",
         profile: "",
         supportedProfile: ["http://example.org/StructureDefinition/supported"]

@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 require "fhir_models"
+require "fhirpath"
 require_relative "../core/ig_metadata"
+require_relative "../core/fhirpath_expressions"
 require_relative "group_metadata_extractor"
 require_relative "../utils/registry"
 
@@ -78,8 +80,9 @@ module InfernoSuiteGenerator
       end
 
       def extract_resource_profiles(cs_resource)
-        all_profiles = [*cs_resource.supportedProfile, cs_resource.profile].compact.uniq.map { |p| p.split("|").first }.uniq
-        all_profiles.reject { |profile| config_keeper.skip_metadata_extraction?(profile, cs_resource.type) }.compact
+        declared_profiles = FhirpathExpressions.declared_profiles.call(cs_resource)
+        unversioned_profiles = declared_profiles.map { |url| url.split("|").first }.uniq
+        unversioned_profiles.reject { |profile| config_keeper.skip_metadata_extraction?(profile, cs_resource.type) }
       end
 
       def extract_metadata_for_cs_resource(cs_resource)
@@ -87,8 +90,6 @@ module InfernoSuiteGenerator
           extract_group_metadata(cs_resource, profile, metadata, ig_resources)
         end.compact
       end
-
-
     end
   end
 end
