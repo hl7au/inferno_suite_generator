@@ -11,6 +11,7 @@ module InfernoSuiteGenerator
       module_function
 
       CS_REST_RESOURCE = FHIR::CapabilityStatement::Rest::Resource
+      STRUCTURE_DEFINITION = FHIR::StructureDefinition
       EXPECTATION_EXTENSION_URL =
         "http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation"
       SEARCH_PARAM_COMBINATION_EXTENSION_URL =
@@ -63,6 +64,33 @@ module InfernoSuiteGenerator
           "rest.first().resource.where(interaction.code contains %code)",
           FHIR::CapabilityStatement,
           CS_REST_RESOURCE
+        )
+      end
+
+      # Snapshot element paths that are mandatory (min cardinality > 0).
+      def mandatory_element_paths
+        @mandatory_element_paths ||= Fhirpath.compile_as_array(
+          "snapshot.element.where(min > 0).path",
+          STRUCTURE_DEFINITION,
+          String
+        )
+      end
+
+      # Snapshot element paths that have a CodeableConcept type and a required binding.
+      def codeable_concept_required_binding_paths
+        @codeable_concept_required_binding_paths ||= Fhirpath.compile_as_array(
+          "snapshot.element.where(type.code contains 'CodeableConcept' and binding.strength = 'required').path",
+          STRUCTURE_DEFINITION,
+          String
+        )
+      end
+
+      # Snapshot elements whose (first) type is a Reference.
+      def reference_elements
+        @reference_elements ||= Fhirpath.compile_as_array(
+          "snapshot.element.where(type.first().code = 'Reference')",
+          STRUCTURE_DEFINITION,
+          FHIR::ElementDefinition
         )
       end
 

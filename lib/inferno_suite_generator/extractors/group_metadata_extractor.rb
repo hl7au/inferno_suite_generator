@@ -236,10 +236,8 @@ module InfernoSuiteGenerator
         # relevant for any of its child profiles
         return [] if resource == "Observation"
 
-        profile_elements
-          .select { |element| element.type&.any? { |type| type.code == "CodeableConcept" } }
-          .select { |element| element.binding&.strength == "required" }
-          .map { |element| element.path.gsub("#{resource}.", "").gsub("[x]", "CodeableConcept") }
+        FhirpathExpressions.codeable_concept_required_binding_paths.call(profile)
+          .map { |path| path.gsub("#{resource}.", "").gsub("[x]", "CodeableConcept") }
           .uniq
       end
 
@@ -269,17 +267,12 @@ module InfernoSuiteGenerator
       end
 
       def mandatory_elements
-        @mandatory_elements ||=
-          profile_elements
-          .select { |element| element.min.positive? }
-          .map(&:path)
-          .uniq
+        @mandatory_elements ||= FhirpathExpressions.mandatory_element_paths.call(profile).uniq
       end
 
       def references
         @references ||=
-          profile_elements
-          .select { |element| element.type&.first&.code == "Reference" }
+          FhirpathExpressions.reference_elements.call(profile)
           .map do |reference_definition|
             target_profiles = reference_definition.type.first.targetProfile
             resource_types = resource_types_for_target_profiles(target_profiles)
