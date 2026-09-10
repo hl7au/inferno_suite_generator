@@ -53,7 +53,7 @@ module InfernoSuiteGenerator
           ig_module_name_prefix:,
           ig_test_id_prefix:,
           ig_version:,
-          groups: groups.map(&:to_hash)
+          groups: ordered_groups.compact.map(&:to_hash)
         }
       end
 
