@@ -72,6 +72,7 @@ Style/StringLiteralsInInterpolation:
 Metrics/ModuleLength:
   Exclude:
     - lib/inferno_suite_generator/utils/set_by_path.rb
+    - lib/inferno_suite_generator/core/fhirpath_expressions.rb
 
 Metrics/MethodLength:
   Exclude:

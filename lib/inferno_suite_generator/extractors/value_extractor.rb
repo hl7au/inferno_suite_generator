@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../core/fhirpath_expressions"
+
 module InfernoSuiteGenerator
   class Generator
     class ValueExactor
@@ -52,39 +54,29 @@ module InfernoSuiteGenerator
           .map { |element| element.patternCodeableConcept.coding.first.code }
       end
 
-      def value_set_binding(the_element)
-        the_element&.binding
-      end
-
       def value_set(the_element)
-        ig_resources.value_set_by_url(value_set_binding(the_element)&.valueSet)
+        ig_resources.value_set_by_url(the_element&.binding&.valueSet)
       end
 
-      def bound_systems(the_element)
-        bound_systems_from_valueset(value_set(the_element))
-      end
+      def codes_from_value_set(value_set)
+        return [] if value_set.nil?
 
-      def bound_systems_from_valueset(value_set)
-        value_set&.compose&.include&.map do |include|
-          if include.concept.present?
-            include
-          elsif include.system.present? && include.filter&.empty? # Cannot process intensional value set with filters
-            ig_resources.code_system_by_url(include.system)
-          elsif include.valueSet.present?
-            include.valueSet.map do |vs|
-              a_value_set = ig_resources.value_set_by_url(vs)
-              bound_systems_from_valueset(a_value_set)
-            end
-          end
-        end&.flatten&.compact
+        inline_codes = FhirpathExpressions.value_set_inline_concept_codes.call(value_set)
+
+        code_system_codes = FhirpathExpressions.value_set_lookup_system_urls.call(value_set).flat_map do |system_url|
+          code_system = ig_resources.code_system_by_url(system_url)
+          code_system ? FhirpathExpressions.code_system_concept_codes.call(code_system) : []
+        end
+
+        nested_codes = FhirpathExpressions.value_set_included_value_set_urls.call(value_set).flat_map do |nested_url|
+          codes_from_value_set(ig_resources.value_set_by_url(nested_url))
+        end
+
+        inline_codes + code_system_codes + nested_codes
       end
 
       def values_from_value_set_binding(the_element)
-        bound_systems = bound_systems(the_element)
-
-        return [] if bound_systems.blank?
-
-        bound_systems.flat_map { |system| system.concept.map(&:code) }.uniq
+        codes_from_value_set(value_set(the_element)).uniq
       end
 
       def fhir_metadata(current_path)

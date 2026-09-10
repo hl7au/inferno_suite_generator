@@ -11,7 +11,6 @@ module InfernoSuiteGenerator
       module_function
 
       CS_REST_RESOURCE = FHIR::CapabilityStatement::Rest::Resource
-      STRUCTURE_DEFINITION = FHIR::StructureDefinition
       EXPECTATION_EXTENSION_URL =
         "http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation"
       SEARCH_PARAM_COMBINATION_EXTENSION_URL =
@@ -71,7 +70,7 @@ module InfernoSuiteGenerator
       def mandatory_element_paths
         @mandatory_element_paths ||= Fhirpath.compile_as_array(
           "snapshot.element.where(min > 0).path",
-          STRUCTURE_DEFINITION,
+          FHIR::StructureDefinition,
           String
         )
       end
@@ -80,7 +79,7 @@ module InfernoSuiteGenerator
       def codeable_concept_required_binding_paths
         @codeable_concept_required_binding_paths ||= Fhirpath.compile_as_array(
           "snapshot.element.where(type.code contains 'CodeableConcept' and binding.strength = 'required').path",
-          STRUCTURE_DEFINITION,
+          FHIR::StructureDefinition,
           String
         )
       end
@@ -89,8 +88,47 @@ module InfernoSuiteGenerator
       def reference_elements
         @reference_elements ||= Fhirpath.compile_as_array(
           "snapshot.element.where(type.first().code = 'Reference')",
-          STRUCTURE_DEFINITION,
+          FHIR::StructureDefinition,
           FHIR::ElementDefinition
+        )
+      end
+
+      # Codes listed inline in a ValueSet's `compose.include` entries.
+      def value_set_inline_concept_codes
+        @value_set_inline_concept_codes ||= Fhirpath.compile_as_array(
+          "compose.include.concept.code",
+          FHIR::ValueSet,
+          String
+        )
+      end
+
+      # `compose.include` system URLs whose codes must be pulled from the referenced
+      # CodeSystem — i.e. the include names a system, lists no inline concepts, and
+      # applies no filter (an intensional filter can't be expanded here).
+      def value_set_lookup_system_urls
+        @value_set_lookup_system_urls ||= Fhirpath.compile_as_array(
+          "compose.include.where(concept.empty() and filter.empty()).system",
+          FHIR::ValueSet,
+          String
+        )
+      end
+
+      # `compose.include` nested ValueSet URLs to expand recursively (the include
+      # neither lists inline concepts nor resolves to a plain system reference).
+      def value_set_included_value_set_urls
+        @value_set_included_value_set_urls ||= Fhirpath.compile_as_array(
+          "compose.include.where(concept.empty() and (system.empty() or filter.exists())).valueSet",
+          FHIR::ValueSet,
+          String
+        )
+      end
+
+      # The (top-level) concept codes defined by a CodeSystem.
+      def code_system_concept_codes
+        @code_system_concept_codes ||= Fhirpath.compile_as_array(
+          "concept.code",
+          FHIR::CodeSystem,
+          String
         )
       end
 
