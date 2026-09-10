@@ -92,6 +92,33 @@ module InfernoSuiteGenerator
       assert_includes extractor.searches, { names: %w[name gender], expectation: "SHALL" }
     end
 
+    def test_combo_searches_below_the_configured_expectation_are_dropped
+      extractor = build_extractor(
+        extensions: [combo_extension(%w[name gender], "MAY")]
+      )
+
+      assert_empty extractor.searches
+    end
+
+    def test_ignored_params_are_stripped_from_combo_searches
+      extractor = build_extractor(
+        search_params: [search_param("name", "SHALL")],
+        extensions: [combo_extension(%w[name _count], "SHALL")]
+      )
+
+      refute(extractor.searches.any? { |search| search[:names].include?("_count") })
+    end
+
+    def test_non_combination_extensions_are_ignored
+      other = FHIR::Extension.new("url" => "http://example.org/other", "valueString" => "x")
+      extractor = build_extractor(
+        search_params: [search_param("name", "SHALL")],
+        extensions: [other]
+      )
+
+      assert_equal([{ names: ["name"], expectation: "SHALL" }], extractor.searches)
+    end
+
     def test_no_search_params_yields_no_searches
       assert_empty build_extractor.searches
     end

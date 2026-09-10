@@ -7,9 +7,6 @@ require_relative "../core/fhirpath_expressions"
 module InfernoSuiteGenerator
   class Generator
     class SearchMetadataExtractor
-      COMBO_EXTENSION_URL =
-        "http://hl7.org/fhir/StructureDefinition/capabilitystatement-search-parameter-combination"
-
       attr_accessor :resource_capabilities, :ig_resources, :profile_elements, :group_metadata, :config,
                     :search_params_raw
 
@@ -31,7 +28,6 @@ module InfernoSuiteGenerator
       end
 
       def conformance_expectation(search_param)
-        # TODO: fix expectation extension finding
         FhirpathExpressions.search_param_expectation.call(search_param) || "SHALL"
       end
 
@@ -49,22 +45,17 @@ module InfernoSuiteGenerator
           .map { |search_param| search_param_raw_to_metadata(search_param) }
       end
 
-      def search_extensions
-        resource_capabilities.extension
+      def search_param_combinations
+        @search_param_combinations ||=
+          FhirpathExpressions.search_param_combinations.call(resource_capabilities)
       end
 
       def combo_searches
-        return [] if search_extensions.blank?
+        combo_search_params = search_param_combinations.filter_map do |extension|
+          expectation = conformance_expectation(extension)
+          next unless config.search_params_expectation.include?(expectation)
 
-        combo_search_params = search_extensions
-                              .select { |extension| extension.url == COMBO_EXTENSION_URL }
-                              .select { |extension| config.search_params_expectation.include? conformance_expectation(extension) }
-                              .map do |extension|
-          names = extension.extension.select { |param| param.valueString.present? }.map(&:valueString)
-          {
-            expectation: conformance_expectation(extension),
-            names:
-          }
+          { expectation:, names: FhirpathExpressions.search_param_combination_names.call(extension) }
         end
 
         remove_params_to_ignore(combo_search_params)
