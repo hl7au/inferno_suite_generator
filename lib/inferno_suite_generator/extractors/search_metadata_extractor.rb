@@ -10,7 +10,8 @@ module InfernoSuiteGenerator
       COMBO_EXTENSION_URL =
         "http://hl7.org/fhir/StructureDefinition/capabilitystatement-search-parameter-combination"
 
-      attr_accessor :resource_capabilities, :ig_resources, :profile_elements, :group_metadata, :config
+      attr_accessor :resource_capabilities, :ig_resources, :profile_elements, :group_metadata, :config,
+                    :search_params_raw
 
       def initialize(resource_capabilities, ig_resources, profile_elements, group_metadata)
         self.resource_capabilities = resource_capabilities
@@ -36,16 +37,16 @@ module InfernoSuiteGenerator
 
       def search_param_raw_to_metadata(search_param)
         {
-          name: search_param.name,
+          names: [search_param.name],
           expectation: conformance_expectation(search_param)
         }
       end
 
       def basic_searches
         search_params_raw
-          .select(&:search_param_expectation_available?)
-          .reject(&:search_param_shall_be_excluded?)
-          .map(&:search_param_raw_to_metadata)
+          .select { |search_param| search_param_expectation_available?(search_param) }
+          .reject { |search_param| search_param_shall_be_excluded?(search_param) }
+          .map { |search_param| search_param_raw_to_metadata(search_param) }
       end
 
       def search_extensions
@@ -96,7 +97,7 @@ module InfernoSuiteGenerator
       def search_param_expectation_available?(search_param)
         config.search_params_expectation.include? conformance_expectation(search_param)
       end
-      
+
       def search_param_shall_be_excluded?(search_param)
         config.search_params_to_ignore.include? search_param.name
       end

@@ -10,6 +10,9 @@ module InfernoSuiteGenerator
     module FhirpathExpressions
       module_function
 
+      EXPECTATION_EXTENSION_URL =
+        "http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation"
+
       def declared_profiles
         @declared_profiles ||= Fhirpath.compile_as_array(
           "(supportedProfile | profile).distinct()",
@@ -26,10 +29,12 @@ module InfernoSuiteGenerator
         )
       end
 
+      # Works for any FHIR element that carries the conformance-expectation extension
+      # (a CapabilityStatement searchParam entry or a search-parameter-combination extension).
       def search_param_expectation
         @search_param_expectation ||= Fhirpath.compile_as_first(
-          "search_param&.extension&.first&.valueCode",
-          FHIR::CapabilityStatement::Rest::Resource::SearchParam,
+          "extension.where(url = '#{EXPECTATION_EXTENSION_URL}').valueCode",
+          FHIR::Model,
           String
         )
       end
