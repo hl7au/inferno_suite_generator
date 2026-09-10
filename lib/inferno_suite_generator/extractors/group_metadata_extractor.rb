@@ -6,6 +6,7 @@ require_relative "must_support_metadata_extractor"
 require_relative "search_metadata_extractor"
 require_relative "terminology_binding_metadata_extractor"
 require_relative "../core/generator_config_keeper"
+require_relative "../core/fhirpath_expressions"
 require_relative "../utils/registry"
 
 module InfernoSuiteGenerator
@@ -178,25 +179,27 @@ module InfernoSuiteGenerator
       end
 
       def interactions
-        # TODO: fix expectation extension finding
         @interactions ||=
-          resource_capabilities.interaction.map do |interaction|
-            expectation = interaction.extension&.first&.valueCode || "SHALL"
+          FhirpathExpressions.cs_interactions.call(resource_capabilities).map do |interaction|
             {
               code: interaction.code,
-              expectation: expectation
+              expectation: conformance_expectation(interaction)
             }
           end
       end
 
       def operations
         @operations ||=
-          resource_capabilities.operation.map do |operation|
+          FhirpathExpressions.cs_operations.call(resource_capabilities).map do |operation|
             {
               code: operation.name,
-              expectation: operation.extension.first.valueCode # TODO: fix expectation extension finding
+              expectation: conformance_expectation(operation)
             }
           end
+      end
+
+      def conformance_expectation(element)
+        FhirpathExpressions.search_param_expectation.call(element) || "SHALL"
       end
 
       def search_metadata_extractor
@@ -221,11 +224,11 @@ module InfernoSuiteGenerator
       end
 
       def include_params
-        resource_capabilities.searchInclude || []
+        FhirpathExpressions.cs_search_includes.call(resource_capabilities)
       end
 
       def revincludes
-        resource_capabilities.searchRevInclude || []
+        FhirpathExpressions.cs_search_revincludes.call(resource_capabilities)
       end
 
       def required_concepts
