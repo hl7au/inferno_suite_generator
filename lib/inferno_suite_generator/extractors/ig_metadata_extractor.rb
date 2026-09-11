@@ -24,10 +24,22 @@ module InfernoSuiteGenerator
 
       def add_groups_metadata
         metadata.groups = resources_in_capability_statement.flat_map(&method(:extract_metadata_for_cs_resource)).compact
+        metadata.groups = reorder_groups(metadata.groups)
         metadata.postprocess_groups(ig_resources)
       end
 
       private
+
+      def reorder_groups(groups)
+        order = config_keeper.groups_order
+        return groups if order.blank?
+
+        groups_by_profile_url = groups.group_by(&:profile_url)
+        ordered_groups = order.flat_map { |profile_url| groups_by_profile_url.delete(profile_url) || [] }
+        remaining_groups = groups_by_profile_url.values.flatten
+
+        ordered_groups + remaining_groups
+      end
 
       def add_config_metadata
         metadata.ig_version = "v#{config_keeper.version}"
