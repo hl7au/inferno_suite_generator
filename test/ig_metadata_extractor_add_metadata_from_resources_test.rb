@@ -12,9 +12,12 @@ module InfernoSuiteGenerator
     FakeExtractorResult = Struct.new(:group_metadata)
 
     class FakeConfigKeeper
-      def initialize(skip_profiles: [])
+      def initialize(skip_profiles: [], groups_order: [])
         @skip_profiles = skip_profiles
+        @groups_order = groups_order
       end
+
+      attr_reader :groups_order
 
       def skip_metadata_extraction?(profile_url, _resource_type)
         @skip_profiles.include?(profile_url)
@@ -112,6 +115,71 @@ module InfernoSuiteGenerator
           "http://example.org/StructureDefinition/primary-a",
           "http://example.org/StructureDefinition/supported-b",
           "http://example.org/StructureDefinition/primary-b"
+        ],
+        subject.metadata.groups.map(&:profile_url)
+      )
+    end
+
+    def test_reorders_groups_according_to_configured_groups_order
+      resource_a = fhir_resource(
+        type: "Patient",
+        profile: "http://example.org/StructureDefinition/primary-a",
+        supportedProfile: ["http://example.org/StructureDefinition/supported-a"]
+      )
+      resource_b = fhir_resource(
+        type: "Observation",
+        profile: "http://example.org/StructureDefinition/primary-b",
+        supportedProfile: ["http://example.org/StructureDefinition/supported-b"]
+      )
+      subject = build_subject(
+        [resource_a, resource_b],
+        config_keeper: FakeConfigKeeper.new(
+          groups_order: [
+            "http://example.org/StructureDefinition/primary-b",
+            "http://example.org/StructureDefinition/supported-a"
+          ]
+        )
+      )
+
+      with_stubbed_extractor do
+        subject.add_groups_metadata
+      end
+
+      assert_equal(
+        [
+          "http://example.org/StructureDefinition/primary-b",
+          "http://example.org/StructureDefinition/supported-a",
+          "http://example.org/StructureDefinition/primary-a",
+          "http://example.org/StructureDefinition/supported-b"
+        ],
+        subject.metadata.groups.map(&:profile_url)
+      )
+    end
+
+    def test_ignores_profiles_in_groups_order_that_do_not_exist_in_groups
+      resource = fhir_resource(
+        type: "Patient",
+        profile: "http://example.org/StructureDefinition/primary",
+        supportedProfile: ["http://example.org/StructureDefinition/supported"]
+      )
+      subject = build_subject(
+        [resource],
+        config_keeper: FakeConfigKeeper.new(
+          groups_order: [
+            "http://example.org/StructureDefinition/not-in-groups",
+            "http://example.org/StructureDefinition/primary"
+          ]
+        )
+      )
+
+      with_stubbed_extractor do
+        subject.add_groups_metadata
+      end
+
+      assert_equal(
+        [
+          "http://example.org/StructureDefinition/primary",
+          "http://example.org/StructureDefinition/supported"
         ],
         subject.metadata.groups.map(&:profile_url)
       )

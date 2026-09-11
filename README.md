@@ -135,6 +135,7 @@ At a high level, a config file contains:
     - `import_path`
     - `group_position` (`before` / `after`)
     - `group_id`
+- **`groups_order`**: Array of profile URLs controlling the order of `groups` in the generated `metadata.yml`. Profiles listed here are placed first, in the given order; any remaining profiles not listed keep their existing (auto-detected) relative order and are appended afterward.
 
 > **Note**: Module names and paths are derived from `suite.title`. You do **not** need to set `suite_module_name`, `module_name_prefix`, `test_id_prefix` or explicit code paths.
 

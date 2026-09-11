@@ -88,6 +88,7 @@ module InfernoSuiteGenerator
         def rewrite_igs: () -> String
         def resource_to_create_filter: (String profile_url, String resource_type) -> String
         def create_resource_overrides: (String profile_url, String resource_type) -> Hash[String, untyped]
+        def groups_order: () -> Array[String]
       end
 
       module Extractors
