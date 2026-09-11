@@ -17,12 +17,10 @@ module InfernoSuiteGenerator
         @groups_order = groups_order
       end
 
+      attr_reader :groups_order
+
       def skip_metadata_extraction?(profile_url, _resource_type)
         @skip_profiles.include?(profile_url)
-      end
-
-      def groups_order
-        @groups_order
       end
     end
 
