@@ -65,6 +65,7 @@ module InfernoSuiteGenerator
         include Utils
 
         def tx_server_url: () -> String
+        def fhirpathlab_url: () -> String
         def snomed_edition: () -> String
         def resources_configs: () -> Hash[String, untyped]
         def ig_link: () -> String

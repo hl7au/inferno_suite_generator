@@ -22,3 +22,19 @@ module FixtureHelpers
     JSON.parse(File.read(file_path), symbolize_names:)
   end
 end
+
+unless defined?(Inferno::Application)
+  module ::Inferno
+    class Application
+      class FakeLogger
+        def error(*); end
+      end
+
+      FAKE_CONFIG = { "base_url" => "http://localhost:4567", "logger" => FakeLogger.new }.freeze
+
+      def self.[](key)
+        FAKE_CONFIG.fetch(key)
+      end
+    end
+  end
+end
