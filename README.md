@@ -254,6 +254,78 @@ You can re‑run the generator whenever the IG or configuration changes; it’s 
 
 ---
 
+## Auto-reload
+
+Test kits built on this gem typically run a Puma web server and a Sidekiq worker in Docker for
+local development, both of which need to restart whenever a generated `.rb` file under `lib/`
+changes. This gem ships a shared `bin/hot-reload` watcher script so every kit doesn't have to
+maintain its own copy.
+
+It is intentionally polling-based (content hash of every `.rb` file under `lib/`, not
+`inotify`/`rerun`/`listen`): Docker bind mounts from macOS and Windows/WSL2 hosts do not deliver
+filesystem change events into the container, and mtimes seen inside the container are frequently
+stale.
+
+### Installing it in a test kit
+
+Add a Rake task to the kit's `Rakefile`:
+
+```ruby
+namespace :dev_tools do
+  desc "Install or update the shared bin/hot-reload watcher script"
+  task :install_hot_reload do
+    require "inferno_suite_generator/dev_tools/hot_reload_installer"
+
+    installer = InfernoSuiteGenerator::DevTools::HotReloadInstaller.new
+    result = installer.install!(force: ENV["FORCE"] == "1")
+
+    case result
+    when :installed
+      puts "Installed bin/hot-reload (v#{installer.installed_version})."
+      puts "Wire it into compose.yaml — see inferno_suite_generator's README 'Auto-reload' section."
+    when :updated
+      puts "Updated bin/hot-reload to v#{installer.installed_version}."
+    when :up_to_date
+      puts "bin/hot-reload is already up to date (v#{installer.installed_version})."
+    end
+  end
+end
+```
+
+Then run `bundle exec rake dev_tools:install_hot_reload`. Re-running it later updates the
+installed copy to whatever the gem currently ships. If the installed script has local edits
+(no recognizable version marker), the task raises instead of overwriting — pass `FORCE=1` to
+overwrite anyway.
+
+### Wiring it up
+
+Two things are the consumer kit's own responsibility, since they touch files this gem doesn't
+own:
+
+`.gitattributes` (prevents CRLF checkouts from breaking the shebang under Docker):
+
+```
+bin/hot-reload text eol=lf
+*.sh text eol=lf
+```
+
+`compose.yaml`, per long-running service:
+
+```yaml
+  inferno:
+    # Hot reload: restarts puma when a .rb under lib/ changes. Content-hash
+    # based (see bin/hot-reload) so it works on Windows/WSL2 + macOS mounts.
+    command: sh bin/hot-reload bundle exec puma
+    volumes:
+      - ./:/opt/inferno/   # hot-reload needs to see host-side file changes
+  inferno-worker:
+    command: sh bin/hot-reload bundle exec sidekiq -r ./worker.rb
+    volumes:
+      - ./:/opt/inferno/
+```
+
+---
+
 ## Development & CI (for contributors)
 
 ### Local development
