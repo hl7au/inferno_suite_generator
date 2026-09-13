@@ -3,7 +3,7 @@
 module InfernoSuiteGenerator
   class MSChecker
     # Slice-related Must Support checks. Mixed into MSChecker.
-    # rubocop:disable-next Metrics/ModuleLength
+    # rubocop:disable Metrics/ModuleLength
     module Slices
       def slices_present_statuses(resources = [], all_present: false)
         must_support_slices.map do |slice|
@@ -24,16 +24,14 @@ module InfernoSuiteGenerator
       end
 
       def slices_present?(resources, slice, all_present: false)
-        if all_present
-          resources.all? { |resource| must_support_slice_present?(resource, slice) }
-        else
-          resources.any? { |resource| must_support_slice_present?(resource, slice) }
+        resources.public_send(all_present ? :all? : :any?) do |resource|
+          must_support_slice_present?(resource, slice)
         end
       end
 
+      # .delete_suffix('[x]')
       def must_support_slice_present?(resource, slice)
-        path = slice[:path] # .delete_suffix('[x]')
-        find_slice(resource, path, slice[:discriminator]).present?
+        find_slice(resource, slice[:path], slice[:discriminator]).present?
       end
 
       # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/BlockLength
@@ -132,7 +130,7 @@ module InfernoSuiteGenerator
       def must_support_slices
         prepare_uscdi_ms(:slices)
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/BlockLength
+      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/BlockLength, Metrics/ModuleLength
     end
   end
 end
