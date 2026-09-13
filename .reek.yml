@@ -75,3 +75,4 @@ exclude_paths:
   - 'lib/inferno_suite_generator/utils/fhirpath_lab_message_linker.rb'
   - 'lib/inferno_suite_generator/utils/kept_resources_repository.rb'
   - 'lib/inferno_suite_generator/utils/resource_keeper_endpoints.rb'
+  - 'test/dev_tools/hot_reload_installer_test.rb'

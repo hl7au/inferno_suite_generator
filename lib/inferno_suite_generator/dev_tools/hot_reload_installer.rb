@@ -7,6 +7,9 @@ module InfernoSuiteGenerator
     # Installs/updates the shared `bin/hot-reload` watcher script into a
     # consumer test-kit project. Never overwrites a locally modified copy
     # unless force: true is passed.
+    # No meaningful non-raising counterpart to pair install! with; status already exists for
+    # callers who want to check before acting.
+    # :reek:MissingSafeMethod { exclude: [ 'install!' ] }
     class HotReloadInstaller
       VERSION_COMMENT = /\A#!.*\n# inferno_suite_generator:hot-reload v(?<version>\d+)\n/
 
@@ -37,12 +40,16 @@ module InfernoSuiteGenerator
         return :fresh unless File.exist?(@dest_path)
 
         installed = File.read(@dest_path)
-        return :modified if version_of(installed).nil?
+        return :modified unless version_of(installed)
         return :up_to_date if installed == File.read(source_path)
 
         :outdated
       end
 
+      # force: mirrors the CLI's own FORCE=1 escape hatch (see README); a symbol-based
+      # alternative would only add ceremony around a single well-named flag.
+      # :reek:BooleanParameter
+      # :reek:TooManyStatements
       def install!(force: false)
         current = status
         if current == :modified && !force
@@ -59,6 +66,8 @@ module InfernoSuiteGenerator
 
       private
 
+      # :reek:UtilityFunction -- pure parsing helper, kept next to VERSION_COMMENT rather than
+      # split into a separate class for one regex lookup.
       def version_of(content)
         content[VERSION_COMMENT, :version]&.to_i
       end
