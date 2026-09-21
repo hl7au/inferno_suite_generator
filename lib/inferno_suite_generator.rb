@@ -2,7 +2,6 @@
 
 require "fhir_models"
 require "inferno/ext/fhir_models"
-require "fhirpath"
 
 require_relative "inferno_suite_generator/utils/set_by_path"
 require_relative "inferno_suite_generator/core/ig_loader"
@@ -37,8 +36,6 @@ module InfernoSuiteGenerator
 
     attr_accessor :ig_resources, :ig_metadata, :ig_deps_path, :ig_demodata
 
-    DEMODATA_INTERACTIONS = %w[create update patch].freeze
-
     def initialize(ig_deps_path)
       self.ig_deps_path = ig_deps_path
     end
@@ -70,23 +67,10 @@ module InfernoSuiteGenerator
     end
 
     def extract_demodata
-      return unless demodata_required?
-
       self.ig_demodata = IGDemodataExtractor.new(ig_resources, ig_metadata).extract
 
       FileUtils.mkdir_p(base_output_dir)
       File.write(File.join(base_output_dir, "demodata.yml"), YAML.dump(ig_demodata.to_hash))
-    end
-
-    def demodata_required?
-      cs_resource = ig_resources.capability_statement
-      return false unless cs_resource
-
-      interactions = Fhirpath.evaluate(
-        cs_resource.to_hash, "CapabilityStatement.rest.resource.interaction.code.distinct()"
-      )
-
-      (interactions & DEMODATA_INTERACTIONS).any?
     end
 
     def base_output_dir
