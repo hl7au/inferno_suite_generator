@@ -33,6 +33,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "deep_merge", "~> 1.2", ">= 1.2.2"
+  spec.add_dependency "fhirpath-rb", ">= 0.1.7"
   spec.add_dependency "inferno_core", ">= 1.0.6"
   spec.add_dependency "jsonpath", "~> 1.1", ">= 1.1.5"
 
