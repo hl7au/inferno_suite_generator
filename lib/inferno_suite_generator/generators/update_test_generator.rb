@@ -10,21 +10,28 @@ module InfernoSuiteGenerator
     # It extends BasicTestGenerator and handles the generation of test files specifically
     # for testing UPDATE operations against a FHIR server.
     class UpdateTestGenerator < BasicTestGenerator
+      UPDATE_TEST_TYPE = "UPDATE".freeze
+      UPDATE_CREATE_TEST_TYPE = "UPDATE_CREATE".freeze
+      
       class << self
-        UPDATE_TEST_TYPES = %w[UPDATE NEW_UPDATE].freeze
+
+        
         def generate(ig_metadata, base_output_dir)
           ig_metadata.groups.each do |group|
             next if Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
             next unless update_interaction(group).present?
 
-            UPDATE_TEST_TYPES.each do |test_type|
-              new(group, base_output_dir, ig_metadata, test_type).generate
-            end
+            new(group, base_output_dir, ig_metadata, UPDATE_TEST_TYPE).generate
+            new(group, base_output_dir, ig_metadata, UPDATE_CREATE_TEST_TYPE).generate if update_create_supported
           end
         end
 
         def update_interaction(group_metadata)
           group_metadata.interactions.find { |interaction| interaction[:code] == "update" }
+        end
+
+        def update_create_supported(group_metadata)
+          group_metadata.update_create == true
         end
       end
 
@@ -63,7 +70,7 @@ module InfernoSuiteGenerator
       end
 
       def references_mapping_should_be_shown?
-        test_type == "NEW_UPDATE" && group_metadata.references.present?
+        test_type == UPDATE_CREATE_TEST_TYPE && group_metadata.references.present?
       end
 
       def resource_to_create_filter
@@ -74,15 +81,15 @@ module InfernoSuiteGenerator
 
       def current_update_test_data
         case @test_type
-        when "UPDATE"
+        when UPDATE_TEST_TYPE
           {
             "humanized_option" => "Update",
             "test_id_option" => "update",
             "executor" => "perform_update_test"
           }
-        when "NEW_UPDATE"
+        when UPDATE_CREATE_TEST_TYPE
           {
-            "humanized_option" => "UpdateNew",
+            "humanized_option" => "Update (Create)",
             "test_id_option" => "update_new",
             "executor" => "perform_update_new_test"
           }

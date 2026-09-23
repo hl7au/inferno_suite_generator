@@ -41,6 +41,7 @@ module InfernoSuiteGenerator
             title:,
             short_description:,
             interactions:,
+            create_update:,
             operations:,
             searches:,
             search_definitions:,
@@ -187,6 +188,10 @@ module InfernoSuiteGenerator
               expectation: expectation
             }
           end
+      end
+
+      def create_update
+        resource_capabilities.createUpdate || false
       end
 
       def operations
