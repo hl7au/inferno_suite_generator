@@ -19,7 +19,7 @@ module InfernoSuiteGenerator
         end
 
         def fhirpathlab_url
-          get("suite.fhirpathlab_url", "https://fhirpath-lab.com/")
+          get("suite.fhirpathlab_url", "https://fhirpath-lab.com/FhirPath")
         end
 
         def snomed_edition
