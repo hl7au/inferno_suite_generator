@@ -15,7 +15,7 @@ module InfernoSuiteGenerator
         title
         short_description
         interactions
-        create_update
+        update_create
         operations
         searches
         search_definitions

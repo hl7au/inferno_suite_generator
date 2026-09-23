@@ -41,7 +41,7 @@ module InfernoSuiteGenerator
             title:,
             short_description:,
             interactions:,
-            create_update:,
+            update_create:,
             operations:,
             searches:,
             search_definitions:,
@@ -190,8 +190,8 @@ module InfernoSuiteGenerator
           end
       end
 
-      def create_update
-        resource_capabilities.createUpdate || false
+      def update_create
+        resource_capabilities.updateCreate || false
       end
 
       def operations

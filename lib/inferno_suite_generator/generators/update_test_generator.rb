@@ -22,7 +22,7 @@ module InfernoSuiteGenerator
             next unless update_interaction(group).present?
 
             new(group, base_output_dir, ig_metadata, UPDATE_TEST_TYPE).generate
-            new(group, base_output_dir, ig_metadata, UPDATE_CREATE_TEST_TYPE).generate if update_create_supported
+            new(group, base_output_dir, ig_metadata, UPDATE_CREATE_TEST_TYPE).generate if update_create_supported(group)
           end
         end
 
