@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "fhirpath"
+
 require_relative "../core/group_metadata"
 require_relative "../core/ig_metadata"
 require_relative "must_support_metadata_extractor"
@@ -42,6 +44,7 @@ module InfernoSuiteGenerator
             short_description:,
             interactions:,
             update_create:,
+            update_create_expectation:,
             operations:,
             searches:,
             search_definitions:,
@@ -192,6 +195,13 @@ module InfernoSuiteGenerator
 
       def update_create
         resource_capabilities.updateCreate || false
+      end
+
+      def update_create_expectation
+        fhirpath_expr = "CapabilityStatement.rest.resource.where(type='QuestionnaireResponse').updateCreate.extension.where(url='http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation').valueCode"
+        fhirpath_res = Fhirpath.evaluate(resource_capabilities.to_json, fhirpath_expr)
+
+        fhirpath_res.len > 0 ? fhirpath_res[0] : "MAY"
       end
 
       def operations

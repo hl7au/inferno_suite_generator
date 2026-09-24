@@ -50,7 +50,12 @@ module InfernoSuiteGenerator
       end
 
       def conformance_expectation
-        update_interaction[:expectation]
+        case @test_type
+        when UPDATE_TEST_TYPE
+          update_interaction[:expectation]
+        when UPDATE_CREATE_TEST_TYPE
+          group_metadata.update_create_expectation
+        end
       end
 
       def optional?

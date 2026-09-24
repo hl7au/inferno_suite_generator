@@ -16,6 +16,7 @@ module InfernoSuiteGenerator
         short_description
         interactions
         update_create
+        update_create_expectation
         operations
         searches
         search_definitions
