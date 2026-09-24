@@ -197,11 +197,14 @@ module InfernoSuiteGenerator
         resource_capabilities.updateCreate || false
       end
 
-      def update_create_expectation
-        fhirpath_expr = "CapabilityStatement.rest.resource.where(type='QuestionnaireResponse').updateCreate.extension.where(url='http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation').valueCode"
-        fhirpath_res = Fhirpath.evaluate(resource_capabilities.to_json, fhirpath_expr)
+      UPDATE_CREATE_EXPECTATION_EXPRESSION =
+        "updateCreate.extension.where(url='http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation').valueCode"
 
-        fhirpath_res.len > 0 ? fhirpath_res[0] : "MAY"
+      def update_create_expectation
+        raw_resource = ig_resources.raw_cs_resource(resource)
+        return "MAY" if raw_resource.blank?
+
+        Fhirpath.evaluate(raw_resource, UPDATE_CREATE_EXPECTATION_EXPRESSION).first || "MAY"
       end
 
       def operations

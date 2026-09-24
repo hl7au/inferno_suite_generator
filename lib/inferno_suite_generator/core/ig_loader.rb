@@ -53,12 +53,12 @@ module InfernoSuiteGenerator
 
             bundle = FHIR.from_contents(file_content)
             ig_resources.add(bundle)
-            bundle.entry.each do |entry|
+            bundle.entry.each_with_index do |entry, index|
               if entry.resource.resourceType == "CapabilityStatement" && config.cs_profile_url != entry.resource.url
                 next
               end
 
-              ig_resources.add(entry.resource)
+              ig_resources.add(entry.resource, json.dig("entry", index, "resource"))
             end
           rescue JSON::ParserError => e
             puts "Error parsing JSON file #{file_path}: #{e.message}"
@@ -89,7 +89,7 @@ module InfernoSuiteGenerator
                   resource = FHIR.from_contents(content)
                   resources << resource
 
-                  ig_resources.add(resource)
+                  ig_resources.add(resource, json)
                 rescue StandardError => e
                   puts "Error processing #{entry.full_name}: #{e.message}"
                 end
