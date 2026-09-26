@@ -8,6 +8,8 @@ require_relative "../version"
 module InfernoSuiteGenerator
   class Generator
     class SuiteGenerator < BasicTestGenerator
+      VALID_OVERRIDE_SEVERITIES = %w[error warning info].freeze
+
       class << self
         def generate(ig_metadata, base_output_dir)
           new(ig_metadata, base_output_dir).generate
@@ -26,6 +28,28 @@ module InfernoSuiteGenerator
 
       def version_specific_message_filters
         []
+      end
+
+      def validation_message_overrides
+        config_keeper.validation_message_overrides.map do |rule|
+          validate_message_override(rule)
+          rule.slice(*["pattern", "location", "message_id", "from", "to"])
+        end.inspect
+      end
+
+      def validate_message_override(rule)
+        raise ArgumentError, "Missing 'pattern' in validation_message_overrides rule: #{rule}" unless rule["pattern"]
+
+        Regexp.new(rule["pattern"])
+        Regexp.new(rule["location"]) if rule["location"]
+        unless VALID_OVERRIDE_SEVERITIES.include?(rule["to"].to_s.downcase)
+          raise ArgumentError, "Invalid 'to' in validation_message_overrides rule: #{rule}"
+        end
+
+        invalid_from = Array(rule["from"]).map { |severity| severity.to_s.downcase } - VALID_OVERRIDE_SEVERITIES
+        return if invalid_from.empty?
+
+        raise ArgumentError, "Invalid 'from' in validation_message_overrides rule: #{rule}"
       end
 
       def generator_version
