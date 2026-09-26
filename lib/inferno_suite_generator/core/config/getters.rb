@@ -26,6 +26,10 @@ module InfernoSuiteGenerator
           get("suite.snomed_edition", "au")
         end
 
+        def validation_message_overrides
+          get("suite.validation_message_overrides", EMPTY_ARRAY)
+        end
+
         def resources_configs
           get("configs.resources", EMPTY_HASH)
         end
