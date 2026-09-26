@@ -82,6 +82,10 @@ module InfernoSuiteGenerator
       assert_raises(ArgumentError) { build_generator([rule]).validation_message_overrides }
     end
 
+    def test_raises_on_missing_to
+      assert_raises(ArgumentError) { build_generator([{ "pattern" => "x" }]).validation_message_overrides }
+    end
+
     def test_raises_on_invalid_from
       rule = { "pattern" => "x", "from" => ["fatal"], "to" => "info" }
 

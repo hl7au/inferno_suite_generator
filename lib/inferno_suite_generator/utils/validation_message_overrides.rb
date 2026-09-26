@@ -5,6 +5,36 @@ module InfernoSuiteGenerator
   # to remap validator message severities via regex rules
   module ValidationMessageOverrides
     SEVERITY_TO_LEVEL = { "error" => "ERROR", "warning" => "WARNING", "info" => "INFORMATION" }.freeze
+    RULE_KEYS = %w[pattern location message_id from to].freeze
+
+    # Validates config rules at generation time and strips keys the runtime does not use (e.g. "comment")
+    def self.normalize_rules(rules)
+      rules.map do |rule|
+        rule = rule.transform_keys(&:to_s)
+        validate_rule!(rule)
+        rule.slice(*RULE_KEYS)
+      end
+    end
+
+    def self.validate_rule!(rule)
+      validate_patterns!(rule)
+      invalid_rule!(rule, "Invalid 'to'") unless rule["to"] && valid_severities?(rule["to"])
+      invalid_rule!(rule, "Invalid 'from'") unless rule["from"].nil? || valid_severities?(rule["from"])
+    end
+
+    def self.validate_patterns!(rule)
+      invalid_rule!(rule, "Missing 'pattern'") unless rule["pattern"]
+      Regexp.new(rule["pattern"])
+      Regexp.new(rule["location"]) if rule["location"]
+    end
+
+    def self.invalid_rule!(rule, problem)
+      raise ArgumentError, "#{problem} in validation_message_overrides rule: #{rule}"
+    end
+
+    def self.valid_severities?(severities)
+      Array(severities).all? { |severity| SEVERITY_TO_LEVEL.key?(severity.to_s.downcase) }
+    end
 
     def message_overrides(rules = nil)
       @message_overrides = rules.map { |rule| compile_override(rule) } if rules
