@@ -119,6 +119,7 @@ module InfernoSuiteGenerator
       response = validator_response(level:, slice_info:)
       validator = Validator.new(:default, "test_suite") do
         extend InfernoSuiteGenerator::ValidationMessageOverrides
+
         message_overrides rules
         instance_eval(&extra) if extra
       end

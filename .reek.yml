@@ -76,3 +76,5 @@ exclude_paths:
   - 'lib/inferno_suite_generator/utils/kept_resources_repository.rb'
   - 'lib/inferno_suite_generator/utils/resource_keeper_endpoints.rb'
   - 'test/dev_tools/hot_reload_installer_test.rb'
+  - 'test/suite_generator_validation_message_overrides_test.rb'
+  - 'test/validation_message_overrides_test.rb'
