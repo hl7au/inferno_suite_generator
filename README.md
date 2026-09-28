@@ -136,6 +136,26 @@ At a high level, a config file contains:
     - `group_position` (`before` / `after`)
     - `group_id`
 - **`groups_order`**: Array of profile URLs controlling the order of `groups` in the generated `metadata.yml`. Profiles listed here are placed first, in the given order; any remaining profiles not listed keep their existing (auto-detected) relative order and are appended afterward.
+- **`validation_message_overrides`**: Array of rules that change the severity of FHIR validator messages (for example `error` → `warning`). Each rule has:
+    - `pattern` (required): regex matched against the full formatted message, including the `ResourceType/id: location:` prefix
+    - `to` (required): new severity, `error`, `warning` or `info`
+    - `from` (optional): array of severities; the rule only applies when the current severity is one of them
+    - `location` (optional): regex matched against the issue location (FHIRPath)
+    - `message_id` (optional): exact match on the validator `messageId`
+    - `comment` (optional): documentation only, not emitted into the generated suite
+
+  The first matching rule wins. Overrides run before `exclude_message` filtering, so both the Messages tab and the pass/fail result use the new severity, and they also apply to nested slice issues. Rules are validated at generation time (invalid regex or severity raises). Remember to escape regex metacharacters in JSON (`\\(`, `\\.`).
+
+  ```json
+  "validation_message_overrides": [
+    {
+      "pattern": "The value provided \\('(xml|json|ttl)'\\) was not found in the value set 'MimeType'",
+      "from": ["error"],
+      "to": "warning",
+      "comment": "Known tx server issue"
+    }
+  ]
+  ```
 
 > **Note**: Module names and paths are derived from `suite.title`. You do **not** need to set `suite_module_name`, `module_name_prefix`, `test_id_prefix` or explicit code paths.
 

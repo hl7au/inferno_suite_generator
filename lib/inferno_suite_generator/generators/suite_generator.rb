@@ -3,6 +3,7 @@
 require_relative "../utils/naming"
 require_relative "basic_test_generator"
 require_relative "../utils/registry"
+require_relative "../utils/validation_message_overrides"
 require_relative "../version"
 
 module InfernoSuiteGenerator
@@ -26,6 +27,10 @@ module InfernoSuiteGenerator
 
       def version_specific_message_filters
         []
+      end
+
+      def validation_message_overrides
+        ValidationMessageOverrides.normalize_rules(config_keeper.validation_message_overrides).inspect
       end
 
       def generator_version
