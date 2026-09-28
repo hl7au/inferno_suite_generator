@@ -48,48 +48,12 @@ module InfernoSuiteGenerator
       patchsets = patch_body_list_by_patch_type_and_resource_type("FHIRPATHPatchJson", resource_type)
       skip skip_message(resource_type) if patchsets.nil? || patchsets.empty?
 
-      parameters_resource_hash_list = patchsets[0..9]
-      is_success_test = false
-      normalized_data = []
-
-      available_resource_id_list.uniq.each do |resource_id|
-        idx = 0
-        parameters_resource_hash_list&.each do |parameters_resource_hash|
-          normalized_data << {
-            resource_id: resource_id,
-            parameters_resource_hash: parameters_resource_hash,
-            attempt: idx + 1
-          }
-          idx += 1
-        end
-      end
-
-      current_resource_id = nil
-      current_resource_version = nil
-      normalized_data.each do |data|
-        resource_id = data[:resource_id]
-        parameters_resource_hash = data[:parameters_resource_hash]
-        attempt = data[:attempt]
-
+      available_resource_id_list.uniq.product(patchsets[0..9]).each do |resource_id, parameters_resource_hash|
         fhir_fhirpath_patch_json(resource_type, resource_id, parameters_resource_hash)
-        response_resource_version = resource&.meta&.versionId
-        response_status = response[:status]
-
-        status_okay = response_status == SUCCESS
-        version_okay = !response_resource_version.nil? && !current_resource_version.nil? && (response_resource_version.to_i > current_resource_version.to_i)
-        attempt_okay = attempt > 1
-        resource_id_is_okay = resource_id == current_resource_id
-
-        if [status_okay, version_okay, attempt_okay, resource_id_is_okay].all?
-          is_success_test = true
-          break
-        else
-          current_resource_id = resource_id
-          current_resource_version = response_resource_version.to_i
-        end
+        break if [SUCCESS, SUCCESS_NO_CONTENT].include?(response[:status])
       end
 
-      assert is_success_test, "Resource version was not updated or status was not #{SUCCESS}."
+      assert_patch_status
     end
 
     def perform_fhirpath_patch_xml_text
