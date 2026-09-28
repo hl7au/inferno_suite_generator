@@ -23,52 +23,16 @@ def perform_fhirpath_patch_json_test
   patchsets = patch_body_list_by_patch_type_and_resource_type("FHIRPATHPatchJson", resource_type)
   skip skip_message(resource_type) if patchsets.nil? || patchsets.empty?
 
-  parameters_resource_hash_list = patchsets[0..9]
-  is_success_test = false
-  normalized_data = []
-
-  available_resource_id_list.uniq.each do |resource_id|
-    idx = 0
-    parameters_resource_hash_list&.each do |parameters_resource_hash|
-      normalized_data << {
-        resource_id: resource_id,
-        parameters_resource_hash: parameters_resource_hash,
-        attempt: idx + 1
-      }
-      idx += 1
-    end
-  end
-
-  current_resource_id = nil
-  current_resource_version = nil
-  normalized_data.each do |data|
-    resource_id = data[:resource_id]
-    parameters_resource_hash = data[:parameters_resource_hash]
-    attempt = data[:attempt]
-
+  available_resource_id_list.uniq.product(patchsets[0..9]).each do |resource_id, parameters_resource_hash|
     fhir_fhirpath_patch_json(resource_type, resource_id, parameters_resource_hash)
-    response_resource_version = resource&.meta&.versionId
-    response_status = response[:status]
-
-    status_okay = response_status == SUCCESS
-    version_okay = !response_resource_version.nil? && !current_resource_version.nil? && (response_resource_version.to_i > current_resource_version.to_i)
-    attempt_okay = attempt > 1
-    resource_id_is_okay = resource_id == current_resource_id
-
-    if [status_okay, version_okay, attempt_okay, resource_id_is_okay].all?
-      is_success_test = true
-      break
-    else
-      current_resource_id = resource_id
-      current_resource_version = response_resource_version.to_i
-    end
+    break if [SUCCESS, SUCCESS_NO_CONTENT].include?(response[:status])
   end
 
-  assert is_success_test, "Resource version was not updated or status was not #{SUCCESS}."
+  assert_patch_status
 end
 ```
 
-perform_fhirpath_patch_json_test runs inside Inferno, not inside the generator. It is the run block of every generated FHIRPathJSON patch test. It takes FHIRPath Patch Parameters bodies for the test's resource type, pairs them with existing resource IDs, and sends them to the server as PATCH requests. The test passes when two consecutive PATCH calls on the same ID both succeed and the second one returns a higher versionId. The result is an Inferno test outcome (pass, fail, skip or error) plus the stored requests. Nothing is written to scratch.
+perform_fhirpath_patch_json_test runs inside Inferno, not inside the generator. It is the run block of every generated FHIRPathJSON patch test. It takes FHIRPath Patch Parameters bodies for the test's resource type, pairs them with existing resource IDs, and sends them to the server as PATCH requests. The test passes as soon as one PATCH call returns status 200 or 204. The response body and its versionId are not checked. The result is an Inferno test outcome (pass, fail, skip or error) plus the stored requests. Nothing is written to scratch.
 
 The method reads no generator config keys. Its inputs come from three configurable places:
 
@@ -81,8 +45,7 @@ The method reads no generator config keys. Its inputs come from three configurab
 The output is the test result. Internally the method builds:
 
 - patchsets: an Array of raw Parameters hashes (source_hash of each PATCH entry resource), in reversed order.
-- normalized_data: an Array of hashes { resource_id:, parameters_resource_hash:, attempt: }, one per ID and patch body.
-- current_resource_id and current_resource_version: the ID and integer versionId of the previous request, used as the baseline for the next one.
+- The pairs [resource_id, parameters_resource_hash] from Array#product of the unique IDs and the first ten patch bodies. They are iterated directly and not stored.
 
 ## 2. Why
 
@@ -93,9 +56,9 @@ The result is used by:
 
 Keeping the logic in a shared runtime module means the generated file holds no patch payloads and no test logic. Payloads can change through demodata.yml or the extra_bundle input without regenerating the suite.
 
-Why send two requests per ID? A single PATCH response gives one versionId, which cannot show that the version changed. The first request for an ID (attempt 1) only sets the baseline. A later attempt on the same ID must return a strictly higher versionId. The comparison is relative, so it does not depend on the starting version of the resource. The same pattern is used in UpdateTest#perform_update_test. Commits 05d07a4 and a3c270e introduced the attempt logic. A consequence is that with only one patch body for the resource type, attempt is always 1 and the test cannot pass.
+Why check only the response status? The client asked for the test to ignore versionId. A server may answer a successful PATCH with 204 and no body, or with a body whose meta.versionId does not change, so the status is the only signal the test relies on. Earlier versions of the method required two consecutive requests on the same ID and a strictly higher versionId on the second one (commits 05d07a4 and a3c270e). That rule was removed. The method now uses the same assert_patch_status as perform_json_patch_test, so both 200 (SUCCESS) and 204 (SUCCESS_NO_CONTENT) pass.
 
-Why accept only status 200? version_okay needs a versionId from the response body. SUCCESS_NO_CONTENT (204) is accepted by assert_patch_status in perform_json_patch_test, but not here.
+Why try several ID and body pairs? A PATCH body from the IG may not apply to every example resource on the server, and an ID may not exist there. The loop keeps trying until one pair succeeds, then stops with break.
 
 Why call uniq on the IDs? Commit fd7fd2e added it to deduplicate resource IDs, together with the early break on success. A duplicated ID would otherwise get a second set of requests.
 
@@ -155,15 +118,15 @@ available_resource_id_list returns:
 
 The RESOURCE_ids input that the template declares for some groups is not read by this method.
 
-### Step 5: Build normalized_data
+### Step 5: Pair IDs with patch bodies
 
 1. .uniq removes duplicate IDs.
-2. For each ID and each patch body, a hash { resource_id:, parameters_resource_hash:, attempt: } is appended. attempt counts from 1 per ID.
+2. .product(patchsets[0..9]) builds every [resource_id, parameters_resource_hash] pair.
 3. The order is ID by ID. All bodies for the first ID come before any body for the second ID.
 
-### Step 6: Send each PATCH and evaluate it
+### Step 6: Send PATCH requests until one succeeds
 
-current_resource_id and current_resource_version start as nil. For each item in normalized_data:
+For each pair:
 
 1. fhir_fhirpath_patch_json(resource_type, resource_id, parameters_resource_hash):
    1. store_request_and_refresh_token(fhir_client(:default), nil, []) refreshes the access token if needed and stores the returned FHIR::ClientReply as an outgoing request.
@@ -171,21 +134,15 @@ current_resource_id and current_resource_version start as nil. For each item in 
    3. headers = fhir_client.fhir_headers, then Content-Type and Accept are set to application/fhir+json. This hash is not used afterwards.
    4. body = parameters_resource_hash.to_json, a String.
    5. fhir_client.partial_update(fhir_class_from_resource_type(resource_type), resource_id, body). fhir_class_from_resource_type returns FHIR.const_get(resource_type.camelize).
-   6. Inside fhir_client 6.2.0, the Inferno client uses default_json, so partial_update sets Content-Type to application/json-patch+json. FHIR::Client#patch then calls request_patch_payload(body, that type), which calls body.each. A String has no each method, so NoMethodError is raised before any HTTP request is sent. This was reproduced locally with the locked gem versions. It is not rescued, no request is stored, and Inferno reports the test as an error. The sub-steps below describe the code path as written.
-2. response_resource_version = resource&.meta&.versionId. resource is the response body of the last stored request, parsed with FHIR.from_contents.
-3. response_status = response[:status].
-4. Four checks are computed:
-   - status_okay: response_status equals SUCCESS (200).
-   - version_okay: both versions are non-nil and response_resource_version.to_i is greater than current_resource_version.to_i.
-   - attempt_okay: attempt is greater than 1.
-   - resource_id_is_okay: resource_id equals current_resource_id.
-5. If all four are true, is_success_test = true and the loop stops with break.
-6. Otherwise current_resource_id = resource_id and current_resource_version = response_resource_version.to_i. A nil versionId becomes 0, so after the first request current_resource_version is never nil. This runs after a failed status too.
+   6. Inside fhir_client 6.2.0, the Inferno client uses default_json, so partial_update sets Content-Type to application/json-patch+json. FHIR::Client#patch then calls request_patch_payload(body, that type), which calls body.each. A String has no each method, so NoMethodError is raised before any HTTP request is sent. This was reproduced locally with the locked gem versions. It is not rescued, no request is stored, and Inferno reports the test as an error. The steps below describe the code path as written.
+2. If response[:status] is 200 or 204, the loop stops with break.
+3. Otherwise the next pair is tried. Nothing is carried over between requests.
 
-### Step 7: Return
+### Step 7: Assert and return
 
-1. assert is_success_test, "Resource version was not updated or status was not 200." fails the test if no item passed all four checks.
-2. The method returns nil when the assertion passes. Nothing is assigned. The outcome is recorded by Inferno as the result of the generated test.
+1. assert_patch_status reads response[:status] of the last stored request and asserts that it is 200 or 204. Because the loop stops on the first success, the last request is successful only if some request succeeded.
+2. On failure the message is "Response status is STATUS. Expected 200 or 204", with the status of the last request.
+3. The method returns nil when the assertion passes. The outcome is recorded by Inferno as the result of the generated test.
 
 ## 4. Diagrams
 
@@ -215,18 +172,17 @@ flowchart TD
     N --> N1{"empty?"}
     N1 -- yes --> N2["skip: Can't find ID"]
     N1 -- no --> O
-    M --> O["uniq IDs x patch bodies<br/>normalized_data with attempt"]
-    O --> P{"next item?"}
-    P -- no --> Z{"is_success_test?"}
+    M --> O["uniq IDs x first 10 patch bodies<br/>Array#product"]
+    O --> P{"next pair?"}
+    P -- no --> Z["assert_patch_status<br/>on last response"]
     P -- yes --> Q["fhir_fhirpath_patch_json<br/>partial_update with JSON string"]
     Q -- "fhir_client 6.2.0" --> Q1["NoMethodError in request_patch_payload<br/>test error"]
     Q -- "TCP open failure" --> Q2["assertion failure"]
-    Q --> R["read status and meta.versionId"]
-    R --> S{"status 200 and version higher<br/>and attempt above 1 and same ID?"}
-    S -- yes --> T["is_success_test = true, break"] --> Z
-    S -- no --> U["store ID and version.to_i<br/>as baseline"] --> P
-    Z -- yes --> Y["test passes"]
-    Z -- no --> X["assert fails:<br/>version not updated or status not 200"]
+    Q --> S{"status 200 or 204?"}
+    S -- yes --> T["break"] --> Z
+    S -- no --> P
+    Z -- "200 or 204" --> Y["test passes"]
+    Z -- other --> X["assert fails:<br/>Response status is STATUS"]
     Y --> W["Inferno group and suite result"]
     X --> W
 ```
@@ -264,21 +220,18 @@ sequenceDiagram
         B->>D: resource_ids via scratch
         B-->>P: first 10 IDs or skip
     end
-    P->>P: build normalized_data
-    loop each ID and patch body
+    loop each ID and patch body pair
         P->>I: store_request_and_refresh_token
         P->>C: partial_update with JSON string
         alt fhir_client 6.2.0
             C-->>P: NoMethodError, test error
         else reply returned
             C-->>I: ClientReply stored
-            P->>I: resource meta.versionId and response status
-            alt all four checks pass
-                P->>P: is_success_test = true, break
-            else
-                P->>P: update baseline ID and version
+            P->>I: response status
+            opt status 200 or 204
+                P->>P: break
             end
         end
     end
-    P->>T: assert is_success_test
+    P->>T: assert_patch_status
 ```
