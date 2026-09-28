@@ -62,6 +62,7 @@ AllCops:
     - "test/update_test_perform_update_new_test.rb"
     - "test/ig_metadata_extractor_add_metadata_from_resources_test.rb"
     - "test/group_metadata_extractor_update_create_test.rb"
+    - "documentation/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
