@@ -71,8 +71,6 @@ module InfernoSuiteGenerator
         full_path = archive_path.start_with?("/") ? archive_path : File.join(Dir.pwd, archive_path)
         return unless File.exist?(full_path)
 
-        resources = []
-
         begin
           Zlib::GzipReader.open(full_path) do |gz|
             Gem::Package::TarReader.new(gz) do |tar|
@@ -87,8 +85,6 @@ module InfernoSuiteGenerator
                   next unless json.is_a?(Hash) && json["resourceType"]
 
                   resource = FHIR.from_contents(content)
-                  resources << resource
-
                   ig_resources.add(resource, json)
                 rescue StandardError => e
                   puts "Error processing #{entry.full_name}: #{e.message}"
@@ -105,23 +101,6 @@ module InfernoSuiteGenerator
         rescue StandardError => e
           puts "Error processing archive at #{archive_path}: #{e.message}"
         end
-
-        return unless resources.any?
-
-        bundle_entries = resources.map do |resource|
-          FHIR::Bundle::Entry.new(
-            resource: resource,
-            fullUrl: resource.respond_to?(:url) ? resource.url : nil
-          )
-        end
-
-        bundle = FHIR::Bundle.new(
-          type: "collection",
-          entry: bundle_entries
-        )
-
-        temp_bundle_path = File.join(Dir.pwd, "package_archive_bundle.json")
-        File.write(temp_bundle_path, bundle.to_json)
       end
     end
   end
