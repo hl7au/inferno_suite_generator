@@ -3,8 +3,9 @@
 module InfernoSuiteGenerator
   class Generator
     class IGResources
-      def add(resource)
+      def add(resource, raw = nil)
         resources_by_type[resource.resourceType] << resource
+        raw_capability_statements[resource] = raw if resource.resourceType == "CapabilityStatement" && raw.is_a?(Hash)
       end
 
       def available_resources
@@ -23,6 +24,13 @@ module InfernoSuiteGenerator
         else
           []
         end
+      end
+
+      def raw_cs_resource(resource_type)
+        raw = raw_capability_statements[capability_statement]
+        return nil if raw.blank?
+
+        raw["rest"]&.first&.dig("resource")&.find { |resource| resource["type"] == resource_type }
       end
 
       def ig
@@ -116,6 +124,10 @@ module InfernoSuiteGenerator
 
       def resources_by_type
         @resources_by_type ||= Hash.new { |hash, key| hash[key] = [] }
+      end
+
+      def raw_capability_statements
+        @raw_capability_statements ||= {}.compare_by_identity
       end
     end
   end

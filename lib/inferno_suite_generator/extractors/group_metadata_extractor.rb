@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "fhirpath"
+
 require_relative "../core/group_metadata"
 require_relative "../core/ig_metadata"
 require_relative "must_support_metadata_extractor"
@@ -41,6 +43,8 @@ module InfernoSuiteGenerator
             title:,
             short_description:,
             interactions:,
+            update_create:,
+            update_create_expectation:,
             operations:,
             searches:,
             search_definitions:,
@@ -187,6 +191,20 @@ module InfernoSuiteGenerator
               expectation: expectation
             }
           end
+      end
+
+      def update_create
+        resource_capabilities.updateCreate || false
+      end
+
+      UPDATE_CREATE_EXPECTATION_EXPRESSION =
+        "updateCreate.extension.where(url='http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation').valueCode"
+
+      def update_create_expectation
+        raw_resource = ig_resources.raw_cs_resource(resource)
+        return "MAY" if raw_resource.blank?
+
+        Fhirpath.evaluate(raw_resource, UPDATE_CREATE_EXPECTATION_EXPRESSION).first || "MAY"
       end
 
       def operations
