@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
                      "Analyzes IG packages and generates Ruby test classes for the Inferno testing framework."
   spec.homepage = "https://github.com/hl7au/inferno_suite_generator"
   spec.license = "Apache-2.0"
-  spec.required_ruby_version = "= 3.3.6"
+  spec.required_ruby_version = ">= 3.3.6", "< 3.4"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/hl7au/inferno_suite_generator"
