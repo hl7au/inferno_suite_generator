@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Tightened the `inferno_core` dependency to `~> 1.4`, `>= 1.4.1`: validation message overrides rely on the validator issue pipeline introduced in the 1.4 series.
+- Relaxed `required_ruby_version` from `= 3.3.6` to `>= 3.3.6, < 3.4` so consumers can run any Ruby 3.3 patch release. Development, CI and the Docker image now use Ruby 3.3.12.
 
 ## [0.2.0] - 2026-07-07
 

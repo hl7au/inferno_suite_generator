@@ -22,7 +22,7 @@ The primary audience is **IG authors and test-kit maintainers** who want to quic
 
 ### Requirements
 
-- Ruby **3.3.6** (if using the gem directly)
+- Ruby **3.3** (3.3.6 or later; if using the gem directly)
 - A FHIR IG package (e.g. `*.tgz` or unpacked package directory)
 - A JSON configuration file describing how your IG maps to an Inferno suite
   (see `config.example.json` / `config.example2.json` in the repo)
@@ -362,7 +362,7 @@ This installs dependencies and prepares the project. You can then use:
 
 ### Ruby and dependencies
 
-- This gem targets **Ruby 3.3.6** (see `inferno_suite_generator.gemspec`).
+- This gem supports **Ruby 3.3** from 3.3.6 onward (`>= 3.3.6, < 3.4`; see `inferno_suite_generator.gemspec`). Development and CI use the version in `.ruby-version`.
 - Dependencies include `deep_merge`, `inferno_core`, and `jsonpath`; see the gemspec for exact versions.
 
 ### Project structure (internal)
