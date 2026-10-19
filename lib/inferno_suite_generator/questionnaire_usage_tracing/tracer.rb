@@ -22,6 +22,7 @@ module InfernoSuiteGenerator
           form = Form.new(questionnaire.to_hash)
           form.query_variables.each { |variable| trace_query(traces, Query.new(form, variable, @ig_resources)) }
           form.launch_contexts.each { |launch_context| add_launch_context(traces, form, launch_context) }
+          form.template_extracts.each { |extract| add_template(traces, Template.new(form, extract)) }
         end
         traces
       end
@@ -70,6 +71,15 @@ module InfernoSuiteGenerator
           add(traces, result, { source: "launch_context", **form.header, name:, defined_at: launch_context[:defined_at],
                                 matched_by: result[:matched_by], elements_read:, used_in: })
         end
+      end
+
+      def add_template(traces, template)
+        unless template.found?
+          return template.log("skipping #{template.label}: no contained resource #{template.reference}")
+        end
+
+        result = @matcher.match(template.resource_type, codes: template.codes, context: template.label)
+        add(traces, result, template.entry(result[:matched_by])) if result
       end
 
       def add(traces, result, entry)
@@ -166,6 +176,71 @@ module InfernoSuiteGenerator
         end
       end
 
+      # One `templateExtract` extension and the contained template it points to.
+      #
+      # A PATCH template (with the smartforms `TemplateExtractExtensionPatchRequestUrl`
+      # sub-extension) is a FHIRPath Patch `Parameters` resource. Its target type
+      # comes from the operations' `path`, or else from the request URL, like
+      # `'Condition/' + ...`. It fixes no codes.
+      class Template
+        PATCH_URL_SUFFIX = "/TemplateExtractExtensionPatchRequestUrl"
+
+        attr_reader :reference
+
+        def initialize(form, extract)
+          @form = form
+          @extract = extract
+          parts = extract[:extension]["extension"].to_a
+          @reference = parts.find { |part| part["url"] == "template" }&.dig("valueReference", "reference").to_s
+          @patch_url = parts.find { |part| part["url"].to_s.end_with?(PATCH_URL_SUFFIX) }&.dig("valueString")
+          @template = form.contained(@reference.delete_prefix("#"))
+        end
+
+        def found?
+          !@template.nil?
+        end
+
+        def patch?
+          !@patch_url.nil?
+        end
+
+        def label
+          "#{@form.label} templateExtract #{@reference} on #{@extract[:defined_at]}"
+        end
+
+        def resource_type
+          patch? ? patch_target : @template["resourceType"]
+        end
+
+        def codes
+          patch? ? {} : ProfileMatcher.from_template(@template)[:codes]
+        end
+
+        def entry(matched_by)
+          owner = @extract[:owner]
+          used_in = @form.root?(owner) ? [] : [Form.usage(owner, "templateExtract")]
+          { source: "template_extract", **@form.header, name: @template["id"] || @reference.delete_prefix("#"),
+            defined_at: @extract[:defined_at], template_codes:, patch: patch?, matched_by:, used_in: }
+        end
+
+        def log(message)
+          puts "Questionnaire usage tracing: #{message}"
+          nil
+        end
+
+        private
+
+        def template_codes
+          codes.fetch(:code, []).map { |coding| [coding[:system], coding[:code]].compact.join("|") }
+        end
+
+        def patch_target
+          paths = @template["parameter"].to_a.flat_map { |parameter| parameter["part"].to_a }
+                                        .filter_map { |part| part["valueString"] if part["name"] == "path" }
+          paths.first&.split(".")&.first || @patch_url[%r{\A\s*'([A-Za-z]+)/}, 1]
+        end
+      end
+
       # The usages of one source in one form: the items in its scope that read
       # it, directly or through aliases, and the element paths they read.
       #
@@ -256,6 +331,7 @@ module InfernoSuiteGenerator
       class Form
         VARIABLE_URL = "http://hl7.org/fhir/StructureDefinition/variable"
         LAUNCH_CONTEXT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext"
+        TEMPLATE_EXTRACT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtract"
         FHIRPATH = "text/fhirpath"
         QUERY = "application/x-fhir-query"
 
@@ -291,6 +367,24 @@ module InfernoSuiteGenerator
         def launch_contexts
           list(@questionnaire["extension"]).select { |extension| extension["url"] == LAUNCH_CONTEXT_URL }
                                            .filter_map { |extension| launch_context(list(extension["extension"])) }
+        end
+
+        # `{ extension:, owner:, defined_at: }` for each `templateExtract`
+        # extension on the root and on items, in document order.
+        def template_extracts
+          owners.flat_map do |owner|
+            list(owner["extension"]).select { |extension| extension["url"] == TEMPLATE_EXTRACT_URL }
+                                    .map { |extension| { extension:, owner:, defined_at: defined_at(owner) } }
+          end
+        end
+
+        # The contained resource with this `id`, or `nil`.
+        def contained(id)
+          list(@questionnaire["contained"]).find { |resource| resource["id"] == id }
+        end
+
+        def root?(owner)
+          owner.equal?(@questionnaire)
         end
 
         # The `text/fhirpath` `variable` extensions, in document order.
@@ -341,7 +435,7 @@ module InfernoSuiteGenerator
         end
 
         def variables_in(language)
-          [@questionnaire, *descendants(@questionnaire)].flat_map do |owner|
+          owners.flat_map do |owner|
             variables(owner).select { |expression| expression["language"] == language }.map do |expression|
               { name: expression["name"], expression: expression["expression"].to_s, owner:,
                 defined_at: defined_at(owner) }
@@ -355,14 +449,18 @@ module InfernoSuiteGenerator
         end
 
         def parents
-          @parents ||= [@questionnaire, *descendants(@questionnaire)]
-                       .each_with_object({}.compare_by_identity) do |node, map|
+          @parents ||= owners.each_with_object({}.compare_by_identity) do |node, map|
             list(node["item"]).each { |child| map[child] = node }
           end
         end
 
         def defined_at(owner)
           owner.equal?(@questionnaire) ? "root" : owner["linkId"]
+        end
+
+        # The root and every item, in document order.
+        def owners
+          [@questionnaire, *descendants(@questionnaire)]
         end
 
         def descendants(node)
