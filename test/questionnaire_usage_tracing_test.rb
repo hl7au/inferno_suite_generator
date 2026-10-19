@@ -10,6 +10,8 @@ require "inferno_suite_generator/questionnaire_usage_tracing/profile_matcher"
 require "inferno_suite_generator/questionnaire_usage_tracing/tracer"
 require "inferno_suite_generator"
 require "inferno_suite_generator/questionnaire_usage_tracing/group_generator"
+require "inferno_suite_generator/generator_with_questionnaire_tracing"
+require "tmpdir"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
@@ -350,6 +352,14 @@ module InfernoSuiteGenerator
           "valueExpression" => { "language" => "text/fhirpath", "expression" => fhirpath } }
       end
 
+      # `value_id: true` gives the name as `valueId`, like older SDC versions.
+      def launch_context(name, *types, value_id: false)
+        name_part = value_id ? { "valueId" => name } : { "valueCoding" => { "code" => name } }
+        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext",
+          "extension" => [{ "url" => "name", **name_part },
+                          *types.map { |type| { "url" => "type", "valueCode" => type } }] }
+      end
+
       def fhirpath_variable(name, fhirpath)
         { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
           "valueExpression" => { "name" => name, "language" => "text/fhirpath", "expression" => fhirpath } }
@@ -647,14 +657,6 @@ module InfernoSuiteGenerator
       def patient_profiles
         { AU_CORE_PATIENT => profile("Patient"), AU_BASE_PATIENT => profile("Patient") }
       end
-
-      # `value_id: true` gives the name as `valueId`, like older SDC versions.
-      def launch_context(name, *types, value_id: false)
-        name_part = value_id ? { "valueId" => name } : { "valueCoding" => { "code" => name } }
-        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext",
-          "extension" => [{ "url" => "name", **name_part },
-                          *types.map { |type| { "url" => "type", "valueCode" => type } }] }
-      end
     end
 
     # Verifies `Tracer` traces `templateExtract` templates to the profile of the
@@ -832,6 +834,105 @@ module InfernoSuiteGenerator
         Generator::GroupMetadata.new(resource: "Observation", profile_url: BODY_HEIGHT,
                                      profile_name: "AU Core Body Height", title: "Body Height", version: "2.0.0",
                                      searches: [])
+      end
+    end
+
+    # Verifies `Generator::WithQuestionnaireTracing` writes the trace next to
+    # each traced group's `metadata.yml`.
+    class GeneratorWithQuestionnaireTracingTest < Minitest::Test
+      include TracerFixtures
+
+      # The config the group generator and its template read.
+      class FakeConfigKeeper
+        attr_reader :result_folder
+
+        def initialize(result_folder)
+          @result_folder = result_folder
+        end
+
+        def exclude_resource?(*) = false
+        def suite_module_name = "AUCoreTestKit"
+        def title = "AU Core"
+        def test_id_prefix = "au_core"
+      end
+
+      def setup
+        @previous_config_keeper = Registry.get(:config_keeper)
+        @result_folder = Dir.mktmpdir
+        Registry.register(:config_keeper, FakeConfigKeeper.new(@result_folder))
+      end
+
+      def teardown
+        Registry.register(:config_keeper, @previous_config_keeper)
+        QuestionnaireAwareGroupGenerator.traces = nil
+        FileUtils.remove_entry(@result_folder)
+      end
+
+      def test_the_group_directory_gets_a_plugins_file_with_the_trace
+        generate_groups
+
+        trace = YAML.load_file(plugins_path)["questionnaire_usage_tracing"]
+
+        assert_equal(["launch_context"], trace.map { |entry| entry["source"] })
+        assert_equal ["birthDate"], trace.first["elements_read"]
+        assert_equal [{ "link_id" => "dob", "text" => "Date of birth", "extension" => "initialExpression" }],
+                     trace.first["used_in"]
+      end
+
+      def test_the_group_description_gets_the_section
+        generate_groups
+
+        assert_includes File.read(File.join(output_dir, "patient_group.rb")), "## Used in questionnaires"
+      end
+
+      def test_an_existing_plugins_file_keeps_its_other_keys
+        FileUtils.mkdir_p(File.dirname(plugins_path))
+        File.write(plugins_path, YAML.dump("other_plugin" => { "enabled" => true }))
+
+        generate_groups
+
+        assert_equal %w[other_plugin questionnaire_usage_tracing], YAML.load_file(plugins_path).keys
+      end
+
+      private
+
+      def generate_groups
+        generator = Generator::WithQuestionnaireTracing.new(nil)
+        _groups, generator.ig_resources = suite_for(AU_CORE_PATIENT => profile("Patient"))
+        generator.ig_resources.add(FHIR::Questionnaire.new(patient_form))
+        generator.ig_metadata = ig_metadata
+        FileUtils.mkdir_p(File.join(output_dir, "patient"))
+        generator.trace_questionnaires
+        generator.generate_groups
+      end
+
+      def patient_form
+        questionnaire(extension: [launch_context("patient", "Patient")],
+                      item: [item("dob", "Date of birth",
+                                  expression("initialExpression", "%patient.birthDate.toString()"))])
+      end
+
+      def ig_metadata
+        Generator::IGMetadata.new.tap do |metadata|
+          metadata.ig_version = "2.0.0"
+          metadata.ig_module_name_prefix = "AUCore"
+          metadata.ig_test_id_prefix = "au_core"
+          metadata.groups = [patient_group]
+        end
+      end
+
+      def patient_group
+        Generator::GroupMetadata.new(resource: "Patient", profile_url: AU_CORE_PATIENT, name: "au_core_patient",
+                                     title: "AU Core Patient", version: "2.0.0", reformatted_version: "200",
+                                     tests: [], searches: [])
+      end
+
+      def output_dir
+        File.join(@result_folder, "2.0.0")
+      end
+
+      def plugins_path
+        File.join(output_dir, "patient", "plugins.yml")
       end
     end
   end
