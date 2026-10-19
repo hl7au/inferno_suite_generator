@@ -1,136 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
-require "active_support/core_ext/object/blank"
-require "fhir_models"
-require "inferno_suite_generator/core/group_metadata"
-require "inferno_suite_generator/core/ig_resources"
-require "inferno_suite_generator/questionnaire_usage_tracing/ast"
-require "inferno_suite_generator/questionnaire_usage_tracing/profile_matcher"
-require "inferno_suite_generator/questionnaire_usage_tracing/tracer"
-require "inferno_suite_generator"
-require "inferno_suite_generator/questionnaire_usage_tracing/group_generator"
 require "inferno_suite_generator/generator_with_questionnaire_tracing"
 require "tmpdir"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
-    # Verifies `Ast` reads `%Name` references and element paths from the
-    # FHIRPath AST, using expressions from the 715 Health Check and GP CCMP forms.
-    class AstTest < Minitest::Test
-      RECORDED_SEX_URL = "http://hl7.org/fhir/StructureDefinition/individual-recordedSexOrGender"
-
-      def test_references_returns_the_external_constant_names
-        assert_equal ["ObsBodyHeight"], Ast.references("%ObsBodyHeight.entry")
-      end
-
-      def test_references_lists_each_name_once
-        assert_equal %w[A B], Ast.references("%A.x | %B.where(y = %A.z)")
-      end
-
-      def test_references_strips_backticks
-        assert_equal ["vs-x"], Ast.references("%`vs-x`.code")
-      end
-
-      def test_references_ignores_a_name_inside_a_string_literal
-        assert_empty Ast.references("'%Foo'")
-      end
-
-      def test_references_returns_empty_and_logs_on_bad_syntax
-        assert_output(/skipping FHIRPath/) { assert_empty Ast.references("%%bad((") }
-      end
-
-      def test_paths_returns_empty_and_logs_on_bad_syntax
-        assert_output(/skipping FHIRPath/) { assert_empty Ast.paths("%%bad((", "bad", bundle: false) }
-      end
-
-      def test_paths_ignores_chains_from_other_names
-        assert_empty Ast.paths("%patient.birthDate", "user", bundle: false)
-      end
-
-      def test_paths_drops_function_calls
-        assert_paths [{ type: nil, path: "birthDate", stopped: false }],
-                     "%patient.birthDate.toString()", "patient"
-      end
-
-      def test_paths_drops_a_where_filter_on_a_member
-        assert_paths [{ type: nil, path: "telecom.value", stopped: false }],
-                     "%patient.telecom.where(system='phone').value", "patient"
-      end
-
-      def test_paths_keeps_the_url_of_an_extension_filter
-        assert_paths [{ type: nil, path: "extension[url=#{RECORDED_SEX_URL}]", stopped: false }],
-                     "%patient.extension.where(url='#{RECORDED_SEX_URL}').exists()", "patient"
-      end
-
-      def test_paths_keeps_the_url_of_the_extension_function
-        assert_paths [{ type: nil, path: "extension[url=#{RECORDED_SEX_URL}]", stopped: false }],
-                     "%patient.extension('#{RECORDED_SEX_URL}').exists()", "patient"
-      end
-
-      def test_paths_keeps_the_url_of_an_extension_filter_inside_exists_and_and
-        expression = "%patient.extension.where(exists(url='#{RECORDED_SEX_URL}' and " \
-                     "extension.where(url='type').exists()) and (url != 'x')).extension.where(url='value').value"
-
-        path = "extension[url=#{RECORDED_SEX_URL}].extension[url=value].value"
-
-        assert_paths [{ type: nil, path:, stopped: false }], expression, "patient"
-      end
-
-      def test_paths_does_not_take_the_url_of_a_sub_extension_filter
-        assert_paths [{ type: nil, path: "extension.value", stopped: false }],
-                     "%patient.extension.where(extension.where(url='type').exists()).value", "patient"
-      end
-
-      def test_paths_gives_an_empty_path_for_a_chain_that_only_picks_the_resource
-        assert_paths [{ type: nil, path: "", stopped: false }],
-                     "%ObsBodyHeight.entry.resource.where(status = 'final' or status = 'amended').first()",
-                     "ObsBodyHeight", bundle: true
-      end
-
-      def test_paths_stops_at_select
-        assert_paths [{ type: nil, path: "name", stopped: true }],
-                     "%user.name.select(given.first() + ' ' + family)", "user"
-      end
-
-      def test_paths_stops_at_of_type_outside_a_bundle
-        assert_paths [{ type: nil, path: "value", stopped: true }],
-                     "%obs.value.ofType(Quantity).value", "obs"
-      end
-
-      def test_paths_reads_the_type_of_a_bundle_chain_from_of_type
-        assert_paths [{ type: "Location", path: "", stopped: false }],
-                     "%PractitionerRoleLocation.entry.resource.ofType(Location)",
-                     "PractitionerRoleLocation", bundle: true
-      end
-
-      def test_paths_reads_the_query_own_type_from_of_type
-        assert_paths [{ type: "MedicationStatement", path: "", stopped: false }],
-                     "%MedicationStatement.entry.resource.ofType(MedicationStatement)",
-                     "MedicationStatement", bundle: true
-      end
-
-      def test_paths_finds_chains_nested_in_function_arguments
-        expression = "%MedicationStatement.entry.resource.ofType(Medication)" \
-                     ".where(id in %MedicationStatement.entry.resource.medication.select(reference))"
-
-        assert_paths [{ type: "Medication", path: "", stopped: false },
-                      { type: nil, path: "medication", stopped: true }],
-                     expression, "MedicationStatement", bundle: true
-      end
-
-      def test_paths_reads_an_alias_chain
-        assert_paths [{ type: nil, path: "value.value", stopped: false }],
-                     "%ObsBodyHeightLatest.value.where(unit = 'cm').value", "ObsBodyHeightLatest"
-      end
-
-      private
-
-      def assert_paths(expected, expression, name, bundle: false)
-        assert_equal expected, Ast.paths(expression, name, bundle:)
-      end
-    end
-
     # Profiles and helpers shared by the `ProfileMatcher` tests. Body Height
     # fixes its code with a `patternCodeableConcept`, Body Weight with
     # `fixedCode` and `fixedUri` on a coding slice, like the real AU Core profiles.
@@ -143,6 +18,8 @@ module InfernoSuiteGenerator
       DIAGNOSTIC_RESULT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-diagnosticresult"
       AU_CORE_PATIENT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-patient"
       AU_BASE_PATIENT = "http://hl7.org.au/fhir/StructureDefinition/au-patient"
+      SNOMED = "http://snomed.info/sct"
+      RECORDED_SEX_URL = "http://hl7.org/fhir/StructureDefinition/individual-recordedSexOrGender"
 
       def observation_profiles
         {
@@ -210,6 +87,186 @@ module InfernoSuiteGenerator
         input = ProfileMatcher.from_query(query)
         result = matcher.match(input[:resource_type], codes: input[:codes])
         result && { groups: result[:groups].map(&:profile_url), matched_by: result[:matched_by] }
+      end
+    end
+
+    # Questionnaire builders shared by the `Tracer` tests. The suite has the
+    # `ProfileMatcherFixtures` Observation profiles.
+    module TracerFixtures
+      include ProfileMatcherFixtures
+
+      FORM_URL = "http://www.health.gov.au/assessments/GPChronicConditionManagementPlan"
+      FORM_TITLE = "GP Chronic Condition Management Plan"
+      HEIGHT_QUERY = "Observation?code=8302-2&_sort=-date&patient={{%patient.id}}"
+      WEIGHT_QUERY = "Observation?code=29463-7&_sort=-date&patient={{%patient.id}}"
+
+      def trace(form, profiles: observation_profiles, resources: [])
+        groups, ig_resources = suite_for(profiles)
+        [FHIR::Questionnaire.new(form), *resources].each { |resource| ig_resources.add(resource) }
+        Tracer.new(ig_resources, groups).trace
+      end
+
+      def questionnaire(extension: [], item: [], contained: [])
+        { "resourceType" => "Questionnaire", "url" => FORM_URL, "version" => "0.1.0",
+          "title" => FORM_TITLE, "status" => "draft",
+          "contained" => contained, "extension" => extension, "item" => item }
+      end
+
+      def item(link_id, text, *extensions, children: [])
+        { "linkId" => link_id, "text" => text, "type" => children.empty? ? "decimal" : "group",
+          "extension" => extensions, "item" => children }
+      end
+
+      # The questionnaire fields every trace entry starts with.
+      def form_header
+        { questionnaire_url: FORM_URL, questionnaire_version: "0.1.0", questionnaire_title: FORM_TITLE }
+      end
+
+      def link_ids(entry)
+        entry[:used_in].map { |usage| usage[:link_id] }
+      end
+
+      def vias(entry)
+        entry[:used_in].map { |usage| usage[:via] }
+      end
+
+      def query_variable(name, query)
+        { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
+          "valueExpression" => { "name" => name, "language" => "application/x-fhir-query", "expression" => query } }
+      end
+
+      def expression(name, fhirpath)
+        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-#{name}",
+          "valueExpression" => { "language" => "text/fhirpath", "expression" => fhirpath } }
+      end
+
+      # `value_id: true` gives the name as `valueId`, like older SDC versions.
+      def launch_context(name, *types, value_id: false)
+        name_part = value_id ? { "valueId" => name } : { "valueCoding" => { "code" => name } }
+        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext",
+          "extension" => [{ "url" => "name", **name_part },
+                          *types.map { |type| { "url" => "type", "valueCode" => type } }] }
+      end
+
+      def fhirpath_variable(name, fhirpath)
+        { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
+          "valueExpression" => { "name" => name, "language" => "text/fhirpath", "expression" => fhirpath } }
+      end
+    end
+
+    # Verifies `Ast` reads `%Name` references and element paths from the
+    # FHIRPath AST, using expressions from the 715 Health Check and GP CCMP forms.
+    class AstTest < Minitest::Test
+      include ProfileMatcherFixtures
+
+      def test_references_returns_the_external_constant_names
+        assert_equal ["ObsBodyHeight"], Ast.references("%ObsBodyHeight.entry")
+      end
+
+      def test_references_lists_each_name_once
+        assert_equal %w[A B], Ast.references("%A.x | %B.where(y = %A.z)")
+      end
+
+      def test_references_strips_backticks
+        assert_equal ["vs-x"], Ast.references("%`vs-x`.code")
+      end
+
+      def test_references_ignores_a_name_inside_a_string_literal
+        assert_empty Ast.references("'%Foo'")
+      end
+
+      def test_references_returns_empty_and_logs_on_bad_syntax
+        assert_output(/skipping FHIRPath/) { assert_empty Ast.references("%%bad((") }
+      end
+
+      def test_paths_returns_empty_and_logs_on_bad_syntax
+        assert_output(/skipping FHIRPath/) { assert_empty Ast.paths("%%bad((", "bad", bundle: false) }
+      end
+
+      def test_paths_ignores_chains_from_other_names
+        assert_empty Ast.paths("%patient.birthDate", "user", bundle: false)
+      end
+
+      def test_paths_drops_function_calls
+        assert_paths [chain("birthDate")], "%patient.birthDate.toString()", "patient"
+      end
+
+      def test_paths_drops_a_where_filter_on_a_member
+        assert_paths [chain("telecom.value")], "%patient.telecom.where(system='phone').value", "patient"
+      end
+
+      def test_paths_keeps_the_url_of_an_extension_filter
+        assert_paths [chain("extension[url=#{RECORDED_SEX_URL}]")],
+                     "%patient.extension.where(url='#{RECORDED_SEX_URL}').exists()", "patient"
+      end
+
+      def test_paths_keeps_the_url_of_the_extension_function
+        assert_paths [chain("extension[url=#{RECORDED_SEX_URL}]")],
+                     "%patient.extension('#{RECORDED_SEX_URL}').exists()", "patient"
+      end
+
+      def test_paths_keeps_the_url_of_an_extension_filter_inside_exists_and_and
+        expression = "%patient.extension.where(exists(url='#{RECORDED_SEX_URL}' and " \
+                     "extension.where(url='type').exists()) and (url != 'x')).extension.where(url='value').value"
+
+        path = "extension[url=#{RECORDED_SEX_URL}].extension[url=value].value"
+
+        assert_paths [chain(path)], expression, "patient"
+      end
+
+      def test_paths_does_not_take_the_url_of_a_sub_extension_filter
+        assert_paths [chain("extension.value")],
+                     "%patient.extension.where(extension.where(url='type').exists()).value", "patient"
+      end
+
+      def test_paths_gives_an_empty_path_for_a_chain_that_only_picks_the_resource
+        assert_paths [chain("")],
+                     "%ObsBodyHeight.entry.resource.where(status = 'final' or status = 'amended').first()",
+                     "ObsBodyHeight", bundle: true
+      end
+
+      def test_paths_stops_at_select
+        assert_paths [chain("name", stopped: true)], "%user.name.select(given.first() + ' ' + family)", "user"
+      end
+
+      def test_paths_stops_at_of_type_outside_a_bundle
+        assert_paths [chain("value", stopped: true)], "%obs.value.ofType(Quantity).value", "obs"
+      end
+
+      def test_paths_reads_the_type_of_a_bundle_chain_from_of_type
+        assert_paths [chain("", type: "Location")],
+                     "%PractitionerRoleLocation.entry.resource.ofType(Location)",
+                     "PractitionerRoleLocation", bundle: true
+      end
+
+      def test_paths_reads_the_query_own_type_from_of_type
+        assert_paths [chain("", type: "MedicationStatement")],
+                     "%MedicationStatement.entry.resource.ofType(MedicationStatement)",
+                     "MedicationStatement", bundle: true
+      end
+
+      def test_paths_finds_chains_nested_in_function_arguments
+        expression = "%MedicationStatement.entry.resource.ofType(Medication)" \
+                     ".where(id in %MedicationStatement.entry.resource.medication.select(reference))"
+
+        assert_paths [chain("", type: "Medication"),
+                      chain("medication", stopped: true)],
+                     expression, "MedicationStatement", bundle: true
+      end
+
+      def test_paths_reads_an_alias_chain
+        assert_paths [chain("value.value")],
+                     "%ObsBodyHeightLatest.value.where(unit = 'cm').value", "ObsBodyHeightLatest"
+      end
+
+      private
+
+      def chain(path, type: nil, stopped: false)
+        { type:, path:, stopped: }
+      end
+
+      def assert_paths(expected, expression, name, bundle: false)
+        assert_equal expected, Ast.paths(expression, name, bundle:)
       end
     end
 
@@ -281,7 +338,7 @@ module InfernoSuiteGenerator
       def test_a_code_with_another_system_is_unresolved
         matcher = matcher_for(observation_profiles)
 
-        assert_output(/unresolved/) { assert_nil match_urls(matcher, "Observation?code=http://snomed.info/sct|8302-2") }
+        assert_output(/unresolved/) { assert_nil match_urls(matcher, "Observation?code=#{SNOMED}|8302-2") }
       end
 
       def test_a_type_without_a_group_is_untraced
@@ -306,63 +363,13 @@ module InfernoSuiteGenerator
           "resourceType" => "Observation",
           "id" => "BodyHeightTemplate",
           "code" => { "coding" => [{ "system" => LOINC, "code" => "8302-2" },
-                                   { "system" => "http://snomed.info/sct", "code" => "50373000" }] }
+                                   { "system" => SNOMED, "code" => "50373000" }] }
         }
         input = ProfileMatcher.from_template(template)
 
         result = matcher.match(input[:resource_type], codes: input[:codes])
 
         assert_equal [BODY_HEIGHT], result[:groups].map(&:profile_url)
-      end
-    end
-
-    # Questionnaire builders shared by the `Tracer` tests. The suite has the
-    # `ProfileMatcherFixtures` Observation profiles.
-    module TracerFixtures
-      include ProfileMatcherFixtures
-
-      FORM_URL = "http://www.health.gov.au/assessments/GPChronicConditionManagementPlan"
-      HEIGHT_QUERY = "Observation?code=8302-2&_sort=-date&patient={{%patient.id}}"
-      WEIGHT_QUERY = "Observation?code=29463-7&_sort=-date&patient={{%patient.id}}"
-
-      def trace(form, profiles: observation_profiles, resources: [])
-        groups, ig_resources = suite_for(profiles)
-        [FHIR::Questionnaire.new(form), *resources].each { |resource| ig_resources.add(resource) }
-        Tracer.new(ig_resources, groups).trace
-      end
-
-      def questionnaire(extension: [], item: [], contained: [])
-        { "resourceType" => "Questionnaire", "url" => FORM_URL, "version" => "0.1.0",
-          "title" => "GP Chronic Condition Management Plan", "status" => "draft",
-          "contained" => contained, "extension" => extension, "item" => item }
-      end
-
-      def item(link_id, text, *extensions, children: [])
-        { "linkId" => link_id, "text" => text, "type" => children.empty? ? "decimal" : "group",
-          "extension" => extensions, "item" => children }
-      end
-
-      def query_variable(name, query)
-        { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
-          "valueExpression" => { "name" => name, "language" => "application/x-fhir-query", "expression" => query } }
-      end
-
-      def expression(name, fhirpath)
-        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-#{name}",
-          "valueExpression" => { "language" => "text/fhirpath", "expression" => fhirpath } }
-      end
-
-      # `value_id: true` gives the name as `valueId`, like older SDC versions.
-      def launch_context(name, *types, value_id: false)
-        name_part = value_id ? { "valueId" => name } : { "valueCoding" => { "code" => name } }
-        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext",
-          "extension" => [{ "url" => "name", **name_part },
-                          *types.map { |type| { "url" => "type", "valueCode" => type } }] }
-      end
-
-      def fhirpath_variable(name, fhirpath)
-        { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
-          "valueExpression" => { "name" => name, "language" => "text/fhirpath", "expression" => fhirpath } }
       end
     end
 
@@ -385,7 +392,7 @@ module InfernoSuiteGenerator
         entry = trace(weight_in_a_group_form)[BODY_WEIGHT].first
 
         assert_equal "vitals", entry[:defined_at]
-        assert_equal(["weight"], entry[:used_in].map { |usage| usage[:link_id] })
+        assert_equal ["weight"], link_ids(entry)
         assert_equal ["value"], entry[:elements_read]
       end
 
@@ -401,15 +408,14 @@ module InfernoSuiteGenerator
       def test_a_query_for_a_type_without_a_group_is_untraced
         form = questionnaire(extension: [query_variable("Conditions", "Condition?patient={{%patient.id}}")])
 
-        assert_output(/untraced GP Chronic Condition Management Plan query Conditions/) { assert_empty trace(form) }
+        assert_output(/untraced .* query Conditions/) { assert_empty trace(form) }
       end
 
       private
 
       def height_entry
         {
-          source: "query", questionnaire_url: FORM_URL, questionnaire_version: "0.1.0",
-          questionnaire_title: "GP Chronic Condition Management Plan",
+          source: "query", **form_header,
           name: "ObsBodyHeight", defined_at: "root", query: HEIGHT_QUERY, matched_by: "code",
           elements_read: ["value.value"],
           used_in: [{ link_id: "height", text: "Height", extension: "initialExpression" }]
@@ -449,7 +455,7 @@ module InfernoSuiteGenerator
         )
         entry = trace(form)[BODY_HEIGHT].first
 
-        assert_equal(["HeightCodes"], entry[:used_in].map { |usage| usage[:via] })
+        assert_equal ["HeightCodes"], vias(entry)
         assert_equal ["code"], entry[:elements_read]
       end
 
@@ -468,7 +474,7 @@ module InfernoSuiteGenerator
                                          fhirpath_variable("B", "%A")],
                              item: [item("height", "Height", expression("initialExpression", "%B.value"))])
 
-        assert_equal(["B"], trace(form)[BODY_HEIGHT].first[:used_in].map { |usage| usage[:via] })
+        assert_equal ["B"], vias(trace(form)[BODY_HEIGHT].first)
       end
 
       private
@@ -519,7 +525,7 @@ module InfernoSuiteGenerator
         entry = traces[MEDICATION_STATEMENT].first
 
         assert_equal "query", entry[:source]
-        assert_equal(["medications"], entry[:used_in].map { |usage| usage[:link_id] })
+        assert_equal ["medications"], link_ids(entry)
         assert_equal ["medication"], entry[:elements_read]
       end
 
@@ -528,7 +534,7 @@ module InfernoSuiteGenerator
 
         assert_equal "explicit", entry[:target_by]
         assert_equal ["name"], entry[:elements_read]
-        assert_equal(["location"], entry[:used_in].map { |usage| usage[:link_id] })
+        assert_equal ["location"], link_ids(entry)
       end
 
       def test_a_target_type_from_of_type_in_the_form
@@ -576,8 +582,7 @@ module InfernoSuiteGenerator
 
       def medication_entry
         {
-          source: "include", questionnaire_url: FORM_URL, questionnaire_version: "0.1.0",
-          questionnaire_title: "GP Chronic Condition Management Plan",
+          source: "include", **form_header,
           name: "MedicationStatement", defined_at: "root", query: MEDS_QUERY,
           include: "MedicationStatement:medication", target_by: "search_parameter", matched_by: "resource_type",
           elements_read: [], used_in: [{ link_id: "medications", text: "Medications", extension: "initialExpression" }]
@@ -602,7 +607,6 @@ module InfernoSuiteGenerator
       include TracerFixtures
 
       AU_CORE_PRACTITIONER = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-practitioner"
-      RECORDED_SEX_URL = "http://hl7.org/fhir/StructureDefinition/individual-recordedSexOrGender"
 
       def test_an_item_reads_an_element_of_the_launch_patient
         form = questionnaire(extension: [launch_context("patient", "Patient")],
@@ -610,8 +614,7 @@ module InfernoSuiteGenerator
                                          expression("initialExpression", "%patient.birthDate.toString()"))])
 
         assert_equal [{
-          source: "launch_context", questionnaire_url: FORM_URL, questionnaire_version: "0.1.0",
-          questionnaire_title: "GP Chronic Condition Management Plan",
+          source: "launch_context", **form_header,
           name: "patient", defined_at: "root", matched_by: "resource_type", elements_read: ["birthDate"],
           used_in: [{ link_id: "dob", text: "Date of birth", extension: "initialExpression" }]
         }], trace(form, profiles: patient_profiles)[AU_CORE_PATIENT]
@@ -632,7 +635,7 @@ module InfernoSuiteGenerator
 
         assert_equal ["extension[url=#{RECORDED_SEX_URL}]", "extension[url=#{RECORDED_SEX_URL}].value.code"],
                      entry[:elements_read]
-        assert_equal(["RecordedSex"], entry[:used_in].map { |usage| usage[:via] })
+        assert_equal ["RecordedSex"], vias(entry)
       end
 
       def test_one_entry_per_type_of_the_launch_context
@@ -666,15 +669,13 @@ module InfernoSuiteGenerator
 
       AU_CORE_CONDITION = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-condition"
       PATCH_URL = "https://smartforms.csiro.au/ig/StructureDefinition/TemplateExtractExtensionPatchRequestUrl"
-      SNOMED = "http://snomed.info/sct"
 
       def test_an_item_with_a_body_height_template
         form = questionnaire(contained: [body_height_template],
                              item: [item("height", "Height", template_extract("#BodyHeightTemplate"))])
 
         assert_equal [{
-          source: "template_extract", questionnaire_url: FORM_URL, questionnaire_version: "0.1.0",
-          questionnaire_title: "GP Chronic Condition Management Plan",
+          source: "template_extract", **form_header,
           name: "BodyHeightTemplate", defined_at: "height",
           template_codes: ["#{LOINC}|8302-2", "#{SNOMED}|50373000"], patch: false, matched_by: "code",
           used_in: [{ link_id: "height", text: "Height", extension: "templateExtract" }]
@@ -749,23 +750,45 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Verifies `QuestionnaireAwareGroupGenerator` adds the "Used in
-    # questionnaires" section to the descriptions of traced groups only.
-    class QuestionnaireAwareGroupGeneratorTest < Minitest::Test
-      BODY_HEIGHT = ProfileMatcherFixtures::BODY_HEIGHT
-      HEIGHT_QUERY = TracerFixtures::HEIGHT_QUERY
-      FakeConfigKeeper = Struct.new(:title)
-      TRICKY_TEXT = "Height (cm) \#{x} \#@y \\ z"
+    # Swaps in a fake config keeper, with a temporary result folder, for each
+    # test and restores the real one after it.
+    module ConfigKeeperSwap
+      # The config the group generator and its template read.
+      class FakeConfigKeeper
+        attr_reader :result_folder
+
+        def initialize(result_folder)
+          @result_folder = result_folder
+        end
+
+        def exclude_resource?(*) = false
+        def suite_module_name = "AUCoreTestKit"
+        def title = "AU Core"
+        def test_id_prefix = "au_core"
+      end
 
       def setup
+        super
         @previous_config_keeper = Registry.get(:config_keeper)
-        Registry.register(:config_keeper, FakeConfigKeeper.new("AU Core"))
+        @result_folder = Dir.mktmpdir
+        Registry.register(:config_keeper, FakeConfigKeeper.new(@result_folder))
       end
 
       def teardown
         Registry.register(:config_keeper, @previous_config_keeper)
         QuestionnaireAwareGroupGenerator.traces = nil
+        FileUtils.remove_entry(@result_folder)
+        super
       end
+    end
+
+    # Verifies `QuestionnaireAwareGroupGenerator` adds the "Used in
+    # questionnaires" section to the descriptions of traced groups only.
+    class QuestionnaireAwareGroupGeneratorTest < Minitest::Test
+      include TracerFixtures
+      include ConfigKeeperSwap
+
+      TRICKY_TEXT = "Height (cm) \#{x} \#@y \\ z"
 
       def test_a_group_with_a_trace_gets_the_section
         QuestionnaireAwareGroupGenerator.traces = { BODY_HEIGHT => [query_entry, launch_context_entry] }
@@ -800,7 +823,7 @@ module InfernoSuiteGenerator
         <<~MARKDOWN
           ## Used in questionnaires
 
-          ### GP Chronic Condition Management Plan
+          ### #{FORM_TITLE}
 
           * Query `ObsBodyHeight`: `Observation?code=8302-2&_sort=-date&patient={{%patient.id}}`
             * Reads: `value.value`, `effective`
@@ -813,21 +836,21 @@ module InfernoSuiteGenerator
 
       def query_entry(used_in: [{ link_id: "height", text: "Height", extension: "initialExpression" },
                                 { link_id: "height", text: "Height", extension: "enableWhenExpression" }])
-        { source: "query", questionnaire_title: "GP Chronic Condition Management Plan", name: "ObsBodyHeight",
+        { source: "query", questionnaire_title: FORM_TITLE, name: "ObsBodyHeight",
           query: HEIGHT_QUERY, elements_read: %w[value.value effective], used_in: }
       end
 
       def launch_context_entry
-        { source: "launch_context", questionnaire_title: "GP Chronic Condition Management Plan", name: "patient",
+        { source: "launch_context", questionnaire_title: FORM_TITLE, name: "patient",
           elements_read: ["birthDate"], used_in: [{ link_id: "dob", text: "Date of birth" }] }
       end
 
       def description
-        QuestionnaireAwareGroupGenerator.new(group, "/tmp", nil).description
+        QuestionnaireAwareGroupGenerator.new(group, @result_folder, nil).description
       end
 
       def plain_description
-        Generator::GroupGenerator.new(group, "/tmp", nil).description
+        Generator::GroupGenerator.new(group, @result_folder, nil).description
       end
 
       def group
@@ -841,32 +864,7 @@ module InfernoSuiteGenerator
     # each traced group's `metadata.yml`.
     class GeneratorWithQuestionnaireTracingTest < Minitest::Test
       include TracerFixtures
-
-      # The config the group generator and its template read.
-      class FakeConfigKeeper
-        attr_reader :result_folder
-
-        def initialize(result_folder)
-          @result_folder = result_folder
-        end
-
-        def exclude_resource?(*) = false
-        def suite_module_name = "AUCoreTestKit"
-        def title = "AU Core"
-        def test_id_prefix = "au_core"
-      end
-
-      def setup
-        @previous_config_keeper = Registry.get(:config_keeper)
-        @result_folder = Dir.mktmpdir
-        Registry.register(:config_keeper, FakeConfigKeeper.new(@result_folder))
-      end
-
-      def teardown
-        Registry.register(:config_keeper, @previous_config_keeper)
-        QuestionnaireAwareGroupGenerator.traces = nil
-        FileUtils.remove_entry(@result_folder)
-      end
+      include ConfigKeeperSwap
 
       def test_the_group_directory_gets_a_plugins_file_with_the_trace
         generate_groups
