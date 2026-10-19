@@ -1,7 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "fhir_models"
+require "inferno_suite_generator/core/group_metadata"
+require "inferno_suite_generator/core/ig_resources"
 require "inferno_suite_generator/questionnaire_usage_tracing/ast"
+require "inferno_suite_generator/questionnaire_usage_tracing/profile_matcher"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
@@ -104,6 +108,186 @@ module InfernoSuiteGenerator
 
       def assert_paths(expected, expression, name, bundle: false)
         assert_equal expected, Ast.paths(expression, name, bundle:)
+      end
+    end
+
+    # Profiles and helpers shared by the `ProfileMatcher` tests. Body Height
+    # fixes its code with a `patternCodeableConcept`, Body Weight with
+    # `fixedCode` and `fixedUri` on a coding slice, like the real AU Core profiles.
+    module ProfileMatcherFixtures
+      LOINC = "http://loinc.org"
+      OBSERVATION_CATEGORY = "http://terminology.hl7.org/CodeSystem/observation-category"
+      BODY_HEIGHT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-bodyheight"
+      BODY_WEIGHT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-bodyweight"
+      PATHOLOGY_RESULT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-diagnosticresult-path"
+      DIAGNOSTIC_RESULT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-diagnosticresult"
+      AU_CORE_PATIENT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-patient"
+      AU_BASE_PATIENT = "http://hl7.org.au/fhir/StructureDefinition/au-patient"
+
+      def observation_profiles
+        {
+          BODY_HEIGHT => body_height,
+          BODY_WEIGHT => body_weight,
+          PATHOLOGY_RESULT => profile("Observation", pattern_element("Observation.category", "laboratory")),
+          DIAGNOSTIC_RESULT => profile("Observation")
+        }
+      end
+
+      # The code as a `patternCodeableConcept`.
+      def body_height
+        profile("Observation", *vital_signs_category,
+                pattern_element("Observation.code", "8302-2", system: LOINC))
+      end
+
+      # The code as `fixedCode` and `fixedUri` on a coding slice.
+      def body_weight
+        profile("Observation", *vital_signs_category,
+                *coding_slice("Observation.code.coding:BodyWeightCode", LOINC, "29463-7"))
+      end
+
+      def vital_signs_category
+        coding_slice("Observation.category:VSCat.coding", OBSERVATION_CATEGORY, "vital-signs")
+      end
+
+      def coding_slice(id, system, code)
+        path = id.gsub(/:[^.]+/, "")
+        [{ "id" => "#{id}.system", "path" => "#{path}.system", "fixedUri" => system },
+         { "id" => "#{id}.code", "path" => "#{path}.code", "fixedCode" => code }]
+      end
+
+      def pattern_element(path, code, system: OBSERVATION_CATEGORY)
+        { "id" => path, "path" => path,
+          "patternCodeableConcept" => { "coding" => [{ "system" => system, "code" => code }] } }
+      end
+
+      def profile(type, *elements)
+        { "type" => type, "elements" => [{ "id" => type, "path" => type }, *elements] }
+      end
+
+      def matcher_for(profiles)
+        ig_resources = Generator::IGResources.new
+        groups = profiles.map do |url, definition|
+          ig_resources.add(structure_definition(url, definition))
+          Generator::GroupMetadata.new(resource: definition["type"], profile_url: url)
+        end
+        ProfileMatcher.new(groups, ig_resources)
+      end
+
+      def structure_definition(url, definition)
+        FHIR::StructureDefinition.new(
+          "resourceType" => "StructureDefinition", "url" => url, "type" => definition["type"],
+          "kind" => "resource", "derivation" => "constraint",
+          "snapshot" => { "element" => definition["elements"] }
+        )
+      end
+
+      def match_urls(matcher, query)
+        input = ProfileMatcher.from_query(query)
+        result = matcher.match(input[:resource_type], codes: input[:codes])
+        result && { groups: result[:groups].map(&:profile_url), matched_by: result[:matched_by] }
+      end
+    end
+
+    # Verifies `ProfileMatcher` builds its input from queries.
+    class ProfileMatcherInputTest < Minitest::Test
+      include ProfileMatcherFixtures
+
+      def test_from_query_reads_codes_with_and_without_system
+        input = ProfileMatcher.from_query("Observation?code=#{LOINC}|8302-2,8306-3&_sort=-date&category=vital-signs")
+
+        assert_equal "Observation", input[:resource_type]
+        assert_equal({ code: [{ system: LOINC, code: "8302-2" }, { system: nil, code: "8306-3" }],
+                       category: [{ system: nil, code: "vital-signs" }] }, input[:codes])
+      end
+
+      def test_from_query_skips_templated_values
+        input = ProfileMatcher.from_query("Observation?code={{%codes}}&patient={{%patient.id}}")
+
+        assert_equal({ code: [], category: [] }, input[:codes])
+      end
+    end
+
+    # Verifies `ProfileMatcher` picks the groups a source links to, from the
+    # resource type and the `code` and `category` values the profiles fix.
+    class ProfileMatcherTest < Minitest::Test
+      include ProfileMatcherFixtures
+
+      def test_one_group_matches_by_resource_type
+        matcher = matcher_for(BODY_HEIGHT => body_height)
+
+        assert_equal({ groups: [BODY_HEIGHT], matched_by: "resource_type" },
+                     match_urls(matcher, "Observation?code=8302-2"))
+      end
+
+      def test_the_profile_with_the_queried_code_wins
+        matcher = matcher_for(observation_profiles)
+
+        assert_equal({ groups: [BODY_HEIGHT], matched_by: "code" }, match_urls(matcher, "Observation?code=8302-2"))
+        assert_equal({ groups: [BODY_WEIGHT], matched_by: "code" },
+                     match_urls(matcher, "Observation?code=#{LOINC}|29463-7"))
+      end
+
+      def test_profile_codes_reads_fixed_code_slices_with_their_system
+        matcher = matcher_for(BODY_WEIGHT => body_weight)
+        group = Generator::GroupMetadata.new(resource: "Observation", profile_url: BODY_WEIGHT)
+
+        assert_equal({ code: [{ system: LOINC, code: "29463-7" }],
+                       category: [{ system: OBSERVATION_CATEGORY, code: "vital-signs" }] },
+                     matcher.profile_codes(group))
+      end
+
+      def test_a_category_query_matches_every_profile_with_that_category
+        matcher = matcher_for(observation_profiles)
+
+        assert_output(/matches several profiles/) do
+          assert_equal({ groups: [BODY_HEIGHT, BODY_WEIGHT], matched_by: "code" },
+                       match_urls(matcher, "Observation?category=vital-signs"))
+        end
+      end
+
+      def test_a_code_that_no_profile_has_is_unresolved
+        matcher = matcher_for(observation_profiles)
+
+        assert_output(/unresolved Observation: no Observation profile matches code=1234-5/) do
+          assert_nil match_urls(matcher, "Observation?code=1234-5")
+        end
+      end
+
+      def test_a_code_with_another_system_is_unresolved
+        matcher = matcher_for(observation_profiles)
+
+        assert_output(/unresolved/) { assert_nil match_urls(matcher, "Observation?code=http://snomed.info/sct|8302-2") }
+      end
+
+      def test_a_type_without_a_group_is_untraced
+        matcher = matcher_for(BODY_HEIGHT => body_height)
+
+        assert_output(/untraced GP CCMP ObsBloodPressure: no group for Condition/) do
+          assert_nil matcher.match("Condition", context: "GP CCMP ObsBloodPressure")
+        end
+      end
+
+      def test_any_of_type_matches_every_group_of_the_type
+        matcher = matcher_for(AU_CORE_PATIENT => profile("Patient"), AU_BASE_PATIENT => profile("Patient"))
+        result = matcher.match("Patient", any_of_type: true)
+
+        assert_equal [AU_CORE_PATIENT, AU_BASE_PATIENT], result[:groups].map(&:profile_url)
+        assert_equal "resource_type", result[:matched_by]
+      end
+
+      def test_a_template_matches_by_its_code_coding
+        matcher = matcher_for(observation_profiles)
+        template = {
+          "resourceType" => "Observation",
+          "id" => "BodyHeightTemplate",
+          "code" => { "coding" => [{ "system" => LOINC, "code" => "8302-2" },
+                                   { "system" => "http://snomed.info/sct", "code" => "50373000" }] }
+        }
+        input = ProfileMatcher.from_template(template)
+
+        result = matcher.match(input[:resource_type], codes: input[:codes])
+
+        assert_equal [BODY_HEIGHT], result[:groups].map(&:profile_url)
       end
     end
   end
