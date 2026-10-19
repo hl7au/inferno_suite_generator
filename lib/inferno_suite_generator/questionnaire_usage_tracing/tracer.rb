@@ -231,7 +231,7 @@ module InfernoSuiteGenerator
         private
 
         def template_codes
-          codes.fetch(:code, []).map { |coding| [coding[:system], coding[:code]].compact.join("|") }
+          codes.fetch(:code) { [] }.map { |coding| [coding[:system], coding[:code]].compact.join("|") }
         end
 
         def patch_target

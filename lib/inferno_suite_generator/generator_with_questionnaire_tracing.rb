@@ -44,25 +44,39 @@ module InfernoSuiteGenerator
 
       private
 
+      # The groups that are not excluded, the same ones `GroupGenerator`
+      # generates. Kept so tracing and `plugins.yml` see the same groups.
       def suite_groups
         config = Registry.get(:config_keeper)
-        ig_metadata.ordered_groups.compact
-                   .reject { |group| config.exclude_resource?(group.profile_url, group.resource) }
+        @suite_groups ||= ig_metadata.ordered_groups.compact
+                                     .reject { |group| config.exclude_resource?(group.profile_url, group.resource) }
       end
 
-      # Sets only the `questionnaire_usage_tracing` key, keeping the rest of an
-      # existing file.
       def write_plugins_file(group)
         entries = questionnaire_traces.to_h[group.profile_url].to_a
         return if entries.empty?
 
         path = File.join(base_output_dir, Naming.snake_case_for_profile(group), PLUGINS_FILE)
-        FileUtils.mkdir_p(File.dirname(path))
-        File.write(path, YAML.dump(read_plugins_file(path).merge(TRACE_KEY => entries.map(&:deep_stringify_keys))))
+        PluginsFile.new(path).set(TRACE_KEY, entries.map(&:deep_stringify_keys))
       end
 
-      def read_plugins_file(path)
-        (YAML.load_file(path, aliases: true) if File.exist?(path)) || {}
+      # One group's `plugins.yml`. Setting a key keeps the rest of an existing
+      # file, so several plugins can share it.
+      class PluginsFile
+        def initialize(path)
+          @path = path
+        end
+
+        def set(key, value)
+          FileUtils.mkdir_p(File.dirname(@path))
+          File.write(@path, YAML.dump(read.merge(key => value)))
+        end
+
+        private
+
+        def read
+          (YAML.load_file(@path, aliases: true) if File.exist?(@path)) || {}
+        end
       end
     end
   end
