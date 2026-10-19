@@ -297,14 +297,52 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Verifies `Tracer` finds the x-fhir-query variables that link a
-    # questionnaire to a profile, and the items that use them.
-    class TracerQueryTest < Minitest::Test
+    # Questionnaire builders shared by the `Tracer` tests. The suite has the
+    # `ProfileMatcherFixtures` Observation profiles.
+    module TracerFixtures
       include ProfileMatcherFixtures
 
       FORM_URL = "http://www.health.gov.au/assessments/GPChronicConditionManagementPlan"
       HEIGHT_QUERY = "Observation?code=8302-2&_sort=-date&patient={{%patient.id}}"
       WEIGHT_QUERY = "Observation?code=29463-7&_sort=-date&patient={{%patient.id}}"
+
+      def trace(form)
+        groups, ig_resources = suite_for(observation_profiles)
+        ig_resources.add(FHIR::Questionnaire.new(form))
+        Tracer.new(ig_resources, groups).trace
+      end
+
+      def questionnaire(extension: [], item: [])
+        { "resourceType" => "Questionnaire", "url" => FORM_URL, "version" => "0.1.0",
+          "title" => "GP Chronic Condition Management Plan", "status" => "draft",
+          "extension" => extension, "item" => item }
+      end
+
+      def item(link_id, text, *extensions, children: [])
+        { "linkId" => link_id, "text" => text, "type" => children.empty? ? "decimal" : "group",
+          "extension" => extensions, "item" => children }
+      end
+
+      def query_variable(name, query)
+        { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
+          "valueExpression" => { "name" => name, "language" => "application/x-fhir-query", "expression" => query } }
+      end
+
+      def expression(name, fhirpath)
+        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-#{name}",
+          "valueExpression" => { "language" => "text/fhirpath", "expression" => fhirpath } }
+      end
+
+      def fhirpath_variable(name, fhirpath)
+        { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
+          "valueExpression" => { "name" => name, "language" => "text/fhirpath", "expression" => fhirpath } }
+      end
+    end
+
+    # Verifies `Tracer` finds the x-fhir-query variables that link a
+    # questionnaire to a profile, and the items that use them.
+    class TracerQueryTest < Minitest::Test
+      include TracerFixtures
 
       def test_a_root_variable_used_by_an_item
         form = questionnaire(
@@ -359,32 +397,73 @@ module InfernoSuiteGenerator
         vitals = item("vitals", "Vitals", query_variable("ObsBodyWeight", WEIGHT_QUERY), children: [weight])
         questionnaire(item: [vitals, other])
       end
+    end
 
-      def trace(form)
-        groups, ig_resources = suite_for(observation_profiles)
-        ig_resources.add(FHIR::Questionnaire.new(form))
-        Tracer.new(ig_resources, groups).trace
+    # Verifies `Tracer` follows variable chains: items that read a query
+    # through `text/fhirpath` variables count as its users.
+    class TracerAliasTest < Minitest::Test
+      include TracerFixtures
+
+      # The GP CCMP chain: `ObsBodyHeight` -> `ObsBodyHeightLatest` ->
+      # `ObsBodyHeightValue`, read by the `height` item.
+      def test_an_item_reads_a_query_through_a_chain_of_aliases
+        entry = trace(height_chain_form)[BODY_HEIGHT].first
+
+        assert_equal [{ link_id: "height", text: "Height", extension: "initialExpression", via: "ObsBodyHeightValue" }],
+                     entry[:used_in]
+        assert_equal ["value.value"], entry[:elements_read]
       end
 
-      def questionnaire(extension: [], item: [])
-        { "resourceType" => "Questionnaire", "url" => FORM_URL, "version" => "0.1.0",
-          "title" => "GP Chronic Condition Management Plan", "status" => "draft",
-          "extension" => extension, "item" => item }
+      def test_users_of_an_alias_that_stops_at_select_add_no_path
+        form = questionnaire(
+          extension: [query_variable("ObsBodyHeight", HEIGHT_QUERY),
+                      fhirpath_variable("HeightCodes", "%ObsBodyHeight.entry.resource.code.select(coding.code)")],
+          item: [item("codes", "Codes", expression("initialExpression", "%HeightCodes.first().length()"))]
+        )
+        entry = trace(form)[BODY_HEIGHT].first
+
+        assert_equal(["HeightCodes"], entry[:used_in].map { |usage| usage[:via] })
+        assert_equal ["code"], entry[:elements_read]
       end
 
-      def item(link_id, text, *extensions, children: [])
-        { "linkId" => link_id, "text" => text, "type" => children.empty? ? "decimal" : "group",
-          "extension" => extensions, "item" => children }
+      def test_an_alias_on_an_item_is_not_visible_to_a_sibling
+        entry = trace(alias_in_a_group_form)[BODY_HEIGHT].first
+
+        assert_equal [{ link_id: "vitals", text: "Vitals", extension: "variable" },
+                      { link_id: "height", text: "Height", extension: "initialExpression", via: "HeightLatest" }],
+                     entry[:used_in]
+        assert_equal ["value"], entry[:elements_read]
       end
 
-      def query_variable(name, query)
-        { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
-          "valueExpression" => { "name" => name, "language" => "application/x-fhir-query", "expression" => query } }
+      def test_aliases_that_reference_each_other_do_not_loop
+        form = questionnaire(extension: [query_variable("ObsBodyHeight", HEIGHT_QUERY),
+                                         fhirpath_variable("A", "%B | %ObsBodyHeight.entry.resource"),
+                                         fhirpath_variable("B", "%A")],
+                             item: [item("height", "Height", expression("initialExpression", "%B.value"))])
+
+        assert_equal(["B"], trace(form)[BODY_HEIGHT].first[:used_in].map { |usage| usage[:via] })
       end
 
-      def expression(name, fhirpath)
-        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-#{name}",
-          "valueExpression" => { "language" => "text/fhirpath", "expression" => fhirpath } }
+      private
+
+      def height_chain_form
+        latest = fhirpath_variable("ObsBodyHeightLatest",
+                                   "%ObsBodyHeight.entry.resource.where(status = 'final').first()")
+        value = fhirpath_variable("ObsBodyHeightValue", "%ObsBodyHeightLatest.value.where(unit = 'cm').value")
+        questionnaire(
+          extension: [query_variable("ObsBodyHeight", HEIGHT_QUERY), latest, value],
+          item: [item("height", "Height", expression("initialExpression", "%ObsBodyHeightValue.round(0)"))]
+        )
+      end
+
+      # `HeightLatest` is defined on the `vitals` group. Its child `height` reads
+      # it; the sibling `other` reads the same name, but can't see it.
+      def alias_in_a_group_form
+        height = item("height", "Height", expression("initialExpression", "%HeightLatest.value"))
+        other = item("other", "Other", expression("initialExpression", "%HeightLatest.status"))
+        vitals = item("vitals", "Vitals", fhirpath_variable("HeightLatest", "%ObsBodyHeight.entry.resource.first()"),
+                      children: [height])
+        questionnaire(extension: [query_variable("ObsBodyHeight", HEIGHT_QUERY)], item: [vitals, other])
       end
     end
   end
