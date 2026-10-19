@@ -6,6 +6,7 @@ require "inferno_suite_generator/core/group_metadata"
 require "inferno_suite_generator/core/ig_resources"
 require "inferno_suite_generator/questionnaire_usage_tracing/ast"
 require "inferno_suite_generator/questionnaire_usage_tracing/profile_matcher"
+require "inferno_suite_generator/questionnaire_usage_tracing/tracer"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
@@ -165,12 +166,17 @@ module InfernoSuiteGenerator
       end
 
       def matcher_for(profiles)
+        ProfileMatcher.new(*suite_for(profiles))
+      end
+
+      # The groups and `IGResources` of a suite with these profiles.
+      def suite_for(profiles)
         ig_resources = Generator::IGResources.new
         groups = profiles.map do |url, definition|
           ig_resources.add(structure_definition(url, definition))
           Generator::GroupMetadata.new(resource: definition["type"], profile_url: url)
         end
-        ProfileMatcher.new(groups, ig_resources)
+        [groups, ig_resources]
       end
 
       def structure_definition(url, definition)
@@ -288,6 +294,97 @@ module InfernoSuiteGenerator
         result = matcher.match(input[:resource_type], codes: input[:codes])
 
         assert_equal [BODY_HEIGHT], result[:groups].map(&:profile_url)
+      end
+    end
+
+    # Verifies `Tracer` finds the x-fhir-query variables that link a
+    # questionnaire to a profile, and the items that use them.
+    class TracerQueryTest < Minitest::Test
+      include ProfileMatcherFixtures
+
+      FORM_URL = "http://www.health.gov.au/assessments/GPChronicConditionManagementPlan"
+      HEIGHT_QUERY = "Observation?code=8302-2&_sort=-date&patient={{%patient.id}}"
+      WEIGHT_QUERY = "Observation?code=29463-7&_sort=-date&patient={{%patient.id}}"
+
+      def test_a_root_variable_used_by_an_item
+        form = questionnaire(
+          extension: [query_variable("ObsBodyHeight", HEIGHT_QUERY)],
+          item: [item("height", "Height",
+                      expression("initialExpression", "%ObsBodyHeight.entry.resource.first().value.value"))]
+        )
+
+        assert_equal({ BODY_HEIGHT => [height_entry] }, trace(form))
+      end
+
+      def test_an_item_variable_is_used_only_within_that_item
+        entry = trace(weight_in_a_group_form)[BODY_WEIGHT].first
+
+        assert_equal "vitals", entry[:defined_at]
+        assert_equal(["weight"], entry[:used_in].map { |usage| usage[:link_id] })
+        assert_equal ["value"], entry[:elements_read]
+      end
+
+      def test_a_variable_that_no_item_uses_still_gets_an_entry
+        form = questionnaire(extension: [query_variable("ObsBodyHeight", HEIGHT_QUERY)],
+                             item: [item("height", "Height")])
+        entry = trace(form)[BODY_HEIGHT].first
+
+        assert_empty entry[:used_in]
+        assert_empty entry[:elements_read]
+      end
+
+      def test_a_query_for_a_type_without_a_group_is_untraced
+        form = questionnaire(extension: [query_variable("Conditions", "Condition?patient={{%patient.id}}")])
+
+        assert_output(/untraced GP Chronic Condition Management Plan query Conditions/) { assert_empty trace(form) }
+      end
+
+      private
+
+      def height_entry
+        {
+          source: "query", questionnaire_url: FORM_URL, questionnaire_version: "0.1.0",
+          questionnaire_title: "GP Chronic Condition Management Plan",
+          name: "ObsBodyHeight", defined_at: "root", query: HEIGHT_QUERY, matched_by: "code",
+          elements_read: ["value.value"],
+          used_in: [{ link_id: "height", text: "Height", extension: "initialExpression" }]
+        }
+      end
+
+      # `ObsBodyWeight` is defined on the `vitals` group and used by its child
+      # `weight`. The sibling `other` reads it too, but is out of its scope.
+      def weight_in_a_group_form
+        weight = item("weight", "Weight", expression("calculatedExpression", "%ObsBodyWeight.entry.resource.value"))
+        other = item("other", "Other", expression("initialExpression", "%ObsBodyWeight.entry.resource.status"))
+        vitals = item("vitals", "Vitals", query_variable("ObsBodyWeight", WEIGHT_QUERY), children: [weight])
+        questionnaire(item: [vitals, other])
+      end
+
+      def trace(form)
+        groups, ig_resources = suite_for(observation_profiles)
+        ig_resources.add(FHIR::Questionnaire.new(form))
+        Tracer.new(ig_resources, groups).trace
+      end
+
+      def questionnaire(extension: [], item: [])
+        { "resourceType" => "Questionnaire", "url" => FORM_URL, "version" => "0.1.0",
+          "title" => "GP Chronic Condition Management Plan", "status" => "draft",
+          "extension" => extension, "item" => item }
+      end
+
+      def item(link_id, text, *extensions, children: [])
+        { "linkId" => link_id, "text" => text, "type" => children.empty? ? "decimal" : "group",
+          "extension" => extensions, "item" => children }
+      end
+
+      def query_variable(name, query)
+        { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
+          "valueExpression" => { "name" => name, "language" => "application/x-fhir-query", "expression" => query } }
+      end
+
+      def expression(name, fhirpath)
+        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-#{name}",
+          "valueExpression" => { "language" => "text/fhirpath", "expression" => fhirpath } }
       end
     end
   end
