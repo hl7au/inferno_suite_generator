@@ -8,6 +8,8 @@ require "inferno_suite_generator/core/ig_resources"
 require "inferno_suite_generator/questionnaire_usage_tracing/ast"
 require "inferno_suite_generator/questionnaire_usage_tracing/profile_matcher"
 require "inferno_suite_generator/questionnaire_usage_tracing/tracer"
+require "inferno_suite_generator"
+require "inferno_suite_generator/questionnaire_usage_tracing/group_generator"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
@@ -742,6 +744,94 @@ module InfernoSuiteGenerator
         parts << { "name" => "path", "valueString" => path } if path
         { "resourceType" => "Parameters", "id" => "ConditionPatchTemplate",
           "parameter" => [{ "name" => "operation", "part" => parts }] }
+      end
+    end
+
+    # Verifies `QuestionnaireAwareGroupGenerator` adds the "Used in
+    # questionnaires" section to the descriptions of traced groups only.
+    class QuestionnaireAwareGroupGeneratorTest < Minitest::Test
+      BODY_HEIGHT = ProfileMatcherFixtures::BODY_HEIGHT
+      HEIGHT_QUERY = TracerFixtures::HEIGHT_QUERY
+      FakeConfigKeeper = Struct.new(:title)
+      TRICKY_TEXT = "Height (cm) \#{x} \#@y \\ z"
+
+      def setup
+        @previous_config_keeper = Registry.get(:config_keeper)
+        Registry.register(:config_keeper, FakeConfigKeeper.new("AU Core"))
+      end
+
+      def teardown
+        Registry.register(:config_keeper, @previous_config_keeper)
+        QuestionnaireAwareGroupGenerator.traces = nil
+      end
+
+      def test_a_group_with_a_trace_gets_the_section
+        QuestionnaireAwareGroupGenerator.traces = { BODY_HEIGHT => [query_entry, launch_context_entry] }
+
+        assert_equal "#{plain_description}\n#{expected_section}", description
+      end
+
+      def test_a_group_without_a_trace_gets_todays_description
+        QuestionnaireAwareGroupGenerator.traces = { "http://example.org/other" => [query_entry] }
+
+        assert_equal plain_description, description
+      end
+
+      def test_added_text_is_escaped_for_the_group_template_literal
+        entry = query_entry(used_in: [{ link_id: "height", text: TRICKY_TEXT }])
+        QuestionnaireAwareGroupGenerator.traces = { BODY_HEIGHT => [entry] }
+
+        assert_includes description, "`height` Height \\(cm\\) \\\#{x} \\\#@y \\\\ z"
+        assert_includes eval("%(#{description})", binding, __FILE__, __LINE__), TRICKY_TEXT # rubocop:disable Security/Eval
+      end
+
+      def test_more_than_ten_items_show_as_a_count
+        used_in = (1..11).map { |index| { link_id: "item-#{index}", text: "Item #{index}" } }
+        QuestionnaireAwareGroupGenerator.traces = { BODY_HEIGHT => [query_entry(used_in:)] }
+
+        assert_includes description, "  * Items: 11 items\n"
+      end
+
+      private
+
+      def expected_section
+        <<~MARKDOWN
+          ## Used in questionnaires
+
+          ### GP Chronic Condition Management Plan
+
+          * Query `ObsBodyHeight`: `Observation?code=8302-2&_sort=-date&patient={{%patient.id}}`
+            * Reads: `value.value`, `effective`
+            * Items: `height` Height
+          * Launch context `patient`
+            * Reads: `birthDate`
+            * Items: `dob` Date of birth
+        MARKDOWN
+      end
+
+      def query_entry(used_in: [{ link_id: "height", text: "Height", extension: "initialExpression" },
+                                { link_id: "height", text: "Height", extension: "enableWhenExpression" }])
+        { source: "query", questionnaire_title: "GP Chronic Condition Management Plan", name: "ObsBodyHeight",
+          query: HEIGHT_QUERY, elements_read: %w[value.value effective], used_in: }
+      end
+
+      def launch_context_entry
+        { source: "launch_context", questionnaire_title: "GP Chronic Condition Management Plan", name: "patient",
+          elements_read: ["birthDate"], used_in: [{ link_id: "dob", text: "Date of birth" }] }
+      end
+
+      def description
+        QuestionnaireAwareGroupGenerator.new(group, "/tmp", nil).description
+      end
+
+      def plain_description
+        Generator::GroupGenerator.new(group, "/tmp", nil).description
+      end
+
+      def group
+        Generator::GroupMetadata.new(resource: "Observation", profile_url: BODY_HEIGHT,
+                                     profile_name: "AU Core Body Height", title: "Body Height", version: "2.0.0",
+                                     searches: [])
       end
     end
   end
