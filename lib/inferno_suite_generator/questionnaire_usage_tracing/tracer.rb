@@ -20,30 +20,133 @@ module InfernoSuiteGenerator
         traces = {}
         @ig_resources.get_resources_by_type("Questionnaire").each do |questionnaire|
           form = Form.new(questionnaire.to_hash)
-          form.query_variables.each { |variable| add_query(traces, form, variable) }
+          form.query_variables.each { |variable| trace_query(traces, Query.new(form, variable, @ig_resources)) }
         end
         traces
       end
 
       private
 
-      def add_query(traces, form, variable)
-        input = ProfileMatcher.from_query(variable[:expression])
-        context = "#{form.label} query #{variable[:name]}"
-        result = @matcher.match(input[:resource_type], codes: input[:codes], context:)
+      # A `query` entry for the query's own type and an `include` entry for each
+      # `_include` target type. Chains are routed by type: one that picks an
+      # included type with `entry.resource.ofType(T)` goes to that include
+      # entry, anything else to the query entry.
+      def trace_query(traces, query)
+        add_query(traces, query)
+        query.includes.each { |include| add_include(traces, query, include) }
+      end
+
+      def add_query(traces, query)
+        result = @matcher.match(query.resource_type, codes: query.codes, context: query.label)
         return unless result
 
-        entry = query_entry(form, variable, input[:resource_type], result[:matched_by])
+        included = query.includes.map { |include| include[:target] }
+        used_in, elements_read = query.usages { |type| !included.include?(type) }
+        add(traces, result, query.entry("query", matched_by: result[:matched_by], elements_read:, used_in:))
+      end
+
+      def add_include(traces, query, include)
+        context = "#{query.label} include #{include[:value]}"
+        result = @matcher.match(include[:target], any_of_type: true, context:)
+        return unless result
+
+        used_in, elements_read = query.usages { |type| type == include[:target] }
+        add(traces, result, query.entry("include", include: include[:value], target_by: include[:target_by],
+                                                   matched_by: result[:matched_by], elements_read:, used_in:))
+      end
+
+      def add(traces, result, entry)
         result[:groups].each { |group| (traces[group.profile_url] ||= []) << entry }
       end
 
-      def query_entry(form, variable, resource_type, matched_by)
-        source = { name: variable[:name], owner: variable[:owner], bundle: true }
-        used_in, elements_read = Usages.new(form, source, ->(type) { [nil, resource_type].include?(type) }).call
-        {
-          source: "query", **form.header, name: variable[:name], defined_at: variable[:defined_at],
-          query: variable[:expression], matched_by:, elements_read:, used_in:
-        }
+      # One x-fhir-query variable of a form, with its `_include` targets.
+      class Query
+        attr_reader :resource_type, :codes
+
+        def initialize(form, variable, ig_resources)
+          @form = form
+          @variable = variable
+          @ig_resources = ig_resources
+          input = ProfileMatcher.from_query(variable[:expression])
+          @resource_type = input[:resource_type]
+          @codes = input[:codes]
+        end
+
+        def label
+          "#{@form.label} query #{@variable[:name]}"
+        end
+
+        # `[used_in, elements_read]` for the chains whose type the block takes.
+        def usages(&accept)
+          source = { name: @variable[:name], owner: @variable[:owner], bundle: true }
+          Usages.new(@form, source, accept).call
+        end
+
+        # A trace entry: the fields shared by `query` and `include` entries,
+        # then `fields`.
+        def entry(source, **fields)
+          { source:, **@form.header, name: @variable[:name], defined_at: @variable[:defined_at],
+            query: @variable[:expression], **fields }
+        end
+
+        # `{ value:, target:, target_by: }` for each target type of each
+        # `_include` of the query's own type. The target is the explicit
+        # `Source:param:Target`, else the SearchParameter's `target` list, else
+        # the types the form picks out with `entry.resource.ofType(T)`.
+        def includes
+          @includes ||= include_values.flat_map { |value| targets_of(value) }
+        end
+
+        private
+
+        def include_values
+          search_params.filter_map do |name, value|
+            next unless name.start_with?("_include")
+            next value if name == "_include" && value.split(":").first == @resource_type
+
+            log("skipping #{name}=#{value} in #{label}: only _include of #{@resource_type} is traced")
+          end
+        end
+
+        def search_params
+          @variable[:expression].split("?", 2)[1].to_s.split("&").map do |pair|
+            name, value = pair.split("=", 2)
+            [ProfileMatcher::Codes.decode(name.to_s), ProfileMatcher::Codes.decode(value.to_s)]
+          end
+        end
+
+        def targets_of(value)
+          source, param, explicit = value.split(":", 3)
+          targets, target_by = explicit ? [[explicit], "explicit"] : implied_targets(source, param)
+          log("unresolved #{label} include #{value}: no target type") if targets.empty?
+          targets.map { |target| { value:, target:, target_by: } }
+        end
+
+        def implied_targets(source, param)
+          from_param = Array(@ig_resources.search_param_by_resource_and_code(source, param)&.target)
+          from_param.any? ? [from_param, "search_parameter"] : [of_types, "of_type"]
+        end
+
+        # The types other than the query's own that the form picks out with
+        # `%Name.entry.resource.ofType(T)`, in the query's scope.
+        def of_types
+          name = @variable[:name]
+          expressions.select { |expression| expression.include?(name) }
+                     .flat_map { |expression| Ast.paths(expression, name, bundle: true).map { |chain| chain[:type] } }
+                     .compact.uniq - [@resource_type]
+        end
+
+        def expressions
+          owner = @variable[:owner]
+          @form.scope(owner).flat_map { |item| @form.expressions(item).map { |expression| expression[:expression] } } +
+            @form.fhirpath_variables.select { |variable| @form.covers?(owner, variable[:owner]) }
+                 .map { |variable| variable[:expression] }
+        end
+
+        def log(message)
+          puts "Questionnaire usage tracing: #{message}"
+          nil
+        end
       end
 
       # The usages of one source in one form: the items in its scope that read
