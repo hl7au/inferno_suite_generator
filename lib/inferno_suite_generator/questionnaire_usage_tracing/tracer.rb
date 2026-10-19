@@ -21,6 +21,7 @@ module InfernoSuiteGenerator
         @ig_resources.get_resources_by_type("Questionnaire").each do |questionnaire|
           form = Form.new(questionnaire.to_hash)
           form.query_variables.each { |variable| trace_query(traces, Query.new(form, variable, @ig_resources)) }
+          form.launch_contexts.each { |launch_context| add_launch_context(traces, form, launch_context) }
         end
         traces
       end
@@ -53,6 +54,22 @@ module InfernoSuiteGenerator
         used_in, elements_read = query.usages { |type| type == include[:target] }
         add(traces, result, query.entry("include", include: include[:value], target_by: include[:target_by],
                                                    matched_by: result[:matched_by], elements_read:, used_in:))
+      end
+
+      # One entry per type of the launch context that has groups. `%name` is
+      # the resource itself, not a Bundle, and its chains carry no type.
+      def add_launch_context(traces, form, launch_context)
+        name = launch_context[:name]
+        source = { name:, owner: launch_context[:owner], bundle: false }
+        usages = nil
+        launch_context[:types].each do |type|
+          result = @matcher.match(type, any_of_type: true, context: "#{form.label} launch context #{name}")
+          next unless result
+
+          used_in, elements_read = usages ||= Usages.new(form, source, ->(_type) { true }).call
+          add(traces, result, { source: "launch_context", **form.header, name:, defined_at: launch_context[:defined_at],
+                                matched_by: result[:matched_by], elements_read:, used_in: })
+        end
       end
 
       def add(traces, result, entry)
@@ -238,6 +255,7 @@ module InfernoSuiteGenerator
       # the items that can define variables are its "owners".
       class Form
         VARIABLE_URL = "http://hl7.org/fhir/StructureDefinition/variable"
+        LAUNCH_CONTEXT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext"
         FHIRPATH = "text/fhirpath"
         QUERY = "application/x-fhir-query"
 
@@ -265,6 +283,14 @@ module InfernoSuiteGenerator
         # document order.
         def query_variables
           variables_in(QUERY)
+        end
+
+        # `{ name:, types:, owner:, defined_at: }` for each `launchContext`
+        # extension on the root. The name is in `valueCoding.code`, or in
+        # `valueId` in older SDC versions. Each `type` sub-extension adds a type.
+        def launch_contexts
+          list(@questionnaire["extension"]).select { |extension| extension["url"] == LAUNCH_CONTEXT_URL }
+                                           .filter_map { |extension| launch_context(list(extension["extension"])) }
         end
 
         # The `text/fhirpath` `variable` extensions, in document order.
@@ -305,6 +331,13 @@ module InfernoSuiteGenerator
 
         def short_name(extension)
           extension["url"].to_s.split("/").last.to_s.delete_prefix("sdc-questionnaire-")
+        end
+
+        def launch_context(parts)
+          name_part = parts.find { |part| part["url"] == "name" } || {}
+          name = name_part.dig("valueCoding", "code") || name_part["valueId"]
+          types = parts.select { |part| part["url"] == "type" }.filter_map { |part| part["valueCode"] }
+          { name:, types:, owner: @questionnaire, defined_at: "root" } if name
         end
 
         def variables_in(language)

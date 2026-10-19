@@ -136,13 +136,34 @@ module InfernoSuiteGenerator
           end
         end
 
-        # The `X` of a single `url = 'X'` argument.
+        # The `X` of a `url = 'X'` condition in the single argument. The
+        # condition can sit inside `and`, parentheses or an unqualified
+        # `exists(...)`, as in `where(exists(url = 'X') and ...)`. A condition
+        # inside another chain, like `extension.where(url = 'Y')`, is about a
+        # sub-extension and is not taken.
         def url_filter(args)
-          equality = args.first if args.one?
-          return unless equality&.dig("type") == "EqualityExpression"
+          url_condition(args.first) if args.one?
+        end
 
-          left, right = Ast.children(equality)
+        def url_condition(node)
+          case node&.dig("type")
+          when "EqualityExpression" then url_equality(node)
+          when "AndExpression", "ParamList", "ParenthesizedTerm"
+            Ast.children(node).lazy.filter_map { |child| url_condition(child) }.first
+          when "TermExpression", "InvocationTerm" then url_condition(Ast.children(node).first)
+          when "FunctionInvocation" then url_exists(*Ast.children(Ast.children(node).first))
+          end
+        end
+
+        def url_equality(node)
+          left, right = Ast.children(node)
           string_literal(right) if left&.dig("text") == "url"
+        end
+
+        # Reached only for an unqualified call: a qualified one is the right
+        # child of an `InvocationExpression`, which `url_condition` skips.
+        def url_exists(name, params = nil)
+          url_condition(params) if Ast.identifier(name) == "exists"
         end
 
         def string_literal(node)

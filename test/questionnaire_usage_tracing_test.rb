@@ -64,6 +64,20 @@ module InfernoSuiteGenerator
                      "%patient.extension('#{RECORDED_SEX_URL}').exists()", "patient"
       end
 
+      def test_paths_keeps_the_url_of_an_extension_filter_inside_exists_and_and
+        expression = "%patient.extension.where(exists(url='#{RECORDED_SEX_URL}' and " \
+                     "extension.where(url='type').exists()) and (url != 'x')).extension.where(url='value').value"
+
+        path = "extension[url=#{RECORDED_SEX_URL}].extension[url=value].value"
+
+        assert_paths [{ type: nil, path:, stopped: false }], expression, "patient"
+      end
+
+      def test_paths_does_not_take_the_url_of_a_sub_extension_filter
+        assert_paths [{ type: nil, path: "extension.value", stopped: false }],
+                     "%patient.extension.where(extension.where(url='type').exists()).value", "patient"
+      end
+
       def test_paths_gives_an_empty_path_for_a_chain_that_only_picks_the_resource
         assert_paths [{ type: nil, path: "", stopped: false }],
                      "%ObsBodyHeight.entry.resource.where(status = 'final' or status = 'amended').first()",
@@ -567,6 +581,77 @@ module InfernoSuiteGenerator
           extension: [query_variable("PractitionerRoleLocation", location_query(include))],
           item: [item("location", "Location", expression("initialExpression", LOCATION_NAME_EXPRESSION))]
         )
+      end
+    end
+
+    # Verifies `Tracer` traces `launchContext` resources and the elements the
+    # items read from them.
+    class TracerLaunchContextTest < Minitest::Test
+      include TracerFixtures
+
+      AU_CORE_PRACTITIONER = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-practitioner"
+      RECORDED_SEX_URL = "http://hl7.org/fhir/StructureDefinition/individual-recordedSexOrGender"
+
+      def test_an_item_reads_an_element_of_the_launch_patient
+        form = questionnaire(extension: [launch_context("patient", "Patient")],
+                             item: [item("dob", "Date of birth",
+                                         expression("initialExpression", "%patient.birthDate.toString()"))])
+
+        assert_equal [{
+          source: "launch_context", questionnaire_url: FORM_URL, questionnaire_version: "0.1.0",
+          questionnaire_title: "GP Chronic Condition Management Plan",
+          name: "patient", defined_at: "root", matched_by: "resource_type", elements_read: ["birthDate"],
+          used_in: [{ link_id: "dob", text: "Date of birth", extension: "initialExpression" }]
+        }], trace(form, profiles: patient_profiles)[AU_CORE_PATIENT]
+      end
+
+      def test_every_patient_group_gets_the_entry
+        form = questionnaire(extension: [launch_context("patient", "Patient")])
+
+        assert_equal [AU_CORE_PATIENT, AU_BASE_PATIENT], trace(form, profiles: patient_profiles).keys
+      end
+
+      def test_an_alias_of_the_launch_patient
+        recorded_sex = "%patient.extension.where(url = '#{RECORDED_SEX_URL}')"
+        form = questionnaire(extension: [launch_context("patient", "Patient"),
+                                         fhirpath_variable("RecordedSex", recorded_sex)],
+                             item: [item("sex", "Sex", expression("initialExpression", "%RecordedSex.value.code"))])
+        entry = trace(form, profiles: patient_profiles)[AU_CORE_PATIENT].first
+
+        assert_equal ["extension[url=#{RECORDED_SEX_URL}]", "extension[url=#{RECORDED_SEX_URL}].value.code"],
+                     entry[:elements_read]
+        assert_equal(["RecordedSex"], entry[:used_in].map { |usage| usage[:via] })
+      end
+
+      def test_one_entry_per_type_of_the_launch_context
+        form = questionnaire(extension: [launch_context("user", "Practitioner", "Patient", value_id: true)],
+                             item: [item("author", "Author", expression("initialExpression", "%user.name.text"))])
+        traces = trace(form, profiles: patient_profiles.merge(AU_CORE_PRACTITIONER => profile("Practitioner")))
+
+        assert_equal [AU_CORE_PRACTITIONER, AU_CORE_PATIENT, AU_BASE_PATIENT], traces.keys
+        assert_equal ["name.text"], traces[AU_CORE_PRACTITIONER].first[:elements_read]
+      end
+
+      def test_a_launch_context_without_a_group_for_its_type_is_untraced
+        form = questionnaire(extension: [launch_context("encounter", "Encounter")])
+
+        assert_output(/untraced .* launch context encounter: no group for Encounter/) do
+          assert_empty trace(form, profiles: patient_profiles)
+        end
+      end
+
+      private
+
+      def patient_profiles
+        { AU_CORE_PATIENT => profile("Patient"), AU_BASE_PATIENT => profile("Patient") }
+      end
+
+      # `value_id: true` gives the name as `valueId`, like older SDC versions.
+      def launch_context(name, *types, value_id: false)
+        name_part = value_id ? { "valueId" => name } : { "valueCoding" => { "code" => name } }
+        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext",
+          "extension" => [{ "url" => "name", **name_part },
+                          *types.map { |type| { "url" => "type", "valueCode" => type } }] }
       end
     end
   end
