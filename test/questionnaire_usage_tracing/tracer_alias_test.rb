@@ -14,7 +14,8 @@ module InfernoSuiteGenerator
       def test_an_item_reads_a_query_through_a_chain_of_aliases
         entry = trace(height_chain_form)[BODY_HEIGHT].first
 
-        assert_equal [{ link_id: "height", text: "Height", extension: "initialExpression", via: "ObsBodyHeightValue" }],
+        assert_equal [{ link_id: "height", text: "Height", extension: "initialExpression", via: "ObsBodyHeightValue",
+                        reads: ["value.value"] }],
                      entry[:used_in]
         assert_equal ["value.value"], entry[:elements_read]
       end
@@ -35,7 +36,8 @@ module InfernoSuiteGenerator
         entry = trace(alias_in_a_group_form)[BODY_HEIGHT].first
 
         assert_equal [{ link_id: "vitals", text: "Vitals", extension: "variable" },
-                      { link_id: "height", text: "Height", extension: "initialExpression", via: "HeightLatest" }],
+                      { link_id: "height", text: "Height", extension: "initialExpression", via: "HeightLatest",
+                        reads: ["value"] }],
                      entry[:used_in]
         assert_equal ["value"], entry[:elements_read]
       end

@@ -17,7 +17,8 @@ module InfernoSuiteGenerator
 
         assert_equal(["launch_context"], trace.map { |entry| entry["source"] })
         assert_equal ["birthDate"], trace.first["elements_read"]
-        assert_equal [{ "link_id" => "dob", "text" => "Date of birth", "extension" => "initialExpression" }],
+        assert_equal [{ "link_id" => "dob", "text" => "Date of birth", "extension" => "initialExpression",
+                        "reads" => ["birthDate"] }],
                      trace.first["used_in"]
       end
 

@@ -292,14 +292,16 @@ module InfernoSuiteGenerator
 
         # One usage per expression that reads the source. `via` names the alias
         # it went through, and is left out when the expression reads the source
-        # directly.
+        # directly. `reads` lists the element paths the expression reads, and is
+        # left out when it reads none.
         def item_usages(item)
           @form.expressions(item).filter_map do |expression|
             reads = reads_of(expression[:expression], item)
             next if reads.empty?
 
-            @paths.concat(reads.filter_map { |read| read_path(*read) })
-            Form.usage(item, expression[:extension], via: via(reads.map(&:first)))
+            paths = reads.filter_map { |read| read_path(*read) }
+            @paths.concat(paths)
+            Form.usage(item, expression[:extension], via: via(reads.map(&:first)), reads: paths.reject(&:empty?).uniq)
           end
         end
 
@@ -335,8 +337,8 @@ module InfernoSuiteGenerator
         FHIRPATH = "text/fhirpath"
         QUERY = "application/x-fhir-query"
 
-        def self.usage(item, extension, via: nil)
-          { link_id: item["linkId"], text: item["text"], extension:, via: }.compact
+        def self.usage(item, extension, via: nil, reads: [])
+          { link_id: item["linkId"], text: item["text"], extension:, via:, reads: (reads unless reads.empty?) }.compact
         end
 
         def initialize(questionnaire)

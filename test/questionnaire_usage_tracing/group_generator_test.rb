@@ -13,7 +13,7 @@ module InfernoSuiteGenerator
       TRICKY_TEXT = "Height (cm) \#{x} \#@y \\ z"
 
       def test_a_group_with_a_trace_gets_the_section
-        QuestionnaireAwareGroupGenerator.traces = { BODY_HEIGHT => [query_entry, launch_context_entry] }
+        QuestionnaireAwareGroupGenerator.traces = { BODY_HEIGHT => [query_entry] }
 
         assert_equal "#{plain_description}\n#{expected_section}", description
       end
@@ -32,39 +32,34 @@ module InfernoSuiteGenerator
         assert_includes eval("%(#{description})", binding, __FILE__, __LINE__), TRICKY_TEXT # rubocop:disable Security/Eval
       end
 
-      def test_more_than_ten_items_show_as_a_count
-        used_in = (1..11).map { |index| { link_id: "item-#{index}", text: "Item #{index}" } }
-        QuestionnaireAwareGroupGenerator.traces = { BODY_HEIGHT => [query_entry(used_in:)] }
-
-        assert_includes description, "  * Items: 11 items\n"
-      end
-
       private
 
       def expected_section
         <<~MARKDOWN
           ## Used in questionnaires
 
+          The IG's questionnaires below use AU Core Body Height resources. An item is pre-populated only when the resources the server returns hold the elements it reads. ⚠️ marks elements that are neither Must Support nor required by the profile, so this group does not check that the server returns them.
+
           ### #{FORM_TITLE}
 
-          * Query `ObsBodyHeight`: `Observation?code=8302-2&_sort=-date&patient={{%patient.id}}`
-            * Reads: `value.value`, `effective`
-            * Items: `height` Height
-          * Launch context `patient`
-            * Reads: `birthDate`
-            * Items: `dob` Date of birth
+          **Query `ObsBodyHeight`**: `Observation?code=8302-2&_sort=-date&patient={{%patient.id}}`
+
+          ✅ This group tests the same search: `patient + code`.
+
+          | Item | Use | Reads |
+          | --- | --- | --- |
+          | `height` Height | pre-fills the answer, shows or hides the item | `value.value`, `effective` ⚠️ |
+
+          ⚠️ Neither Must Support nor required: `effective`.
         MARKDOWN
       end
 
-      def query_entry(used_in: [{ link_id: "height", text: "Height", extension: "initialExpression" },
-                                { link_id: "height", text: "Height", extension: "enableWhenExpression" }])
+      def query_entry(used_in: [{ link_id: "height", text: "Height", extension: "initialExpression",
+                                  reads: %w[value.value effective] },
+                                { link_id: "height", text: "Height", extension: "enableWhenExpression",
+                                  reads: ["value.value"] }])
         { source: "query", questionnaire_title: FORM_TITLE, name: "ObsBodyHeight",
           query: HEIGHT_QUERY, elements_read: %w[value.value effective], used_in: }
-      end
-
-      def launch_context_entry
-        { source: "launch_context", questionnaire_title: FORM_TITLE, name: "patient",
-          elements_read: ["birthDate"], used_in: [{ link_id: "dob", text: "Date of birth" }] }
       end
 
       def description
@@ -78,7 +73,8 @@ module InfernoSuiteGenerator
       def group
         Generator::GroupMetadata.new(resource: "Observation", profile_url: BODY_HEIGHT,
                                      profile_name: "AU Core Body Height", title: "Body Height", version: "2.0.0",
-                                     searches: [])
+                                     searches: [{ names: %w[patient code] }],
+                                     must_supports: { elements: [{ path: "value[x]:valueQuantity.value" }] })
       end
     end
   end

@@ -49,7 +49,7 @@ module InfernoSuiteGenerator
           source: "query", **form_header,
           name: "ObsBodyHeight", defined_at: "root", query: HEIGHT_QUERY, matched_by: "code",
           elements_read: ["value.value"],
-          used_in: [{ link_id: "height", text: "Height", extension: "initialExpression" }]
+          used_in: [{ link_id: "height", text: "Height", extension: "initialExpression", reads: ["value.value"] }]
         }
       end
 

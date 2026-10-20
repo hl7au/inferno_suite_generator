@@ -19,7 +19,8 @@ module InfernoSuiteGenerator
         assert_equal [{
           source: "launch_context", **form_header,
           name: "patient", defined_at: "root", matched_by: "resource_type", elements_read: ["birthDate"],
-          used_in: [{ link_id: "dob", text: "Date of birth", extension: "initialExpression" }]
+          used_in: [{ link_id: "dob", text: "Date of birth", extension: "initialExpression",
+                      reads: ["birthDate"] }]
         }], trace(form, profiles: patient_profiles)[AU_CORE_PATIENT]
       end
 
