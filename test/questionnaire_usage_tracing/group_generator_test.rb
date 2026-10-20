@@ -28,7 +28,7 @@ module InfernoSuiteGenerator
         entry = query_entry(used_in: [{ link_id: "height", text: TRICKY_TEXT }])
         QuestionnaireAwareGroupGenerator.traces = { BODY_HEIGHT => [entry] }
 
-        assert_includes description, "`height` Height \\(cm\\) \\\#{x} \\\#@y \\\\ z"
+        assert_includes description, "**Height \\(cm\\) \\\#{x} \\\#@y \\\\ z"
         assert_includes eval("%(#{description})", binding, __FILE__, __LINE__), TRICKY_TEXT # rubocop:disable Security/Eval
       end
 
@@ -38,19 +38,13 @@ module InfernoSuiteGenerator
         <<~MARKDOWN
           ## Used in questionnaires
 
-          The IG's questionnaires below use AU Core Body Height resources. An item is pre-populated only when the resources the server returns hold the elements it reads. ⚠️ marks elements that are neither Must Support nor required by the profile, so this group does not check that the server returns them.
+          These questionnaires in the IG read or create AU Core Body Height resources. A form can pre-fill an item only if the server returns the elements the item reads. Elements marked \\(not checked\\) are neither Must Support nor required by the profile, so this group's tests do not check them.
 
-          ### #{FORM_TITLE}
-
-          **Query `ObsBodyHeight`**: `Observation?code=8302-2&_sort=-date&patient={{%patient.id}}`
-
-          ✅ This group tests the same search: `patient + code`.
-
-          | Item | Use | Reads |
-          | --- | --- | --- |
-          | `height` Height | pre-fills the answer, shows or hides the item | `value.value`, `effective` ⚠️ |
-
-          ⚠️ Neither Must Support nor required: `effective`.
+          - **#{FORM_TITLE}**
+            - **Query ObsBodyHeight**: searches Observation resources
+              - Request: #{HEIGHT_QUERY}
+              - This group tests the same search: patient + code
+              - **Height**: pre-fills the answer, shows or hides the item; reads value.value, effective \\(not checked\\)
         MARKDOWN
       end
 
