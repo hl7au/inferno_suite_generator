@@ -10,7 +10,7 @@ Generates a read interaction test for every profile whose CapabilityStatement de
 }
 ```
 
-While the built-in read generator still exists, both would generate the same tests (same ids and file names), so generation stops with an error naming the duplicate test. Enable this plugin once the built-in read generator is gone.
+When this plugin is enabled, the host skips its built-in `ReadTestGenerator`, so the suite gets one read test per group, from the plugin. Without the plugin, the built-in read tests are generated as before.
 
 Each read test goes where the built-in one was: first in delayed groups, otherwise right after the group's search tests, before include, Provenance revinclude, validation and must support tests. Those later tests check the resources the read test keeps in scratch.
 

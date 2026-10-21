@@ -14,6 +14,12 @@ module InfernoSuiteGenerator
         @plugins = plugins
       end
 
+      # Whether a plugin with this id is enabled. The host uses it to skip a built-in generator that a plugin
+      # replaces, such as the built-in read tests when the read plugin is on.
+      def plugin?(id)
+        plugins.any? { |plugin| plugin.id == id }
+      end
+
       # host: the Context fields the host provides: ig_resources, ig_metadata, ig_demodata, base_output_dir
       # and config.
       def run(**host)

@@ -24,7 +24,7 @@ The host keeps its own files as they are. Plugin data goes into separate `plugin
 ## 2. Why
 
 - Teams can add IG-specific tests without forking the generator.
-- Each test type can move into its own isolated plugin, with its own tests and docs, one at a time. The read tests are the first: once the plugin is in use, the built-in read generator can be deleted.
+- Each test type can move into its own isolated plugin, with its own tests and docs, one at a time. The read tests are the first: while the `read` plugin is enabled, the host skips its built-in read generator, and once every suite uses the plugin, the built-in generator can be deleted.
 - The host's `metadata.yml` and `demodata.yml` stay unchanged, so nothing that reads them breaks.
 
 `configs.generic.register_generators` still works. Plugins are the structured replacement: they carry a manifest, a version and a contract, and can bring their own data and runtime files.

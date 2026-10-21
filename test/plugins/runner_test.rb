@@ -84,6 +84,15 @@ module InfernoSuiteGenerator
         assert_equal %w[second first], RUNS
       end
 
+      def test_plugin_tells_whether_a_plugin_id_is_enabled
+        write_plugin(File.join(@dir, "read"), id: "read", body: RECORD_RUN)
+        runner = Runner.new(Loader.new({ "read" => { "path" => "read" } }, base_dir: @dir).load)
+
+        assert runner.plugin?("read")
+        refute runner.plugin?("other")
+        refute Runner.new.plugin?("read")
+      end
+
       def test_runs_nothing_and_writes_nothing_without_plugins
         Runner.new.run(base_output_dir: @dir)
 

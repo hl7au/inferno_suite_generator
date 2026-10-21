@@ -108,8 +108,9 @@ module InfernoSuiteGenerator
       generate_custom_tests_with_type("validation")
     end
 
+    # The read plugin replaces the built-in read tests, so they are generated only while it is off.
     def generate_read_tests
-      ReadTestGenerator.generate(ig_metadata, base_output_dir)
+      ReadTestGenerator.generate(ig_metadata, base_output_dir) unless plugin_runner.plugin?("read")
       generate_custom_tests_with_type("read")
     end
 
