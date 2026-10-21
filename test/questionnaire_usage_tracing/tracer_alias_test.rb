@@ -56,6 +56,19 @@ module InfernoSuiteGenerator
         assert_equal [1], parsed.values.uniq
       end
 
+      def test_each_chain_is_read_once_per_name
+        read = Hash.new(0)
+        paths_in = Ast.method(:paths_in)
+        counting_paths_in = lambda do |tree, name, bundle:|
+          read[[tree.object_id, name, bundle]] += 1
+          paths_in.call(tree, name, bundle:)
+        end
+
+        Ast.stub(:paths_in, counting_paths_in) { trace(height_chain_form) }
+
+        assert_equal [1], read.values.uniq
+      end
+
       def test_aliases_that_reference_each_other_do_not_loop
         form = questionnaire(extension: [query_variable("ObsBodyHeight", HEIGHT_QUERY),
                                          fhirpath_variable("A", "%B | %ObsBodyHeight.entry.resource"),

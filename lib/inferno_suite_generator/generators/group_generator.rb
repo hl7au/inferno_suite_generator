@@ -10,12 +10,15 @@ module InfernoSuiteGenerator
     class GroupGenerator < BasicTestGenerator
       class << self
         def generate(ig_metadata, base_output_dir)
+          suite_groups(ig_metadata).each { |group| new(group, base_output_dir, ig_metadata).generate }
+        end
+
+        # The groups that are not excluded, the ones `generate` generates.
+        def suite_groups(ig_metadata)
+          config = Registry.get(:config_keeper)
           ig_metadata.ordered_groups
                      .compact
-                     .reject do |group|
-                       Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
-                     end
-                     .each { |group| new(group, base_output_dir, ig_metadata).generate }
+                     .reject { |group| config.exclude_resource?(group.profile_url, group.resource) }
         end
       end
 

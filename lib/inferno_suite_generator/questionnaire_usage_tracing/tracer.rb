@@ -44,6 +44,8 @@ module InfernoSuiteGenerator
         names = Array(questionnaire["extension"]).filter_map do |extension|
           extension["valueString"] if extension["url"] == ASSEMBLE_CONTEXT_URL
         end
+        return if names.empty?
+
         names &= references(form, questionnaire)
         return if names.empty?
 
@@ -53,7 +55,7 @@ module InfernoSuiteGenerator
 
       # The `%Name` names the expressions on the root and on items reference.
       def references(form, questionnaire)
-        expressions = [questionnaire, *form.scope(questionnaire)].flat_map { |owner| form.expressions(owner) }
+        expressions = form.scope(questionnaire).flat_map { |owner| form.expressions(owner) }
         expressions.flat_map { |expression| form.fhirpath.references(expression[:expression]) }
       end
 
@@ -93,16 +95,18 @@ module InfernoSuiteGenerator
       end
 
       # One entry per type of the launch context that has groups. `%name` is
-      # the resource itself, not a Bundle, and its chains carry no type.
+      # the resource itself, not a Bundle. A chain that picks one type, like
+      # `%user.where(resourceType = 'PractitionerRole')`, counts for that
+      # type only.
       def add_launch_context(traces, form, launch_context)
         name = launch_context[:name]
         source = { name:, owner: launch_context[:owner], bundle: false }
-        usages = nil
         launch_context[:types].each do |type|
           result = @matcher.match(type, any_of_type: true, context: "#{form.label} launch context #{name}")
           next unless result
 
-          used_in, elements_read = usages ||= Usages.new(form, source, ->(_type) { true }).call
+          accept = ->(chain_type) { chain_type.nil? || chain_type == type }
+          used_in, elements_read = Usages.new(form, source, accept).call
           add(traces, result, { source: "launch_context", **form.header, name:, defined_at: launch_context[:defined_at],
                                 matched_by: result[:matched_by], elements_read:, used_in: })
         end
@@ -176,12 +180,11 @@ module InfernoSuiteGenerator
         private
 
         def include_values
-          QuerySearch.pairs(@variable[:expression]).filter_map do |name, value|
-            next unless name.start_with?("_include")
-            next value if name == "_include" && value.split(":").first == @resource_type
-
+          query = @variable[:expression]
+          QuerySearch.other_includes(query).each do |name, value|
             log("skipping #{name}=#{value} in #{label}: only _include of #{@resource_type} is traced")
           end
+          QuerySearch.includes(query)
         end
 
         def targets_of(value)
@@ -197,7 +200,7 @@ module InfernoSuiteGenerator
         end
 
         # The types other than the query's own that the form names on
-        # `%Name.entry.resource`, in the query's scope.
+        # `%Name.entry` or `%Name.entry.resource`, in the query's scope.
         def of_types
           name = @variable[:name]
           fhirpath = @form.fhirpath
@@ -206,11 +209,12 @@ module InfernoSuiteGenerator
                      .flat_map { |chain| chain[:types] }.uniq - [@resource_type]
         end
 
+        # Variables are `variable` extensions, so the owners' expressions
+        # include them.
         def expressions
-          owner = @variable[:owner]
-          @form.scope(owner).flat_map { |item| @form.expressions(item).map { |expression| expression[:expression] } } +
-            @form.fhirpath_variables.select { |variable| @form.covers?(owner, variable[:owner]) }
-                 .map { |variable| variable[:expression] }
+          @form.scope(@variable[:owner]).flat_map do |owner|
+            @form.expressions(owner).map { |expression| expression[:expression] }
+          end
         end
 
         def log(message)
@@ -283,15 +287,16 @@ module InfernoSuiteGenerator
       #
       # An alias is a `text/fhirpath` variable whose expression reads the source
       # or another alias. Its prefix is the parent's prefix plus the path of its
-      # own chain, or `nil` when that chain stopped at `ofType` or `select`. It
+      # own chain, or `nil` when that chain stopped (see `Ast::ChainPath`). It
       # keeps the chain's type, and only chains whose type `accept` takes count.
-      # A chain's own type counts only on a name that is a resource, with the
-      # prefix `""`.
+      # A chain's own type counts only on a name that is a resource, or Bundle
+      # entries, with the prefix `""`. An alias of a chain that ends at Bundle
+      # entries, like `%q.entry.where(resource is Condition)`, is entries too.
       class Usages
         Name = Struct.new(:name, :owner, :bundle, :type, :prefix, :alias, keyword_init: true)
 
         # `source` is `{ name:, owner:, bundle: }`. `bundle: true` for a query,
-        # whose `%Name` is a Bundle.
+        # whose `%Name` is a Bundle. `Ast::ChainPath` lists the values.
         def initialize(form, source, accept)
           @form = form
           @accept = accept
@@ -303,7 +308,7 @@ module InfernoSuiteGenerator
         # `[used_in, elements_read]`
         def call
           resolve_aliases
-          used_in = @form.scope(@source.owner).flat_map { |item| item_usages(item) }
+          used_in = @form.scope(@source.owner).flat_map { |owner| item_usages(owner) }
           [used_in.uniq, @paths.reject(&:empty?).uniq]
         end
 
@@ -324,9 +329,7 @@ module InfernoSuiteGenerator
 
           name, chain = reads.first
           @paths.concat(reads.flat_map { |read| read_paths(*read) })
-          @names << Name.new(name: variable[:name], owner: variable[:owner], bundle: false, alias: true,
-                             type: type_of(name, chain), prefix: chain[:stopped] ? nil : read_path(name, chain))
-          true
+          add_name(variable, chain, type: type_of(name, chain), prefix: chain[:stopped] ? nil : read_path(name, chain))
         end
 
         # A variable that picks resources of several types, like
@@ -338,10 +341,15 @@ module InfernoSuiteGenerator
           return false if @accept.call(nil)
 
           untyped = reads_of(variable[:expression], variable[:owner], accept: lambda(&:nil?))
-          return false unless untyped.any? { |name, chain| resource?(name, chain) }
+          _name, chain = untyped.find { |name, read| resource?(name, read) }
+          return false unless chain
 
-          @names << Name.new(name: variable[:name], owner: variable[:owner], bundle: false, alias: true, type: nil,
-                             prefix: "")
+          add_name(variable, chain, type: nil, prefix: "")
+        end
+
+        def add_name(variable, chain, type:, prefix:)
+          @names << Name.new(name: variable[:name], owner: variable[:owner], bundle: chain[:entries] ? :entries : false,
+                             alias: true, type:, prefix:)
           true
         end
 
@@ -354,7 +362,7 @@ module InfernoSuiteGenerator
         # directly. `reads` lists the element paths the expression reads, and is
         # left out when it reads none.
         def item_usages(item)
-          @form.expressions(item).filter_map do |expression|
+          usage_expressions(item).filter_map do |expression|
             reads = reads_of(expression[:expression], item)
             next if reads.empty?
 
@@ -362,6 +370,12 @@ module InfernoSuiteGenerator
             @paths.concat(paths)
             Form.usage(item, expression[:extension], via: via(reads.map(&:first)), reads: paths.reject(&:empty?).uniq)
           end
+        end
+
+        # A root variable is not a usage: the items that read it are.
+        def usage_expressions(item)
+          expressions = @form.expressions(item)
+          @form.root?(item) ? expressions.reject { |expression| expression[:extension] == "variable" } : expressions
         end
 
         def via(names)
@@ -398,6 +412,10 @@ module InfernoSuiteGenerator
 
       # A questionnaire as a Hash, with the walks the tracer needs. The root and
       # the items that can define variables are its "owners".
+      #
+      # A usage on the root, like a root `itemExtractionContext`, has no
+      # `link_id` or `text`: every item has a `linkId`, and the root's `text` is
+      # its narrative.
       class Form
         VARIABLE_URL = "http://hl7.org/fhir/StructureDefinition/variable"
         LAUNCH_CONTEXT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext"
@@ -406,7 +424,8 @@ module InfernoSuiteGenerator
         QUERY = "application/x-fhir-query"
 
         def self.usage(item, extension, via: nil, reads: [])
-          { link_id: item["linkId"], text: item["text"], extension:, via:, reads: (reads unless reads.empty?) }.compact
+          text = item["text"] if item["text"].is_a?(String)
+          { link_id: item["linkId"], text:, extension:, via:, reads: (reads unless reads.empty?) }.compact
         end
 
         def initialize(questionnaire)
@@ -416,12 +435,11 @@ module InfernoSuiteGenerator
         # The form's parsed FHIRPath, shared by every source traced in it.
         def fhirpath = (@fhirpath ||= Ast::Cache.new)
 
+        # The `id` stands in for a missing `url`, so forms without one stay apart.
         def header
-          {
-            questionnaire_url: @questionnaire["url"],
-            questionnaire_version: @questionnaire["version"],
-            questionnaire_title: @questionnaire["title"]
-          }.compact
+          url = @questionnaire["url"]
+          { questionnaire_url: url, questionnaire_id: (@questionnaire["id"] unless url),
+            questionnaire_version: @questionnaire["version"], questionnaire_title: @questionnaire["title"] }.compact
         end
 
         def label
@@ -465,10 +483,10 @@ module InfernoSuiteGenerator
           @fhirpath_variables ||= variables_in(FHIRPATH)
         end
 
-        # A root variable covers every item. An item variable covers that item
-        # and its children.
+        # The owner and the items under it: the root and every item for a root
+        # variable, the item and its children for an item variable.
         def scope(owner)
-          owner.equal?(@questionnaire) ? descendants(owner) : [owner, *descendants(owner)]
+          [owner, *descendants(owner)]
         end
 
         # Whether a variable defined on `owner` (the root or an item) is visible

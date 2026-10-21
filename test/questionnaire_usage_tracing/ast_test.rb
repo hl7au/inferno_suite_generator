@@ -79,6 +79,11 @@ module InfernoSuiteGenerator
         assert_paths [chain(path)], expression, "patient"
       end
 
+      def test_paths_does_not_take_the_url_of_a_not_equal_filter
+        assert_paths [chain("extension.value", criteria: ["extension.url"])],
+                     "%p.extension.where(url != 'http://x/a').value", "p"
+      end
+
       def test_paths_does_not_take_the_url_of_a_sub_extension_filter
         assert_paths [chain("extension.value", criteria: ["extension.extension[url=type]"])],
                      "%patient.extension.where(extension.where(url='type').exists()).value", "patient"
@@ -97,6 +102,12 @@ module InfernoSuiteGenerator
 
       def test_paths_stops_at_of_type_outside_a_bundle
         assert_paths [chain("value", stopped: true)], "%obs.value.ofType(Quantity).value", "obs"
+      end
+
+      def test_paths_stops_where_the_chain_leaves_the_resource
+        assert_paths [chain("subject", stopped: true)], "%obs.subject.resolve().name.given", "obs"
+        assert_paths [chain("component", stopped: true)], "%obs.component.descendants().value", "obs"
+        assert_paths [chain("", stopped: true)], "%obs.children().code", "obs"
       end
 
       def test_paths_reads_an_alias_chain
@@ -135,6 +146,19 @@ module InfernoSuiteGenerator
 
       def test_paths_takes_no_type_from_an_as_filter_on_entry
         assert_paths [chain("code")], "%q.entry.where(resource as Observation).resource.code", "q", bundle: true
+      end
+
+      def test_paths_reads_the_type_of_a_chain_that_ends_at_entries
+        assert_paths [chain("", type: "Condition").merge(entries: true)],
+                     "%q.entry.where(resource is Condition)", "q", bundle: true
+        assert_paths [chain("", type: "Condition").merge(entries: true)],
+                     "%q.entry.where(resource is Condition).first()", "q", bundle: true
+      end
+
+      def test_paths_reads_an_alias_of_entries_from_its_resource
+        assert_paths [chain("code")], "%conds.resource.code", "conds", bundle: :entries
+        assert_paths [chain("", type: "Condition").merge(entries: true)],
+                     "%conds.where(resource is Condition)", "conds", bundle: :entries
       end
 
       def test_paths_gives_no_element_for_a_chain_that_reads_the_bundle

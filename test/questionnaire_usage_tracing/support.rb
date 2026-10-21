@@ -185,7 +185,6 @@ module InfernoSuiteGenerator
 
       def teardown
         Registry.register(:config_keeper, @previous_config_keeper)
-        QuestionnaireAwareGroupGenerator.traces = nil
         FileUtils.remove_entry(@result_folder)
         super
       end

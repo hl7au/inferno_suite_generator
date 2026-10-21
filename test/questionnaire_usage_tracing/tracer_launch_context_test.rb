@@ -51,6 +51,32 @@ module InfernoSuiteGenerator
         assert_equal ["name.text"], traces[AU_CORE_PRACTITIONER].first[:elements_read]
       end
 
+      def test_a_chain_that_picks_one_type_counts_for_that_type_only
+        fhirpath = "%user.where(resourceType = 'Practitioner').qualification.code"
+        form = questionnaire(extension: [launch_context("user", "Practitioner", "Patient")],
+                             item: [item("qualification", "Qualification", expression("initialExpression", fhirpath))])
+        traces = trace(form, profiles: patient_profiles.merge(AU_CORE_PRACTITIONER => profile("Practitioner")))
+
+        assert_equal ["qualification.code"], traces[AU_CORE_PRACTITIONER].first[:elements_read]
+        assert_empty traces[AU_CORE_PATIENT].first[:used_in]
+      end
+
+      def test_an_expression_on_the_root_is_a_usage
+        form = questionnaire(extension: [launch_context("patient", "Patient"),
+                                         expression("itemExtractionContext", "%patient.name")])
+        entry = trace(form, profiles: patient_profiles)[AU_CORE_PATIENT].first
+
+        assert_equal [{ extension: "itemExtractionContext", reads: ["name"] }], entry[:used_in]
+      end
+
+      def test_a_form_without_a_url_is_named_by_its_id
+        form = questionnaire(extension: [launch_context("patient", "Patient")]).except("url").merge("id" => "intake")
+        entry = trace(form, profiles: patient_profiles)[AU_CORE_PATIENT].first
+
+        assert_equal "intake", entry[:questionnaire_id]
+        refute entry.key?(:questionnaire_url)
+      end
+
       def test_a_launch_context_without_a_group_for_its_type_is_untraced
         form = questionnaire(extension: [launch_context("encounter", "Encounter")])
 

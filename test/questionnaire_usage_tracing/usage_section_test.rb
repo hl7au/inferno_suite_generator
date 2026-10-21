@@ -130,6 +130,28 @@ module InfernoSuiteGenerator
         assert_includes markdown, "- **#{FORM_URL}, version 0.2.0**\n"
       end
 
+      def test_a_query_whose_only_include_is_not_traced_is_left_out
+        query = "PractitionerRole?_id=1&_include:iterate=PractitionerRole:location"
+
+        assert_empty section([query_entry(query, used_in: [])])
+      end
+
+      def test_a_compartment_search_selects_by_its_compartment
+        group = patient_group(searches: [{ names: %w[patient code] }])
+
+        assert_includes section([query_entry("Patient/{{%patient.id}}/Observation?code=x")], group:),
+                        "- This group tests the same search: patient + code\n"
+      end
+
+      def test_questionnaires_without_a_url_stay_apart
+        first = launch_entry.except(:questionnaire_url).merge(questionnaire_id: "first")
+        second = launch_entry.except(:questionnaire_url, :questionnaire_title).merge(questionnaire_id: "second")
+        markdown = section([first, second])
+
+        assert_includes markdown, "- **#{FORM_TITLE}**\n"
+        assert_includes markdown, "- **second**\n"
+      end
+
       def test_a_read_says_it_reads_one_resource
         entry = query_entry("Patient/{{%patient.id}}").merge(read: true)
 
@@ -163,6 +185,17 @@ module InfernoSuiteGenerator
       # `deceased[x]`; FHIRPath reads it as `deceased`.
       def test_a_choice_element_with_a_must_support_type_slice_counts_as_checked
         assert_includes section([launch_entry(reads: %w[deceased])]), "reads deceased\n"
+      end
+
+      def test_a_choice_element_read_by_its_type_counts_as_checked
+        assert_includes section([launch_entry(reads: %w[deceasedBoolean deceasedDateTime.value])]),
+                        "reads deceasedBoolean, deceasedDateTime.value (not checked)\n"
+      end
+
+      def test_a_usage_on_the_root_is_named_as_the_whole_form
+        markdown = section([launch_entry(used_in: [{ extension: "itemExtractionContext", reads: ["name"] }])])
+
+        assert_includes markdown, "- **The whole form**: sets the extraction context; reads name (not checked)\n"
       end
 
       def test_an_item_without_text_is_named_by_its_link_id

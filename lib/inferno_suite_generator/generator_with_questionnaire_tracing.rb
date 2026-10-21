@@ -37,19 +37,17 @@ module InfernoSuiteGenerator
       end
 
       def generate_groups
-        QuestionnaireUsageTracing::QuestionnaireAwareGroupGenerator.traces = questionnaire_traces
-        QuestionnaireUsageTracing::QuestionnaireAwareGroupGenerator.generate(ig_metadata, base_output_dir)
+        QuestionnaireUsageTracing::QuestionnaireAwareGroupGenerator.generate(ig_metadata, base_output_dir,
+                                                                             questionnaire_traces)
         suite_groups.each { |group| write_plugins_file(group) }
       end
 
       private
 
-      # The groups that are not excluded, the same ones `GroupGenerator`
-      # generates. Kept so tracing and `plugins.yml` see the same groups.
+      # The groups `GroupGenerator` generates, so tracing and `plugins.yml` see
+      # the same ones.
       def suite_groups
-        config = Registry.get(:config_keeper)
-        @suite_groups ||= ig_metadata.ordered_groups.compact
-                                     .reject { |group| config.exclude_resource?(group.profile_url, group.resource) }
+        @suite_groups ||= GroupGenerator.suite_groups(ig_metadata)
       end
 
       # A group without a trace has the key removed, so a trace from an earlier

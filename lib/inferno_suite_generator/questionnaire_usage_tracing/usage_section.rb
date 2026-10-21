@@ -23,8 +23,9 @@ module InfernoSuiteGenerator
       def initialize(entries, group)
         @group = group
         @must_support = MustSupport.new(group)
-        @forms = entries.select { |entry| shown?(entry) }
-                        .group_by { |entry| entry.values_at(:questionnaire_url, :questionnaire_version) }
+        @forms = entries.select { |entry| shown?(entry) }.group_by do |entry|
+          entry.values_at(:questionnaire_url, :questionnaire_id, :questionnaire_version)
+        end
       end
 
       def empty?
@@ -61,7 +62,7 @@ module InfernoSuiteGenerator
         ItemLines.new(entry[:used_in].to_a, @must_support)
       end
 
-      # The title, or the URL for an untitled form, with the version when
+      # The title, or the URL or id for an untitled form, with the version when
       # another questionnaire shown has the same title, as an assembled modular
       # form does.
       def form_title(entry)
@@ -72,7 +73,7 @@ module InfernoSuiteGenerator
       end
 
       def title_of(entry)
-        entry[:questionnaire_title] || entry[:questionnaire_url]
+        entry[:questionnaire_title] || entry[:questionnaire_url] || entry[:questionnaire_id] || "Untitled questionnaire"
       end
 
       def entry_lines(entry)
@@ -131,6 +132,7 @@ module InfernoSuiteGenerator
     class ItemLines
       MAX = 25
       HIDDEN_USES = %w[variable].freeze
+      ROOT_LABEL = "The whole form"
 
       # What an item does with the source, by the short name of the extension
       # whose expression reads it.
@@ -181,10 +183,13 @@ module InfernoSuiteGenerator
         "reads #{paths.map { |path| read_label(path) }.join(", ")}" unless paths.empty?
       end
 
-      # The item's text, or its linkId when it has none.
+      # The item's text, or its linkId when it has none. A usage with neither
+      # is on the questionnaire root.
       def label(usage)
         text = usage[:text].to_s.split.join(" ")
-        text.empty? ? usage[:link_id].to_s : text.gsub(/[*_`\[\]]/) { |match| "\\#{match}" }
+        return text.gsub(/[*_`\[\]]/) { |match| "\\#{match}" } unless text.empty?
+
+        usage[:link_id]&.to_s || ROOT_LABEL
       end
 
       # The path with an extension the profile does not slice shortened to the
@@ -232,6 +237,9 @@ module InfernoSuiteGenerator
     # the profile slices as Must Support as `extension:sliceName`, like the
     # profile does. A path inside such an extension counts as checked, since
     # the extension's own profile defines what it holds.
+    #
+    # A trace path names a choice element by its type, like `valueQuantity`,
+    # where the profile has `value[x]`, so `covered?` compares it as `value`.
     class MustSupport
       ALWAYS_PRESENT = %w[id].freeze
       EXTENSION_URL = /\A((?:modifierE|e)xtension)\[url=(.+)\]\z/
@@ -239,8 +247,9 @@ module InfernoSuiteGenerator
 
       def initialize(group)
         must_supports = group.must_supports || {}
-        @paths = checked_paths(must_supports[:elements].to_a + must_supports[:slices].to_a,
-                               group.mandatory_elements.to_a)
+        paths = element_paths(must_supports, group.mandatory_elements.to_a)
+        @paths = paths.to_set { |path| plain(path) }
+        @choices = choice_paths(paths)
         @slices = must_supports[:extensions].to_a.to_h { |extension| slice(extension) }
       end
 
@@ -252,7 +261,7 @@ module InfernoSuiteGenerator
       end
 
       def covered?(label)
-        ALWAYS_PRESENT.include?(label) || @paths.include?(label) ||
+        ALWAYS_PRESENT.include?(label) || @paths.include?(without_choice_types(label)) ||
           segments(label).any? { |segment| segment.match?(EXTENSION_SLICE) }
       end
 
@@ -261,9 +270,30 @@ module InfernoSuiteGenerator
       # Must Support element and slice paths are relative, like
       # `value[x]:valueQuantity.value` or `onset[x]` for an `onsetDateTime`
       # type slice; mandatory ones start with the type, like `Observation.status`.
-      def checked_paths(elements, mandatory)
-        paths = elements.map { |element| element[:path] } + mandatory.map { |path| path.split(".", 2).last }
-        paths.compact.to_set { |path| plain(path) }
+      def element_paths(must_supports, mandatory)
+        elements = must_supports[:elements].to_a + must_supports[:slices].to_a
+        (elements.map { |element| element[:path] } + mandatory.map { |path| path.split(".", 2).last }).compact
+      end
+
+      # `[parent path, name]` for each choice element, like `["", "value"]`
+      # for `value[x]:valueQuantity.value`.
+      def choice_paths(paths)
+        paths.filter_map do |path|
+          parent, _, name = plain(path[/\A.*?\[x\]/]).rpartition(".") if path.include?("[x]")
+          [parent, name] if name
+        end.to_set
+      end
+
+      # The label with each segment that names a choice element by its type,
+      # like `valueQuantity` or `effectiveDateTime`, written as the element.
+      def without_choice_types(label)
+        segments(label).each_with_object([]) do |segment, done|
+          done << (choice_name(done.join("."), segment) || segment)
+        end.join(".")
+      end
+
+      def choice_name(parent, segment)
+        @choices.find { |choice_parent, name| choice_parent == parent && segment.match?(/\A#{name}[A-Z]/) }&.last
       end
 
       # `[[parent path, member, url], "extension:sliceName"]` for an extension

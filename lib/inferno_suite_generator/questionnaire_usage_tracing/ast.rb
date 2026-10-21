@@ -24,7 +24,8 @@ module InfernoSuiteGenerator
 
       # One `{ type:, types:, path:, stopped:, criteria: }` per longest chain
       # that starts with `%name`, including chains nested in function
-      # arguments. `ChainPath` says what each key holds.
+      # arguments. `ChainPath` says what each key holds, and what `bundle:`
+      # takes.
       def paths(expression, name, bundle:)
         paths_in(parse(expression), name, bundle:)
       end
@@ -135,12 +136,13 @@ module InfernoSuiteGenerator
         node["children"] || []
       end
 
-      # `references` and `paths` that parse each expression once, however many
+      # `references` and `paths` that read each expression once, however many
       # sources and aliases read it.
       class Cache
         def initialize
           @trees = {}
           @references = {}
+          @paths = {}
         end
 
         def references(expression)
@@ -148,7 +150,7 @@ module InfernoSuiteGenerator
         end
 
         def paths(expression, name, bundle:)
-          Ast.paths_in(tree(expression), name, bundle:)
+          @paths[[expression, name, bundle]] ||= Ast.paths_in(tree(expression), name, bundle:).freeze
         end
 
         private
@@ -164,22 +166,33 @@ module InfernoSuiteGenerator
       # - `types`: every resource type the chain names, including each branch
       #   of a `where(... or resourceType = 'T')` that picks several
       # - `path`: the member path, which ends where the chain stops
-      # - `stopped`: whether it stopped at `ofType` or `select`
+      # - `stopped`: whether it stopped at `ofType` or `select`, or left the
+      #   resource at `resolve`, `children` or `descendants`
       # - `criteria`: the paths the arguments of `where`, `exists`, `all` and
       #   `select` read, like `status` in `where(status = 'final')`
+      #
+      # A chain that ends at Bundle entries, like
+      # `%q.entry.where(resource is Condition)`, also has `entries: true`.
+      #
+      # `bundle:` says what the chain starts at: `true` for a Bundle,
+      # `:entries` for Bundle entries, and `false` for a resource.
       module ChainPath
-        STOP_FUNCTIONS = %w[ofType select].freeze
+        STOP_FUNCTIONS = %w[ofType select resolve children descendants].freeze
         CRITERIA_FUNCTIONS = %w[where exists all select].freeze
         EXTENSION_MEMBERS = %w[extension modifierExtension].freeze
+        # The functions that pick some of the Bundle entries, as an indexer does.
+        ENTRY_PICKS = %w[where first last tail skip take single].freeze
         # A chain that reads the Bundle itself instead of a resource in it.
         BUNDLE_READ = { type: nil, types: [], path: "", stopped: true, criteria: [] }.freeze
 
         module_function
 
         def read(steps, bundle:)
-          return read_bundle(steps) if bundle
-
-          read_path(steps)
+          case bundle
+          when :entries then read_entries(steps)
+          when true then read_bundle(steps)
+          else read_path(steps)
+          end
         end
 
         # The path and criteria paths of a chain inside a criteria argument,
@@ -190,21 +203,38 @@ module InfernoSuiteGenerator
         end
 
         # A Bundle chain reads a resource through `entry` and then `resource`.
-        # Functions and indexers between the two pick entries, and a
-        # `where(resource is T)` among them gives the type, as does an
-        # `ofType(T)` right after `resource`.
-        #
-        # A chain that never reaches `resource`, like `%q.total` or
-        # `%q.entry.count()`, reads the Bundle, so it reads no profile element.
-        # It counts as stopped, so an alias of it gets no prefix.
+        # A chain that never reaches `entry`, like `%q.total`, reads the
+        # Bundle, so it reads no profile element. It counts as stopped, so an
+        # alias of it gets no prefix.
         def read_bundle(steps)
-          return BUNDLE_READ unless member?(steps.first, "entry")
+          member?(steps.first, "entry") ? read_entries(steps.drop(1)) : BUNDLE_READ
+        end
 
-          between = steps.drop(1).take_while { |step| step[:kind] != :member }
-          rest = steps.drop(1 + between.size)
-          return BUNDLE_READ unless member?(rest.first, "resource")
+        # The steps after `entry`. Functions and indexers before `resource`
+        # pick entries, and a `where(resource is T)` among them gives the type,
+        # as does an `ofType(T)` right after `resource`.
+        #
+        # A chain that only picks entries, like
+        # `%q.entry.where(resource is Condition)`, ends at entries, so an alias
+        # of it reads `resource` the same way. One that does something else
+        # with them, like `%q.entry.count()` or `%q.entry.fullUrl`, reads the
+        # Bundle.
+        def read_entries(steps)
+          between = steps.take_while { |step| step[:kind] != :member }
+          rest = steps.drop(between.size)
+          return read_resource(rest.drop(1), entry_type(between)) if member?(rest.first, "resource")
+          return BUNDLE_READ unless rest.empty? && between.all? { |step| entry_pick?(step) }
 
-          read_resource(rest.drop(1), between.filter_map { |step| entry_filter_type(step) }.last)
+          type = entry_type(between)
+          { type:, types: [type].compact, path: "", stopped: false, criteria: [], entries: true }
+        end
+
+        def entry_type(between)
+          between.filter_map { |step| entry_filter_type(step) }.last
+        end
+
+        def entry_pick?(step)
+          step[:kind] == :index || (step[:kind] == :function && ENTRY_PICKS.include?(step[:name]))
         end
 
         # The steps after `resource`, with the type an entry filter gave.
@@ -270,7 +300,7 @@ module InfernoSuiteGenerator
 
         def url_equality(node)
           left, right = Ast.children(node)
-          string_literal(right) if left&.dig("text") == "url"
+          string_literal(right) if node["terminalNodeText"].to_a == ["="] && left&.dig("text") == "url"
         end
 
         # Reached only for an unqualified call: a qualified one is the right
