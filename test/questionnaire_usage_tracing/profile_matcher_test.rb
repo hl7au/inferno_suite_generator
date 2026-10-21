@@ -21,6 +21,21 @@ module InfernoSuiteGenerator
 
         assert_equal({ code: [], category: [] }, input[:codes])
       end
+
+      def test_from_query_reads_the_type_of_a_read
+        input = ProfileMatcher.from_query("Patient/{{%patient.id}}")
+
+        assert_equal "Patient", input[:resource_type]
+        assert input[:read]
+      end
+
+      def test_from_query_reads_the_type_of_a_compartment_search
+        input = ProfileMatcher.from_query("Patient/{{%patient.id}}/Observation?code=8302-2")
+
+        assert_equal "Observation", input[:resource_type]
+        refute input[:read]
+        assert_equal [{ system: nil, code: "8302-2" }], input[:codes][:code]
+      end
     end
 
     # Verifies `ProfileMatcher` picks the groups a source links to, from the
@@ -33,6 +48,29 @@ module InfernoSuiteGenerator
 
         assert_equal({ groups: [BODY_HEIGHT], matched_by: "resource_type" },
                      match_urls(matcher, "Observation?code=8302-2"))
+      end
+
+      def test_the_only_profile_of_the_type_matches_a_query_without_codes
+        matcher = matcher_for(BODY_HEIGHT => body_height)
+
+        assert_equal({ groups: [BODY_HEIGHT], matched_by: "resource_type" },
+                     match_urls(matcher, "Observation?patient={{%patient.id}}"))
+      end
+
+      def test_the_only_profile_of_the_type_does_not_match_a_code_it_fixes_otherwise
+        matcher = matcher_for(BODY_HEIGHT => body_height)
+        message = /unresolved Observation: the Observation profile fixes code=\S+\|8302-2, .*, not code=29463-7/
+
+        assert_output(message) { assert_nil match_urls(matcher, "Observation?code=29463-7") }
+      end
+
+      def test_the_only_profile_of_the_type_does_not_match_a_template_with_another_code
+        matcher = matcher_for(BODY_HEIGHT => body_height)
+        input = ProfileMatcher.from_template(
+          "resourceType" => "Observation", "code" => { "coding" => [{ "system" => LOINC, "code" => "29463-7" }] }
+        )
+
+        assert_output(/unresolved/) { assert_nil matcher.match(input[:resource_type], codes: input[:codes]) }
       end
 
       def test_the_profile_with_the_queried_code_wins

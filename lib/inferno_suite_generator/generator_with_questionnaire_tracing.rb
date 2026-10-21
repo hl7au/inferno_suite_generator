@@ -52,16 +52,18 @@ module InfernoSuiteGenerator
                                      .reject { |group| config.exclude_resource?(group.profile_url, group.resource) }
       end
 
+      # A group without a trace has the key removed, so a trace from an earlier
+      # run into the same folder doesn't stay behind.
       def write_plugins_file(group)
         entries = questionnaire_traces.to_h[group.profile_url].to_a
-        return if entries.empty?
+        file = PluginsFile.new(File.join(base_output_dir, Naming.snake_case_for_profile(group), PLUGINS_FILE))
+        return file.delete(TRACE_KEY) if entries.empty?
 
-        path = File.join(base_output_dir, Naming.snake_case_for_profile(group), PLUGINS_FILE)
-        PluginsFile.new(path).set(TRACE_KEY, entries.map(&:deep_stringify_keys))
+        file.set(TRACE_KEY, entries.map(&:deep_stringify_keys))
       end
 
-      # One group's `plugins.yml`. Setting a key keeps the rest of an existing
-      # file, so several plugins can share it.
+      # One group's `plugins.yml`. Setting or deleting a key keeps the rest of
+      # an existing file, so several plugins can share it.
       class PluginsFile
         def initialize(path)
           @path = path
@@ -70,6 +72,15 @@ module InfernoSuiteGenerator
         def set(key, value)
           FileUtils.mkdir_p(File.dirname(@path))
           File.write(@path, YAML.dump(read.merge(key => value)))
+        end
+
+        # Removes the file when no other key is left in it.
+        def delete(key)
+          content = read
+          return unless content.key?(key)
+
+          content.delete(key)
+          content.empty? ? File.delete(@path) : File.write(@path, YAML.dump(content))
         end
 
         private

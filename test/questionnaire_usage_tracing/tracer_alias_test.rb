@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "support"
+require "minitest/mock"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
@@ -40,6 +41,19 @@ module InfernoSuiteGenerator
                         reads: ["value"] }],
                      entry[:used_in]
         assert_equal ["value"], entry[:elements_read]
+      end
+
+      def test_each_expression_is_parsed_once
+        parsed = Hash.new(0)
+        parse = Fhirpath::Parser.method(:parse)
+        counting_parse = lambda do |expression|
+          parsed[expression] += 1
+          parse.call(expression)
+        end
+
+        Fhirpath::Parser.stub(:parse, counting_parse) { trace(height_chain_form) }
+
+        assert_equal [1], parsed.values.uniq
       end
 
       def test_aliases_that_reference_each_other_do_not_loop

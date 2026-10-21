@@ -4,10 +4,24 @@ require_relative "support"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
+    # Builds and checks the chains `Ast.paths` returns.
+    module AstPathAssertions
+      private
+
+      def chain(path, type: nil, stopped: false)
+        { type:, path:, stopped: }
+      end
+
+      def assert_paths(expected, expression, name, bundle: false)
+        assert_equal expected, Ast.paths(expression, name, bundle:)
+      end
+    end
+
     # Verifies `Ast` reads `%Name` references and element paths from the
     # FHIRPath AST, using expressions from the 715 Health Check and GP CCMP forms.
     class AstTest < Minitest::Test
       include ProfileMatcherFixtures
+      include AstPathAssertions
 
       def test_references_returns_the_external_constant_names
         assert_equal ["ObsBodyHeight"], Ast.references("%ObsBodyHeight.entry")
@@ -83,6 +97,17 @@ module InfernoSuiteGenerator
         assert_paths [chain("value", stopped: true)], "%obs.value.ofType(Quantity).value", "obs"
       end
 
+      def test_paths_reads_an_alias_chain
+        assert_paths [chain("value.value")],
+                     "%ObsBodyHeightLatest.value.where(unit = 'cm').value", "ObsBodyHeightLatest"
+      end
+    end
+
+    # Verifies `Ast.paths` reads the type and path of a chain through a query's
+    # Bundle, and tells a read of the Bundle itself apart.
+    class AstBundlePathTest < Minitest::Test
+      include AstPathAssertions
+
       def test_paths_reads_the_type_of_a_bundle_chain_from_of_type
         assert_paths [chain("", type: "Location")],
                      "%PractitionerRoleLocation.entry.resource.ofType(Location)",
@@ -95,6 +120,29 @@ module InfernoSuiteGenerator
                      "MedicationStatement", bundle: true
       end
 
+      def test_paths_skips_functions_between_entry_and_resource
+        assert_paths [chain("code")], "%q.entry.first().resource.code", "q", bundle: true
+      end
+
+      def test_paths_reads_the_type_of_a_bundle_chain_from_an_is_filter_on_entry
+        assert_paths [chain("code", type: "Observation")],
+                     "%q.entry.where(resource is Observation).resource.code", "q", bundle: true
+        assert_paths [chain("", type: "Observation")],
+                     "%q.entry.where(resource.is(FHIR.Observation)).resource", "q", bundle: true
+      end
+
+      def test_paths_takes_no_type_from_an_as_filter_on_entry
+        assert_paths [chain("code")], "%q.entry.where(resource as Observation).resource.code", "q", bundle: true
+      end
+
+      def test_paths_gives_no_element_for_a_chain_that_reads_the_bundle
+        bundle_read = chain("", stopped: true)
+
+        assert_paths [bundle_read], "%q.total > 0", "q", bundle: true
+        assert_paths [bundle_read], "%q.entry.count()", "q", bundle: true
+        assert_paths [bundle_read], "%q.entry.fullUrl", "q", bundle: true
+      end
+
       def test_paths_finds_chains_nested_in_function_arguments
         expression = "%MedicationStatement.entry.resource.ofType(Medication)" \
                      ".where(id in %MedicationStatement.entry.resource.medication.select(reference))"
@@ -102,21 +150,6 @@ module InfernoSuiteGenerator
         assert_paths [chain("", type: "Medication"),
                       chain("medication", stopped: true)],
                      expression, "MedicationStatement", bundle: true
-      end
-
-      def test_paths_reads_an_alias_chain
-        assert_paths [chain("value.value")],
-                     "%ObsBodyHeightLatest.value.where(unit = 'cm').value", "ObsBodyHeightLatest"
-      end
-
-      private
-
-      def chain(path, type: nil, stopped: false)
-        { type:, path:, stopped: }
-      end
-
-      def assert_paths(expected, expression, name, bundle: false)
-        assert_equal expected, Ast.paths(expression, name, bundle:)
       end
     end
   end

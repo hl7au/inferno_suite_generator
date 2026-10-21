@@ -1,30 +1,44 @@
 # frozen_string_literal: true
 
 require "fhirpath"
+require_relative "log"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
     # Reads `%Name` references and element paths from FHIRPath expressions.
+    #
+    # Each reader takes an expression, and has an `_in` variant that takes the
+    # tree `parse` returns, so a caller that keeps trees parses each expression
+    # once.
     module Ast
       module_function
 
       # The `%Name` names the expression references, without duplicates.
       def references(expression)
-        nodes(parse(expression)).filter_map { |node| constant_name(node) }.uniq
+        references_in(parse(expression))
+      end
+
+      def references_in(tree)
+        nodes(tree).filter_map { |node| constant_name(node) }.uniq
       end
 
       # One `{ type:, path:, stopped: }` per longest chain that starts with
       # `%name`, including chains nested in function arguments.
       def paths(expression, name, bundle:)
-        chains(parse(expression), name).map { |steps| ChainPath.read(steps, bundle:) }
+        paths_in(parse(expression), name, bundle:)
       end
 
+      def paths_in(tree, name, bundle:)
+        chains(tree, name).map { |steps| ChainPath.read(steps, bundle:) }
+      end
+
+      # The tree, or `{}` for an empty expression or one that doesn't parse.
       def parse(expression)
         return {} if expression.to_s.strip.empty?
 
         Fhirpath::Parser.parse(expression)
       rescue Fhirpath::Error => e
-        puts "Questionnaire usage tracing: skipping FHIRPath #{expression.inspect}: #{e.message}"
+        QuestionnaireUsageTracing.log("skipping FHIRPath #{expression.inspect}: #{e.message}")
         {}
       end
 
@@ -89,31 +103,94 @@ module InfernoSuiteGenerator
         node["children"] || []
       end
 
+      # `references` and `paths` that parse each expression once, however many
+      # sources and aliases read it.
+      class Cache
+        def initialize
+          @trees = {}
+          @references = {}
+        end
+
+        def references(expression)
+          @references[expression] ||= Ast.references_in(tree(expression))
+        end
+
+        def paths(expression, name, bundle:)
+          Ast.paths_in(tree(expression), name, bundle:)
+        end
+
+        private
+
+        def tree(expression)
+          @trees[expression] ||= Ast.parse(expression)
+        end
+      end
+
       # Turns the steps of one chain into `{ type:, path:, stopped: }`
       module ChainPath
         STOP_FUNCTIONS = %w[ofType select].freeze
-        BUNDLE_STEPS = %w[entry resource].freeze
         EXTENSION_MEMBERS = %w[extension modifierExtension].freeze
+        # A chain that reads the Bundle itself instead of a resource in it.
+        BUNDLE_READ = { type: nil, path: "", stopped: true }.freeze
 
         module_function
 
         def read(steps, bundle:)
-          type = nil
-          if bundle
-            steps = drop_bundle_steps(steps)
-            type = type_name(steps.shift) if function?(steps.first, "ofType")
-          end
+          return read_bundle(steps) if bundle
+
           path, stopped = read_path(steps)
-          { type:, path:, stopped: }
+          { type: nil, path:, stopped: }
         end
 
-        def drop_bundle_steps(steps)
-          BUNDLE_STEPS.each do |member|
-            break unless steps.first&.dig(:name) == member && steps.first[:kind] == :member
+        # A Bundle chain reads a resource through `entry` and then `resource`.
+        # Functions and indexers between the two pick entries, and a
+        # `where(resource is T)` among them gives the type, as does an
+        # `ofType(T)` right after `resource`.
+        #
+        # A chain that never reaches `resource`, like `%q.total` or
+        # `%q.entry.count()`, reads the Bundle, so it reads no profile element.
+        # It counts as stopped, so an alias of it gets no prefix.
+        def read_bundle(steps)
+          return BUNDLE_READ unless member?(steps.first, "entry")
 
-            steps = steps.drop(1).drop_while { |step| step[:kind] == :index }
+          between = steps.drop(1).take_while { |step| step[:kind] != :member }
+          rest = steps.drop(1 + between.size)
+          return BUNDLE_READ unless member?(rest.first, "resource")
+
+          read_resource(rest.drop(1), between.filter_map { |step| entry_filter_type(step) }.last)
+        end
+
+        # The steps after `resource`, with the type an entry filter gave.
+        def read_resource(steps, filter_type)
+          of_type = type_name(steps.shift) if function?(steps.first, "ofType")
+          path, stopped = read_path(steps)
+          { type: of_type || filter_type, path:, stopped: }
+        end
+
+        # The `T` of `where(resource is T)` or `where(resource.is(T))`.
+        def entry_filter_type(step)
+          return unless function?(step, "where") && step[:args].one?
+
+          condition = step[:args].first
+          case condition["type"]
+          when "TypeExpression" then type_of_is_operator(condition)
+          when "InvocationExpression" then type_of_is_call(condition)
           end
-          steps
+        end
+
+        def type_of_is_operator(condition)
+          term, specifier = Ast.children(condition)
+          return unless condition["terminalNodeText"].to_a == ["is"] && term&.dig("text") == "resource"
+
+          clean_type(specifier&.dig("text"))
+        end
+
+        def type_of_is_call(condition)
+          term, invocation = Ast.children(condition)
+          return unless term&.dig("text") == "resource" && invocation&.dig("type") == "FunctionInvocation"
+
+          step = Ast.function_step(Ast.children(invocation).first)
+          type_name(step) if step[:name] == "is"
         end
 
         def read_path(steps)
@@ -171,11 +248,19 @@ module InfernoSuiteGenerator
         end
 
         def type_name(step)
-          step[:args].first&.dig("text").to_s.delete("`").delete_prefix("FHIR.")
+          clean_type(step[:args].first&.dig("text"))
+        end
+
+        def clean_type(text)
+          text.to_s.delete("`").delete_prefix("FHIR.")
         end
 
         def function?(step, name)
           step && step[:kind] == :function && step[:name] == name
+        end
+
+        def member?(step, name)
+          step && step[:kind] == :member && step[:name] == name
         end
       end
     end

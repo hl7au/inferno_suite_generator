@@ -57,6 +57,27 @@ module InfernoSuiteGenerator
         end
       end
 
+      def test_an_is_filter_on_entry_routes_a_chain_to_its_include_entry
+        expression = "%PractitionerRoleLocation.entry.where(resource is Location).resource.name"
+        form = questionnaire(
+          extension: [query_variable("PractitionerRoleLocation", location_query("PractitionerRole:location:Location"))],
+          item: [item("location", "Location", expression("initialExpression", expression))]
+        )
+        traces = trace(form, profiles: suite_profiles)
+
+        assert_equal ["name"], traces[LOCATION].first[:elements_read]
+        assert_empty traces[PRACTITIONER_ROLE].first[:used_in]
+      end
+
+      def test_an_include_of_the_query_own_type_leaves_its_chains_with_the_query_entry
+        query_entry, include_entry = trace(own_type_include_form)[BODY_HEIGHT].partition do |entry|
+          entry[:source] == "query"
+        end.map(&:first)
+
+        assert_equal [["height"], ["value"]], [link_ids(query_entry), query_entry[:elements_read]]
+        assert_empty include_entry[:used_in]
+      end
+
       def test_an_include_iterate_is_skipped
         query = "#{MEDS_QUERY}&_include:iterate=Medication:manufacturer"
         form = questionnaire(extension: [query_variable("MedicationStatement", query)])
@@ -91,6 +112,16 @@ module InfernoSuiteGenerator
           include: "MedicationStatement:medication", target_by: "search_parameter", matched_by: "resource_type",
           elements_read: [], used_in: [{ link_id: "medications", text: "Medications", extension: "initialExpression" }]
         }
+      end
+
+      # A Body Height query that also includes the Observations its results
+      # have as members.
+      def own_type_include_form
+        questionnaire(
+          extension: [query_variable("Heights", "Observation?code=8302-2&_include=Observation:has-member:Observation")],
+          item: [item("height", "Height",
+                      expression("initialExpression", "%Heights.entry.resource.ofType(Observation).value"))]
+        )
       end
 
       def location_query(include)

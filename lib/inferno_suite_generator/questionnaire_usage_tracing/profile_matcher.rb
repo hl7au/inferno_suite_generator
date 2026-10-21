@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-require "uri"
+require_relative "log"
+require_relative "query_search"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
@@ -8,10 +9,11 @@ module InfernoSuiteGenerator
     class ProfileMatcher
       PARAMS = %i[code category].freeze
 
-      # The input for a query like `Observation?code=http://loinc.org|8302-2`.
+      # The input for a query like `Observation?code=http://loinc.org|8302-2`,
+      # or a read like `Patient/{{%patient.id}}`, with `read:` from
+      # `QuerySearch.target`.
       def self.from_query(query)
-        resource_type, search = query.to_s.split("?", 2)
-        { resource_type: resource_type.to_s.split("/").last, codes: Codes.from_search(search) }
+        { **QuerySearch.target(query), codes: Codes.from_search(QuerySearch.pairs(query)) }
       end
 
       # The input for a contained template.
@@ -27,13 +29,22 @@ module InfernoSuiteGenerator
 
       # `{ groups:, matched_by: }`, or `nil` when the source is untraced or
       # unresolved. `context` names the source in the log lines.
+      #
+      # The only group of the type matches by type, unless the source has a
+      # `code` or `category` its profile fixes to other values.
       def match(resource_type, codes: {}, any_of_type: false, context: nil)
         label = context || resource_type
         candidates = @groups.select { |group| group.resource == resource_type }
         return log("untraced #{label}: no group for #{resource_type}") if candidates.empty?
-        return { groups: candidates, matched_by: "resource_type" } if candidates.one? || any_of_type
+        return { groups: candidates, matched_by: "resource_type" } if any_of_type
+        return match_by_code(candidates, codes, label) unless candidates.one?
 
-        match_by_code(candidates, codes, label)
+        if codes_conflict?(profile_codes(candidates.first), codes)
+          return log("unresolved #{label}: the #{resource_type} profile fixes " \
+                     "#{Codes.format(profile_codes(candidates.first))}, not #{Codes.format(codes)}")
+        end
+
+        { groups: candidates, matched_by: "resource_type" }
       end
 
       # The `code` and `category` values the group's profile fixes.
@@ -54,13 +65,21 @@ module InfernoSuiteGenerator
       end
 
       def codes_match?(profile, source)
-        shared = PARAMS.select { |param| profile[param].any? && source[param].to_a.any? }
+        shared = shared_params(profile, source)
         shared.any? && shared.all? { |param| Codes.overlap?(profile[param], source[param]) }
       end
 
+      def codes_conflict?(profile, source)
+        shared_params(profile, source).any? { |param| !Codes.overlap?(profile[param], source[param]) }
+      end
+
+      # The params both the profile and the source give values for.
+      def shared_params(profile, source)
+        PARAMS.select { |param| profile[param].any? && source[param].to_a.any? }
+      end
+
       def log(message)
-        puts "Questionnaire usage tracing: #{message}"
-        nil
+        QuestionnaireUsageTracing.log(message)
       end
 
       # Builds and compares `codes` Hashes.
@@ -70,12 +89,11 @@ module InfernoSuiteGenerator
 
         module_function
 
-        # Query values are `system|code` or `code`. A comma means OR. Values
-        # with a `{{...}}` template are skipped.
-        def from_search(search)
+        # `pairs` from `QuerySearch.pairs`. Query values are `system|code` or
+        # `code`. A comma means OR. Values with a `{{...}}` template are skipped.
+        def from_search(pairs)
           codes = empty
-          search.to_s.split("&").each do |pair|
-            name, value = pair.split("=", 2).map(&:to_s)
+          pairs.each do |name, value|
             key = param(name)
             codes[key].concat(search_values(value)) if key
           end
@@ -128,17 +146,11 @@ module InfernoSuiteGenerator
         end
 
         def query_value(token)
-          parts = decode(token).split("|", 2)
+          parts = token.split("|", 2)
           return if parts.last.to_s.empty?
 
           system = parts.first if parts.size == 2
           { system: system.to_s.empty? ? nil : system, code: parts.last }
-        end
-
-        def decode(token)
-          URI.decode_uri_component(token)
-        rescue ArgumentError
-          token
         end
 
         # Codes fixed on one element: a `pattern[x]`/`fixed[x]` CodeableConcept

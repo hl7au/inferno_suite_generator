@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "profile_matcher"
+require_relative "query_search"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
@@ -61,12 +61,18 @@ module InfernoSuiteGenerator
         ItemLines.new(entry[:used_in].to_a, @must_support)
       end
 
-      # The title, with the version when another questionnaire shown has the
-      # same title, as an assembled modular form does.
+      # The title, or the URL for an untitled form, with the version when
+      # another questionnaire shown has the same title, as an assembled modular
+      # form does.
       def form_title(entry)
-        title = entry[:questionnaire_title] || entry[:questionnaire_url]
-        same_title = @forms.values.count { |entries| entries.first[:questionnaire_title] == title }
-        same_title > 1 ? "#{title}, version #{entry[:questionnaire_version]}" : title
+        title = title_of(entry)
+        version = entry[:questionnaire_version]
+        same_title = @forms.values.count { |entries| title_of(entries.first) == title }
+        same_title > 1 && version ? "#{title}, version #{version}" : title
+      end
+
+      def title_of(entry)
+        entry[:questionnaire_title] || entry[:questionnaire_url]
       end
 
       def entry_lines(entry)
@@ -77,11 +83,15 @@ module InfernoSuiteGenerator
         name = entry[:name]
         resource = @group.resource
         case entry[:source]
-        when "query" then "**Query #{name}**: searches #{resource} resources"
+        when "query" then "**Query #{name}**: #{query_action(entry)}"
         when "include" then "**Query #{name}**: fetches #{resource} resources through _include=#{entry[:include]}"
         when "launch_context" then "**Launch context #{name}**: the #{resource} the form is opened for"
         when "template_extract" then "**Extraction template #{name}**: #{template_action(entry)}"
         end
+      end
+
+      def query_action(entry)
+        entry[:read] ? "reads one #{@group.resource} by id" : "searches #{@group.resource} resources"
       end
 
       def template_action(entry)
@@ -271,30 +281,6 @@ module InfernoSuiteGenerator
       # Dot-separated steps, keeping the dots inside `[url=...]` together.
       def segments(path)
         path.scan(/(?:[^.\[]+|\[[^\]]*\])+/)
-      end
-    end
-
-    # Reads the search parameters of an x-fhir-query.
-    module QuerySearch
-      # Parameters that shape the result instead of selecting resources.
-      RESULT_PARAMS = %w[_sort _include _revinclude _count _elements _summary _total _contained _containedType].freeze
-
-      module_function
-
-      # The parameter names that select resources, without modifiers.
-      def params(query)
-        pairs(query).map { |name, _value| name.split(":").first }.uniq - RESULT_PARAMS
-      end
-
-      # The `_include` values, like `PractitionerRole:location`.
-      def includes(query)
-        pairs(query).filter_map { |name, value| value if name.split(":").first == "_include" }
-      end
-
-      def pairs(query)
-        query.to_s.split("?", 2)[1].to_s.split("&").map do |pair|
-          pair.split("=", 2).map { |part| ProfileMatcher::Codes.decode(part.to_s) }
-        end
       end
     end
   end

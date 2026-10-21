@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 require_relative "ast"
+require_relative "log"
 require_relative "profile_matcher"
+require_relative "query_search"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsageTracing
@@ -31,28 +33,35 @@ module InfernoSuiteGenerator
 
       # A `query` entry for the query's own type and an `include` entry for each
       # `_include` target type. Chains are routed by type: one that picks an
-      # included type with `entry.resource.ofType(T)` goes to that include
-      # entry, anything else to the query entry.
+      # included type, with `entry.resource.ofType(T)` or
+      # `entry.where(resource is T)`, goes to that include entry, anything else
+      # to the query entry.
+      #
+      # An included resource of the query's own type can't be told apart from
+      # the query's own resources by type, so chains of that type stay with the
+      # query entry, and its include entry has no usages.
       def trace_query(traces, query)
         add_query(traces, query)
         query.includes.each { |include| add_include(traces, query, include) }
       end
 
+      # A read, like `Patient/{{%patient.id}}`, has no codes to tell profiles
+      # apart, so it links to every group of its type, like a launch context.
       def add_query(traces, query)
-        result = @matcher.match(query.resource_type, codes: query.codes, context: query.label)
+        result = @matcher.match(query.resource_type, codes: query.codes, any_of_type: query.read?,
+                                                     context: query.label)
         return unless result
 
-        included = query.includes.map { |include| include[:target] }
-        used_in, elements_read = query.usages { |type| !included.include?(type) }
+        used_in, elements_read = query.usages { |type| !query.other_include_types.include?(type) }
         add(traces, result, query.entry("query", matched_by: result[:matched_by], elements_read:, used_in:))
       end
 
       def add_include(traces, query, include)
-        context = "#{query.label} include #{include[:value]}"
-        result = @matcher.match(include[:target], any_of_type: true, context:)
+        target = include[:target]
+        result = @matcher.match(target, any_of_type: true, context: "#{query.label} include #{include[:value]}")
         return unless result
 
-        used_in, elements_read = query.usages { |type| type == include[:target] }
+        used_in, elements_read = target == query.resource_type ? [[], []] : query.usages { |type| type == target }
         add(traces, result, query.entry("include", include: include[:value], target_by: include[:target_by],
                                                    matched_by: result[:matched_by], elements_read:, used_in:))
       end
@@ -75,7 +84,8 @@ module InfernoSuiteGenerator
 
       def add_template(traces, template)
         unless template.found?
-          return template.log("skipping #{template.label}: no contained resource #{template.reference}")
+          return QuestionnaireUsageTracing.log("skipping #{template.label}: no contained resource " \
+                                               "#{template.reference}")
         end
 
         result = @matcher.match(template.resource_type, codes: template.codes, context: template.label)
@@ -97,23 +107,30 @@ module InfernoSuiteGenerator
           input = ProfileMatcher.from_query(variable[:expression])
           @resource_type = input[:resource_type]
           @codes = input[:codes]
+          @read = input[:read]
         end
 
         def label
           "#{@form.label} query #{@variable[:name]}"
         end
 
+        # Whether the query reads one resource by id, so `%Name` is that
+        # resource instead of a Bundle.
+        def read?
+          @read
+        end
+
         # `[used_in, elements_read]` for the chains whose type the block takes.
         def usages(&accept)
-          source = { name: @variable[:name], owner: @variable[:owner], bundle: true }
+          source = { name: @variable[:name], owner: @variable[:owner], bundle: !read? }
           Usages.new(@form, source, accept).call
         end
 
         # A trace entry: the fields shared by `query` and `include` entries,
-        # then `fields`.
+        # then `fields`. `read: true` marks a read.
         def entry(source, **fields)
           { source:, **@form.header, name: @variable[:name], defined_at: @variable[:defined_at],
-            query: @variable[:expression], **fields }
+            query: @variable[:expression], **(read? ? { read: true } : {}), **fields }
         end
 
         # `{ value:, target:, target_by: }` for each target type of each
@@ -124,21 +141,19 @@ module InfernoSuiteGenerator
           @includes ||= include_values.flat_map { |value| targets_of(value) }
         end
 
+        # The `_include` target types other than the query's own.
+        def other_include_types
+          @other_include_types ||= includes.map { |include| include[:target] } - [@resource_type]
+        end
+
         private
 
         def include_values
-          search_params.filter_map do |name, value|
+          QuerySearch.pairs(@variable[:expression]).filter_map do |name, value|
             next unless name.start_with?("_include")
             next value if name == "_include" && value.split(":").first == @resource_type
 
             log("skipping #{name}=#{value} in #{label}: only _include of #{@resource_type} is traced")
-          end
-        end
-
-        def search_params
-          @variable[:expression].split("?", 2)[1].to_s.split("&").map do |pair|
-            name, value = pair.split("=", 2)
-            [ProfileMatcher::Codes.decode(name.to_s), ProfileMatcher::Codes.decode(value.to_s)]
           end
         end
 
@@ -158,9 +173,10 @@ module InfernoSuiteGenerator
         # `%Name.entry.resource.ofType(T)`, in the query's scope.
         def of_types
           name = @variable[:name]
-          expressions.select { |expression| expression.include?(name) }
-                     .flat_map { |expression| Ast.paths(expression, name, bundle: true).map { |chain| chain[:type] } }
-                     .compact.uniq - [@resource_type]
+          fhirpath = @form.fhirpath
+          expressions.select { |expression| fhirpath.references(expression).include?(name) }
+                     .flat_map { |expression| fhirpath.paths(expression, name, bundle: true) }
+                     .filter_map { |chain| chain[:type] }.uniq - [@resource_type]
         end
 
         def expressions
@@ -171,8 +187,7 @@ module InfernoSuiteGenerator
         end
 
         def log(message)
-          puts "Questionnaire usage tracing: #{message}"
-          nil
+          QuestionnaireUsageTracing.log(message)
         end
       end
 
@@ -221,11 +236,6 @@ module InfernoSuiteGenerator
           used_in = @form.root?(owner) ? [] : [Form.usage(owner, "templateExtract")]
           { source: "template_extract", **@form.header, name: @template["id"] || @reference.delete_prefix("#"),
             defined_at: @extract[:defined_at], template_codes:, patch: patch?, matched_by:, used_in: }
-        end
-
-        def log(message)
-          puts "Questionnaire usage tracing: #{message}"
-          nil
         end
 
         private
@@ -312,10 +322,11 @@ module InfernoSuiteGenerator
         # `[name, chain]` for each accepted chain in the expression from a name
         # visible at `node`.
         def reads_of(expression, node)
-          @names.select { |name| expression.include?(name.name) && @form.covers?(name.owner, node) }
+          references = @form.fhirpath.references(expression)
+          @names.select { |name| references.include?(name.name) && @form.covers?(name.owner, node) }
                 .flat_map do |name|
-            Ast.paths(expression, name.name, bundle: name.bundle)
-               .filter_map { |chain| [name, chain] if @accept.call(type_of(name, chain)) }
+            @form.fhirpath.paths(expression, name.name, bundle: name.bundle)
+                 .filter_map { |chain| [name, chain] if @accept.call(type_of(name, chain)) }
           end
         end
 
@@ -344,6 +355,9 @@ module InfernoSuiteGenerator
         def initialize(questionnaire)
           @questionnaire = questionnaire
         end
+
+        # The form's parsed FHIRPath, shared by every source traced in it.
+        def fhirpath = (@fhirpath ||= Ast::Cache.new)
 
         def header
           {

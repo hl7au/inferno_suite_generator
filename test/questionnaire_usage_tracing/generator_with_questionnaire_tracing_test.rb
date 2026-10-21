@@ -37,12 +37,33 @@ module InfernoSuiteGenerator
         assert_equal %w[other_plugin questionnaire_usage_tracing], YAML.load_file(plugins_path).keys
       end
 
+      def test_a_group_without_a_trace_loses_the_key_from_an_earlier_run
+        write_plugins_file("other_plugin" => { "enabled" => true }, "questionnaire_usage_tracing" => [{ "a" => 1 }])
+
+        generate_groups(questionnaire)
+
+        assert_equal ["other_plugin"], YAML.load_file(plugins_path).keys
+      end
+
+      def test_a_plugins_file_left_without_keys_is_removed
+        write_plugins_file("questionnaire_usage_tracing" => [{ "a" => 1 }])
+
+        generate_groups(questionnaire)
+
+        refute_path_exists plugins_path
+      end
+
       private
 
-      def generate_groups
+      def write_plugins_file(content)
+        FileUtils.mkdir_p(File.dirname(plugins_path))
+        File.write(plugins_path, YAML.dump(content))
+      end
+
+      def generate_groups(form = patient_form)
         generator = Generator::WithQuestionnaireTracing.new(nil)
         _groups, generator.ig_resources = suite_for(AU_CORE_PATIENT => profile("Patient"))
-        generator.ig_resources.add(FHIR::Questionnaire.new(patient_form))
+        generator.ig_resources.add(FHIR::Questionnaire.new(form))
         generator.ig_metadata = ig_metadata
         FileUtils.mkdir_p(File.join(output_dir, "patient"))
         generator.trace_questionnaires

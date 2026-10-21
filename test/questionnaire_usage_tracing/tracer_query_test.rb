@@ -36,6 +36,17 @@ module InfernoSuiteGenerator
         assert_empty entry[:elements_read]
       end
 
+      def test_a_read_links_to_every_group_of_its_type_and_reads_the_resource_itself
+        traces = trace(patient_read_form,
+                       profiles: { AU_CORE_PATIENT => profile("Patient"), AU_BASE_PATIENT => profile("Patient") })
+        entry = traces[AU_CORE_PATIENT].first
+
+        assert_equal [AU_CORE_PATIENT, AU_BASE_PATIENT], traces.keys
+        assert_equal({ read: true, matched_by: "resource_type", elements_read: ["birthDate"] },
+                     entry.slice(:read, :matched_by, :elements_read))
+        assert_equal ["dob"], link_ids(entry)
+      end
+
       def test_a_query_for_a_type_without_a_group_is_untraced
         form = questionnaire(extension: [query_variable("Conditions", "Condition?patient={{%patient.id}}")])
 
@@ -51,6 +62,14 @@ module InfernoSuiteGenerator
           elements_read: ["value.value"],
           used_in: [{ link_id: "height", text: "Height", extension: "initialExpression", reads: ["value.value"] }]
         }
+      end
+
+      # A read of the patient, so `%PatientRead` is the Patient, not a Bundle.
+      def patient_read_form
+        questionnaire(
+          extension: [query_variable("PatientRead", "Patient/{{%patient.id}}")],
+          item: [item("dob", "Date of birth", expression("initialExpression", "%PatientRead.birthDate"))]
+        )
       end
 
       # `ObsBodyWeight` is defined on the `vitals` group and used by its child

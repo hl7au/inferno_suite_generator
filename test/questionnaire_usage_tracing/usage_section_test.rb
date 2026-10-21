@@ -121,6 +121,20 @@ module InfernoSuiteGenerator
         assert_includes markdown, "- **#{FORM_TITLE}, version 0.1.0**\n"
         assert_includes markdown, "- **#{FORM_TITLE}, version 0.1.0-assembled**\n"
       end
+
+      def test_untitled_questionnaires_with_the_same_url_show_their_version
+        untitled = launch_entry.except(:questionnaire_title)
+        markdown = section([untitled, untitled.merge(questionnaire_version: "0.2.0")])
+
+        assert_includes markdown, "- **#{FORM_URL}, version 0.1.0**\n"
+        assert_includes markdown, "- **#{FORM_URL}, version 0.2.0**\n"
+      end
+
+      def test_a_read_says_it_reads_one_resource
+        entry = query_entry("Patient/{{%patient.id}}").merge(read: true)
+
+        assert_includes section([entry]), "- **Query Patients**: reads one Patient by id\n"
+      end
     end
 
     # Verifies the `UsageSection` item lines: labels, read paths and the Must
