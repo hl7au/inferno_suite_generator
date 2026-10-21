@@ -1,0 +1,7 @@
+id: read
+name: Read tests
+version: 0.1.0
+description: Generates a read interaction test for every profile whose CapabilityStatement declares read
+entrypoint: lib/read.rb
+class: InfernoSuitePlugins::Read::Plugin
+host_version: ">= 0.1.0"

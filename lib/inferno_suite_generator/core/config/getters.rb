@@ -66,6 +66,11 @@ module InfernoSuiteGenerator
           get("suite.links", EMPTY_ARRAY)
         end
 
+        # Plugins to run, keyed by plugin id. See Plugins::Loader for the entry format.
+        def plugins
+          get("plugins", EMPTY_HASH)
+        end
+
         def package_archive_path
           get("ig.package_archive_path", nil)
         end

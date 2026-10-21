@@ -1,0 +1,45 @@
+require_relative '../plugins/read/read_test'
+require 'inferno_suite_generator/plugins/runtime_metadata'
+
+module <%= suite_module_name %>
+  module <%= module_name %>
+    class <%= class_name %> < Inferno::Test
+      include InfernoSuitePlugins::Read::ReadTest
+
+      title '(<%= conformance_expectation %>) Server returns correct <%= resource_type %> resource from <%= resource_type %> read interaction'
+      description 'A server <%= conformance_expectation %> support the <%= resource_type %> read interaction.'
+
+      <% if ids_input %>
+      input :<%= ids_input["input_id"] %>,
+            title: '<%= ids_input["title"] %>',
+            description: '<%= ids_input["description"] %>',
+            default: '<%= ids_input["default"] %>',
+            optional: true
+      <% end %>
+
+      id :<%= test_id %>
+
+      def self.demodata
+        @demodata ||= InfernoSuiteGenerator::Generator::IGDemodata.new(
+          YAML.load_file(File.join(File.dirname(__dir__), 'demodata.yml'), aliases: true)
+        )
+      end
+
+      def self.plugin_metadata
+        @plugin_metadata ||= InfernoSuiteGenerator::Plugins::RuntimeMetadata.load(__dir__, 'read')
+      end
+
+      def resource_type
+        '<%= resource_type %>'
+      end
+
+      def scratch_resources
+        scratch[:<%= profile_identifier %>_resources] ||= {}
+      end
+
+      run do
+        perform_read_test(<%= resource_collection_string %>)
+      end
+    end
+  end
+end

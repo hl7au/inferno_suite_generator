@@ -11,7 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `suite.validation_message_overrides` configuration option to change the severity of FHIR validator messages matched by regex (optionally narrowed by `from`, `location` and `message_id`). Implemented by `InfernoSuiteGenerator::ValidationMessageOverrides`, which generated suites extend their default validator with.
 - Added `suite.groups_order` configuration option to control the order of `groups` in the generated `metadata.yml`. Profiles listed in `groups_order` are placed first in the given order, with any remaining profiles appended afterward in their existing relative order.
+- Added generator plugins: gems or folders with a `plugin.yml` manifest and a class that defines `generate(context)`, enabled in a new top-level `plugins` config section keyed by plugin id (`path`, `gem` or `builtin` source, optional `options` and `enabled`). Plugins run in config order after the built-in tests and before groups and suites. Plugin data is written to new `plugins.yml` files in the suite and group directories, keyed by plugin id, and `metadata.yml` is unchanged. See `documentation/plugins.md`.
+- Added plugin tooling under `InfernoSuiteGenerator::Plugins`: `Base`, `Context`, `Extractor`, `TestGenerator`, `MetadataStore`, `RuntimeMetadata`, `Testing` and `Scaffold`, plus a `rake 'plugins:new[id]'` task.
+- Added the bundled `read` plugin (`{ "builtin": "read" }`), the built-in read tests moved into a plugin. Its tests match the built-in ones in content and place in each group, and run on the plugin's own runtime module, which it installs into the suite at `plugins/read/read_test.rb`. It also adds a `plugin_metadata` accessor and `plugins.yml` entries. It is meant to take over once the built-in read generator is removed.
 - Added shared `bin/hot-reload` dev-tooling asset and `InfernoSuiteGenerator::DevTools::HotReloadInstaller` to install/update it in a consumer test kit, replacing the copy-pasted watcher script previously maintained separately in each kit repo.
+
+### Fixed
+
+- `InfernoSuiteGenerator::BasicTest` now requires `forwardable` itself instead of relying on Inferno to have loaded it.
+- `GeneratorConfigKeeper` no longer merges every config into one shared hash, which leaked one keeper's config into the next when several were created in the same process.
 
 ### Changed
 

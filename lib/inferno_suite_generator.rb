@@ -25,6 +25,7 @@ require_relative "inferno_suite_generator/generators/patch_test_generator"
 require_relative "inferno_suite_generator/core/generator_config_keeper"
 require_relative "inferno_suite_generator/utils/registry"
 require_relative "inferno_suite_generator/utils/helpers"
+require_relative "inferno_suite_generator/plugins"
 
 module InfernoSuiteGenerator
   class Generator
@@ -34,13 +35,14 @@ module InfernoSuiteGenerator
       new(config.ig_deps_path).generate
     end
 
-    attr_accessor :ig_resources, :ig_metadata, :ig_deps_path, :ig_demodata
+    attr_accessor :ig_resources, :ig_metadata, :ig_deps_path, :ig_demodata, :plugin_runner
 
     def initialize(ig_deps_path)
       self.ig_deps_path = ig_deps_path
     end
 
     def generate
+      load_plugins
       load_ig_package
       extract_metadata
       extract_demodata
@@ -54,6 +56,7 @@ module InfernoSuiteGenerator
       generate_create_tests
       generate_update_tests
       generate_patch_tests
+      run_plugins
       generate_groups
       generate_suites
       use_tests
@@ -80,6 +83,16 @@ module InfernoSuiteGenerator
     def load_ig_package
       FHIR.logger = Logger.new(File::NULL)
       self.ig_resources = IGLoader.new(ig_deps_path).load
+    end
+
+    def load_plugins
+      self.plugin_runner = Plugins::Runner.new(Plugins::Loader.new(Registry.get(:config_keeper).plugins).load)
+    end
+
+    def run_plugins
+      plugin_runner.run(
+        ig_resources:, ig_metadata:, ig_demodata:, base_output_dir:, config: Registry.get(:config_keeper)
+      )
     end
 
     def generate_reference_resolution_tests
