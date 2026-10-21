@@ -8,6 +8,7 @@ This folder is an inferno_suite_generator plugin. Keep every change inside it.
 - The class in `plugin.yml` takes no constructor arguments and defines `generate(context)`. `context` is an `InfernoSuiteGenerator::Plugins::Context`.
 - Write plugin data only through `context.metadata` (`group`, `groups`, `suite`). It ends up under this plugin's id in `plugins.yml`.
 - Never edit the host's `metadata.yml` or `demodata.yml`. Read them through `context.ig_metadata` and `context.ig_demodata`.
+- Add text to a group's description only through `context.descriptions` (`group`, `groups`), with plain Markdown. Don't override or patch `GroupGenerator`.
 
 ## Where things go
 

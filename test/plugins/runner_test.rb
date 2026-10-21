@@ -99,6 +99,35 @@ module InfernoSuiteGenerator
         assert_empty Dir.children(@dir)
       end
 
+      DESCRIBE = <<~'RUBY'
+        def generate(context) = context.descriptions.group(context.ig_metadata.groups.first, "## #{context.plugin_id}")
+      RUBY
+
+      def test_run_plugin_returns_the_group_descriptions_the_plugin_added
+        write_plugin(File.join(@dir, "extra"), id: "extra", body: DESCRIBE)
+        group = build_group_metadata
+
+        descriptions = run_plugin(File.join(@dir, "extra"), ig_metadata: build_ig_metadata(groups: [group]),
+                                                            base_output_dir: @dir)
+
+        assert_equal ["## extra"], descriptions.for(group)
+      end
+
+      def test_runner_keeps_group_descriptions_in_config_order
+        group = build_group_metadata
+        %w[second first].each { |id| write_plugin(File.join(@dir, id), id:, body: DESCRIBE) }
+        runner = Runner.new(Loader.new({ "second" => { "path" => "second" }, "first" => { "path" => "first" } },
+                                       base_dir: @dir).load)
+
+        capture_io { runner.run(**host, ig_metadata: build_ig_metadata(groups: [group])) }
+
+        assert_equal ["## second", "## first"], runner.group_descriptions.for(group)
+      end
+
+      def test_runner_without_plugins_has_no_group_descriptions
+        assert_empty Runner.new.group_descriptions.for(build_group_metadata)
+      end
+
       private
 
       def host

@@ -77,14 +77,14 @@ extract_metadata
 extract_demodata
 built-in tests
 run_plugins             # every enabled plugin, in config order
-generate_groups
+generate_groups         # each group's description gets the text plugins added to it
 generate_suites
 ```
 
 1. Generator#load_plugins reads the `plugins` section and loads every enabled plugin. A bad manifest, a missing class or a `generate` that takes no argument stops the run before any IG work starts.
 2. The host generates its built-in tests.
 3. Generator#run_plugins runs the plugins in config order, then writes all `plugins.yml` files.
-4. Groups and suites are generated last, so every test a plugin registers appears in its group.
+4. Groups and suites are generated last, so every test a plugin registers appears in its group. Generator#generate_groups also appends the Markdown each plugin added for a group to that group's description (Step 6).
 
 Inferno runs a group's tests in the order of the group's test list, and later tests reuse resources that earlier ones put in scratch. A plugin test goes at the end of the list unless its TestGenerator overrides `insert_index` (Step 4). The read plugin uses that to keep its test where the built-in read test was.
 
@@ -102,6 +102,7 @@ Inferno runs a group's tests in the order of the group's test list, and later te
 | base_output_dir | the generated suite directory |
 | config | Generator::GeneratorConfigKeeper, the merged config |
 | metadata | a writer for this plugin's plugins.yml sections |
+| descriptions | a writer for Markdown appended to group descriptions |
 
 Helpers:
 
@@ -117,6 +118,7 @@ Helpers:
 | Plugins::Extractor | per-group data extraction: implement `extract` and return a hash, or nil to skip the group. `MyExtractor.extract(context)` returns `{ group_metadata => data }` |
 | Plugins::TestGenerator | one test file per group from an ERB template. Set `template_name`, `class_name_suffix` and `test_id_suffix`, and override `insert_index` to choose the test's place in the group |
 | Plugins::RuntimeMetadata | reading the plugin's plugins.yml section from a generated test at Inferno run time |
+| Plugins::GroupDescriptions | collecting the Markdown plugins add to group descriptions; `run_plugin` returns it in tests |
 | Plugins::Testing | plugin tests: build group and IG metadata, run the plugin into a temporary directory, read plugins.yml |
 | Plugins::Scaffold | creating a new plugin folder |
 
@@ -184,7 +186,31 @@ def self.plugin_metadata
 end
 ```
 
-### Step 6: Create and test a plugin
+### Step 6: Group descriptions
+
+A plugin can add Markdown to the description of any group it generates tests for:
+
+```ruby
+usage_by_group = UsageExtractor.extract(context)                    # { group_metadata => markdown }
+context.descriptions.groups(usage_by_group)                         # one text per group
+context.descriptions.group(context.groups.first, "## Usage\n\n...") # or one group at a time
+```
+
+- Pass plain Markdown. The group template puts the description inside a `%( ... )` literal, so the host escapes `\`, `(`, `)`, `#{`, `#@` and `#$` for you. Nil or blank text is ignored.
+- The text is appended after the built-in description, separated by a blank line. Texts from several plugins come in config order, and each plugin's texts in the order it added them.
+- Plugins can only append. They can't change, remove or reorder the built-in sections.
+- Any GroupMetadata for a profile reaches the same group: entries are keyed by the group's directory name.
+- The text goes only into the generated `<group>_group.rb` file. It isn't written to `plugins.yml`.
+- A group that gets no plugin text keeps exactly the description it had before.
+
+In plugin tests, `run_plugin` returns the collected Plugins::GroupDescriptions:
+
+```ruby
+descriptions = run_plugin(PLUGIN_ROOT, ig_metadata: build_ig_metadata(groups: [group]), base_output_dir: dir)
+descriptions.for(group) # => ["## Usage\n\n..."]
+```
+
+### Step 7: Create and test a plugin
 
 ```bash
 bundle exec rake 'plugins:new[my_plugin]'                  # creates plugins/my_plugin
@@ -207,6 +233,6 @@ plugin_metadata(File.join(dir, "patient"), "read") # => { "interaction" => { ...
 
 `run_plugin` loads the plugin through the real Loader. It registers a GeneratorConfigKeeper for the run (pass `config:` to set config values) and writes the `plugins.yml` files. In this repository, `bundle exec rake test` also runs `plugins/*/test/**/*_test.rb`. Plugin tests are left out of the packaged gem.
 
-### Step 7: Ship a plugin as a gem
+### Step 8: Ship a plugin as a gem
 
 Put `plugin.yml` at the gem root and include it, the templates and the runtime files in `spec.files`. Users then enable it with `{ "gem": "<gem name>" }`. Depend on `inferno_suite_generator` in the gemspec, and set `host_version` in `plugin.yml` to the range you test against.

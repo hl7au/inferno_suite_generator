@@ -3,6 +3,7 @@
 require_relative "base"
 require_relative "context"
 require_relative "error"
+require_relative "group_descriptions"
 
 module InfernoSuiteGenerator
   module Plugins
@@ -34,10 +35,14 @@ module InfernoSuiteGenerator
         manifest.id
       end
 
-      # host: the Context fields that come from the host, i.e. all but manifest, options and metadata.
-      def generate(store, host)
+      # host: the Context fields that come from the host, i.e. all but manifest, options, metadata and
+      # descriptions.
+      def generate(store, host, descriptions: GroupDescriptions.new)
         puts "Running plugin: #{id} #{manifest.version}"
-        instance.generate(Context.new(manifest:, options:, metadata: store.for_plugin(id), **host))
+        instance.generate(
+          Context.new(manifest:, options:, metadata: store.for_plugin(id), descriptions: descriptions.for_plugin(id),
+                      **host)
+        )
       end
     end
   end

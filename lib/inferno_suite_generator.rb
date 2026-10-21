@@ -186,7 +186,8 @@ module InfernoSuiteGenerator
     end
 
     def generate_groups
-      GroupGenerator.generate(ig_metadata, base_output_dir)
+      GroupGenerator.generate(ig_metadata, base_output_dir,
+                              plugin_runner&.group_descriptions || Plugins::GroupDescriptions.new)
     end
 
     def generate_suites

@@ -14,8 +14,10 @@ module InfernoSuiteGenerator
     #   base_output_dir - the generated suite directory, e.g. lib/au_core_test_kit/generated/2.0.0
     #   config          - Generator::GeneratorConfigKeeper, the merged generator config
     #   metadata        - MetadataStore::Writer bound to this plugin, for plugins.yml files
+    #   descriptions    - GroupDescriptions::Writer bound to this plugin, for Markdown appended to group descriptions
     Context = Data.define(
-      :manifest, :options, :ig_resources, :ig_metadata, :ig_demodata, :base_output_dir, :config, :metadata
+      :manifest, :options, :ig_resources, :ig_metadata, :ig_demodata, :base_output_dir, :config, :metadata,
+      :descriptions
     ) do
       def plugin_id
         manifest.id

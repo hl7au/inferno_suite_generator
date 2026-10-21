@@ -6,6 +6,7 @@ require_relative "../core/generator_config_keeper"
 require_relative "../core/group_metadata"
 require_relative "../core/ig_metadata"
 require_relative "../utils/registry"
+require_relative "group_descriptions"
 require_relative "loader"
 require_relative "metadata_store"
 require_relative "runtime_metadata"
@@ -13,13 +14,15 @@ require_relative "runtime_metadata"
 module InfernoSuiteGenerator
   module Plugins
     # Helpers for a plugin's own tests: build small IG metadata by hand, load the plugin through the real
-    # Loader and run it into a temporary directory, then inspect the files and plugins.yml it wrote.
+    # Loader and run it into a temporary directory, then inspect the files and plugins.yml it wrote, and the
+    # group description text it added.
     #
     #   include InfernoSuiteGenerator::Plugins::Testing
     #
     #   group = build_group_metadata(interactions: [{ code: "read", expectation: "SHALL" }])
-    #   run_plugin(PLUGIN_ROOT, ig_metadata: build_ig_metadata(groups: [group]), base_output_dir: dir)
+    #   descriptions = run_plugin(PLUGIN_ROOT, ig_metadata: build_ig_metadata(groups: [group]), base_output_dir: dir)
     #   plugin_metadata(File.join(dir, "patient"), "read")  # => { "interaction" => ... }
+    #   descriptions.for(group)                             # => ["## Read", ...]
     #
     # The fixture builders need no instance state, so they are utility functions on purpose.
     # :reek:UtilityFunction
@@ -85,15 +88,18 @@ module InfernoSuiteGenerator
 
       # Loads the plugin at plugin_root the way the host does, runs it and writes its plugins.yml files. host
       # takes the Context fields the host provides: ig_metadata and base_output_dir, optionally ig_resources
-      # and ig_demodata.
+      # and ig_demodata. Returns the GroupDescriptions the plugin added to.
       # :reek:LongParameterList
+      # :reek:TooManyStatements
       def run_plugin(plugin_root, options: {}, config: {}, **host)
         plugin = load_plugin(plugin_root, options)
         store = MetadataStore.new(host.fetch(:base_output_dir))
+        descriptions = GroupDescriptions.new
         with_config_keeper(config) do |config_keeper|
-          plugin.generate(store, { ig_resources: nil, ig_demodata: nil, **host, config: config_keeper })
+          plugin.generate(store, { ig_resources: nil, ig_demodata: nil, **host, config: config_keeper }, descriptions:)
         end
         store.flush
+        descriptions
       end
 
       def load_plugin(plugin_root, options = {})
