@@ -47,6 +47,17 @@ module InfernoSuiteGenerator
         assert_equal ["dob"], link_ids(entry)
       end
 
+      def test_a_module_form_logs_the_assemble_context_names_it_reads
+        form = questionnaire(
+          extension: [assemble_context("ObsBodyWeightLatest"), assemble_context("age")],
+          item: [item("weight", "Weight", expression("initialExpression", "%ObsBodyWeightLatest.value.value"))]
+        )
+
+        assert_output(/Management Plan reads ObsBodyWeightLatest from the form it is assembled into/) do
+          assert_empty trace(form)
+        end
+      end
+
       def test_a_query_for_a_type_without_a_group_is_untraced
         form = questionnaire(extension: [query_variable("Conditions", "Condition?patient={{%patient.id}}")])
 

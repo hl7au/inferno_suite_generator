@@ -148,6 +148,11 @@ module InfernoSuiteGenerator
                           *types.map { |type| { "url" => "type", "valueCode" => type } }] }
       end
 
+      def assemble_context(name)
+        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembleContext",
+          "valueString" => name }
+      end
+
       def fhirpath_variable(name, fhirpath)
         { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
           "valueExpression" => { "name" => name, "language" => "text/fhirpath", "expression" => fhirpath } }

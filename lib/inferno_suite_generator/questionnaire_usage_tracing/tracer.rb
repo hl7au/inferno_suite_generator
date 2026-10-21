@@ -13,6 +13,8 @@ module InfernoSuiteGenerator
     # `trace` returns `{ profile_url => [trace entries] }`. Every `Questionnaire`
     # in `ig_resources` is traced.
     class Tracer
+      ASSEMBLE_CONTEXT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembleContext"
+
       def initialize(ig_resources, groups)
         @ig_resources = ig_resources
         @matcher = ProfileMatcher.new(groups, ig_resources)
@@ -21,15 +23,39 @@ module InfernoSuiteGenerator
       def trace
         traces = {}
         @ig_resources.get_resources_by_type("Questionnaire").each do |questionnaire|
-          form = Form.new(questionnaire.to_hash)
-          form.query_variables.each { |variable| trace_query(traces, Query.new(form, variable, @ig_resources)) }
-          form.launch_contexts.each { |launch_context| add_launch_context(traces, form, launch_context) }
-          form.template_extracts.each { |extract| add_template(traces, Template.new(form, extract)) }
+          trace_form(traces, questionnaire.to_hash)
         end
         traces
       end
 
       private
+
+      def trace_form(traces, questionnaire)
+        form = Form.new(questionnaire)
+        log_assemble_contexts(form, questionnaire)
+        form.query_variables.each { |variable| trace_query(traces, Query.new(form, variable, @ig_resources)) }
+        form.launch_contexts.each { |launch_context| add_launch_context(traces, form, launch_context) }
+        form.template_extracts.each { |extract| add_template(traces, Template.new(form, extract)) }
+      end
+
+      # A module form gets its `assembleContext` variables from the form it is
+      # assembled into, so their usages are traced in the assembled form only.
+      def log_assemble_contexts(form, questionnaire)
+        names = Array(questionnaire["extension"]).filter_map do |extension|
+          extension["valueString"] if extension["url"] == ASSEMBLE_CONTEXT_URL
+        end
+        names &= references(form, questionnaire)
+        return if names.empty?
+
+        QuestionnaireUsageTracing.log("#{form.label} reads #{names.join(", ")} from the form it is assembled " \
+                                      "into: trace the assembled form for their usages")
+      end
+
+      # The `%Name` names the expressions on the root and on items reference.
+      def references(form, questionnaire)
+        expressions = [questionnaire, *form.scope(questionnaire)].flat_map { |owner| form.expressions(owner) }
+        expressions.flat_map { |expression| form.fhirpath.references(expression[:expression]) }
+      end
 
       # A `query` entry for the query's own type and an `include` entry for each
       # `_include` target type. Chains are routed by type: one that picks an
@@ -136,7 +162,8 @@ module InfernoSuiteGenerator
         # `{ value:, target:, target_by: }` for each target type of each
         # `_include` of the query's own type. The target is the explicit
         # `Source:param:Target`, else the SearchParameter's `target` list, else
-        # the types the form picks out with `entry.resource.ofType(T)`.
+        # the types the form picks out with `entry.resource.ofType(T)` or
+        # `entry.resource.where(resourceType = 'T')`.
         def includes
           @includes ||= include_values.flat_map { |value| targets_of(value) }
         end
@@ -169,14 +196,14 @@ module InfernoSuiteGenerator
           from_param.any? ? [from_param, "search_parameter"] : [of_types, "of_type"]
         end
 
-        # The types other than the query's own that the form picks out with
-        # `%Name.entry.resource.ofType(T)`, in the query's scope.
+        # The types other than the query's own that the form names on
+        # `%Name.entry.resource`, in the query's scope.
         def of_types
           name = @variable[:name]
           fhirpath = @form.fhirpath
           expressions.select { |expression| fhirpath.references(expression).include?(name) }
                      .flat_map { |expression| fhirpath.paths(expression, name, bundle: true) }
-                     .filter_map { |chain| chain[:type] }.uniq - [@resource_type]
+                     .flat_map { |chain| chain[:types] }.uniq - [@resource_type]
         end
 
         def expressions
@@ -258,6 +285,8 @@ module InfernoSuiteGenerator
       # or another alias. Its prefix is the parent's prefix plus the path of its
       # own chain, or `nil` when that chain stopped at `ofType` or `select`. It
       # keeps the chain's type, and only chains whose type `accept` takes count.
+      # A chain's own type counts only on a name that is a resource, with the
+      # prefix `""`.
       class Usages
         Name = Struct.new(:name, :owner, :bundle, :type, :prefix, :alias, keyword_init: true)
 
@@ -291,13 +320,33 @@ module InfernoSuiteGenerator
 
         def add_alias(variable)
           reads = reads_of(variable[:expression], variable[:owner])
-          return false if reads.empty?
+          return add_mixed_alias(variable) if reads.empty?
 
           name, chain = reads.first
-          @paths.concat(reads.filter_map { |read| read_path(*read) })
+          @paths.concat(reads.flat_map { |read| read_paths(*read) })
           @names << Name.new(name: variable[:name], owner: variable[:owner], bundle: false, alias: true,
                              type: type_of(name, chain), prefix: chain[:stopped] ? nil : read_path(name, chain))
           true
+        end
+
+        # A variable that picks resources of several types, like
+        # `%q.entry.resource.where(intent = 'order' or resourceType = 'Medication')`,
+        # reads the source through an untyped chain that `accept` may reject.
+        # It still becomes an alias, with no paths of its own, so a typed chain
+        # from it, like `%name.where(resourceType = 'Medication')`, counts.
+        def add_mixed_alias(variable)
+          return false if @accept.call(nil)
+
+          untyped = reads_of(variable[:expression], variable[:owner], accept: lambda(&:nil?))
+          return false unless untyped.any? { |name, chain| resource?(name, chain) }
+
+          @names << Name.new(name: variable[:name], owner: variable[:owner], bundle: false, alias: true, type: nil,
+                             prefix: "")
+          true
+        end
+
+        def resource?(name, chain)
+          name.prefix == "" && chain[:path].empty? && !chain[:stopped]
         end
 
         # One usage per expression that reads the source. `via` names the alias
@@ -309,7 +358,7 @@ module InfernoSuiteGenerator
             reads = reads_of(expression[:expression], item)
             next if reads.empty?
 
-            paths = reads.filter_map { |read| read_path(*read) }
+            paths = reads.flat_map { |read| read_paths(*read) }
             @paths.concat(paths)
             Form.usage(item, expression[:extension], via: via(reads.map(&:first)), reads: paths.reject(&:empty?).uniq)
           end
@@ -321,21 +370,29 @@ module InfernoSuiteGenerator
 
         # `[name, chain]` for each accepted chain in the expression from a name
         # visible at `node`.
-        def reads_of(expression, node)
+        def reads_of(expression, node, accept: @accept)
           references = @form.fhirpath.references(expression)
           @names.select { |name| references.include?(name.name) && @form.covers?(name.owner, node) }
                 .flat_map do |name|
             @form.fhirpath.paths(expression, name.name, bundle: name.bundle)
-                 .filter_map { |chain| [name, chain] if @accept.call(type_of(name, chain)) }
+                 .filter_map { |chain| [name, chain] if accept.call(type_of(name, chain)) }
           end
         end
 
         def type_of(name, chain)
-          name.type || chain[:type]
+          name.type || (chain[:type] if name.prefix == "")
         end
 
         def read_path(name, chain)
           [name.prefix, chain[:path]].reject(&:empty?).join(".") if name.prefix
+        end
+
+        # The chain's path and the paths its criteria read, after the prefix.
+        # None when the prefix is unknown.
+        def read_paths(name, chain)
+          return [] unless name.prefix
+
+          [chain[:path], *chain[:criteria]].map { |path| [name.prefix, path].reject(&:empty?).join(".") }
         end
       end
 

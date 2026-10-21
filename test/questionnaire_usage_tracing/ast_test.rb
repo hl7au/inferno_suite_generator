@@ -8,8 +8,8 @@ module InfernoSuiteGenerator
     module AstPathAssertions
       private
 
-      def chain(path, type: nil, stopped: false)
-        { type:, path:, stopped: }
+      def chain(path, type: nil, stopped: false, types: [type].compact, criteria: [])
+        { type:, types:, path:, stopped:, criteria: }
       end
 
       def assert_paths(expected, expression, name, bundle: false)
@@ -55,8 +55,9 @@ module InfernoSuiteGenerator
         assert_paths [chain("birthDate")], "%patient.birthDate.toString()", "patient"
       end
 
-      def test_paths_drops_a_where_filter_on_a_member
-        assert_paths [chain("telecom.value")], "%patient.telecom.where(system='phone').value", "patient"
+      def test_paths_reads_a_where_filter_on_a_member_as_a_criteria
+        assert_paths [chain("telecom.value", criteria: ["telecom.system"])],
+                     "%patient.telecom.where(system='phone').value", "patient"
       end
 
       def test_paths_keeps_the_url_of_an_extension_filter
@@ -79,18 +80,19 @@ module InfernoSuiteGenerator
       end
 
       def test_paths_does_not_take_the_url_of_a_sub_extension_filter
-        assert_paths [chain("extension.value")],
+        assert_paths [chain("extension.value", criteria: ["extension.extension[url=type]"])],
                      "%patient.extension.where(extension.where(url='type').exists()).value", "patient"
       end
 
       def test_paths_gives_an_empty_path_for_a_chain_that_only_picks_the_resource
-        assert_paths [chain("")],
+        assert_paths [chain("", criteria: ["status"])],
                      "%ObsBodyHeight.entry.resource.where(status = 'final' or status = 'amended').first()",
                      "ObsBodyHeight", bundle: true
       end
 
-      def test_paths_stops_at_select
-        assert_paths [chain("name", stopped: true)], "%user.name.select(given.first() + ' ' + family)", "user"
+      def test_paths_stops_at_select_after_reading_its_argument
+        assert_paths [chain("name", stopped: true, criteria: ["name.given", "name.family"])],
+                     "%user.name.select(given.first() + ' ' + family)", "user"
       end
 
       def test_paths_stops_at_of_type_outside_a_bundle
@@ -98,7 +100,7 @@ module InfernoSuiteGenerator
       end
 
       def test_paths_reads_an_alias_chain
-        assert_paths [chain("value.value")],
+        assert_paths [chain("value.value", criteria: ["value.unit"])],
                      "%ObsBodyHeightLatest.value.where(unit = 'cm').value", "ObsBodyHeightLatest"
       end
     end
@@ -147,9 +149,54 @@ module InfernoSuiteGenerator
         expression = "%MedicationStatement.entry.resource.ofType(Medication)" \
                      ".where(id in %MedicationStatement.entry.resource.medication.select(reference))"
 
-        assert_paths [chain("", type: "Medication"),
-                      chain("medication", stopped: true)],
+        assert_paths [chain("", type: "Medication", criteria: ["id"]),
+                      chain("medication", stopped: true, criteria: ["medication.reference"])],
                      expression, "MedicationStatement", bundle: true
+      end
+    end
+
+    # Verifies `Ast.paths` reads the elements in the criteria of `where`,
+    # `exists`, `all` and `select`, and the resource types a
+    # `where(resourceType = 'T')` names, using expressions from the 715
+    # Absolute CVD Risk module.
+    class AstCriteriaPathTest < Minitest::Test
+      include AstPathAssertions
+
+      def test_paths_reads_nested_criteria_relative_to_their_chain
+        expression = "%conditions.entry.resource.where(clinicalStatus.coding.exists(code = 'active'))" \
+                     ".where(verificationStatus.coding.all(code.empty() or code = 'confirmed'))"
+
+        assert_paths [chain("", criteria: ["clinicalStatus.coding", "clinicalStatus.coding.code",
+                                           "verificationStatus.coding", "verificationStatus.coding.code"])],
+                     expression, "conditions", bundle: true
+      end
+
+      def test_paths_reads_this_and_the_arguments_of_an_unqualified_function
+        assert_paths [chain("", criteria: %w[id intent authoredOn])],
+                     "%meds.where($this.id.exists() and iif(intent = 'order', authoredOn > now(), false))", "meds"
+      end
+
+      def test_paths_leaves_a_chain_from_another_name_in_a_criteria_to_that_name
+        expression = "%meds.where(id in %orders.medicationReference.select(reference.replace('Medication/', '')))"
+
+        assert_paths [chain("", criteria: ["id"])], expression, "meds"
+      end
+
+      def test_paths_reads_the_type_of_a_where_resource_type_on_the_resource
+        assert_paths [chain("", type: "Medication", criteria: %w[id code])],
+                     "%meds.where(resourceType = 'Medication' and id = 'x').where(code.exists())", "meds"
+      end
+
+      def test_paths_names_each_type_of_a_where_resource_type_in_an_or
+        expression = "%MedicationRequest.entry.resource.where(intent = 'order' or resourceType = 'Medication')"
+
+        assert_paths [chain("", types: ["Medication"], criteria: ["intent"])],
+                     expression, "MedicationRequest", bundle: true
+      end
+
+      def test_paths_takes_no_type_from_a_where_resource_type_on_an_element
+        assert_paths [chain("contained", criteria: ["contained.code"])],
+                     "%meds.contained.where(resourceType = 'Medication').where(code.exists())", "meds"
       end
     end
   end

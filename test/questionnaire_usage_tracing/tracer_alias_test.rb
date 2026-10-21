@@ -18,7 +18,7 @@ module InfernoSuiteGenerator
         assert_equal [{ link_id: "height", text: "Height", extension: "initialExpression", via: "ObsBodyHeightValue",
                         reads: ["value.value"] }],
                      entry[:used_in]
-        assert_equal ["value.value"], entry[:elements_read]
+        assert_equal ["status", "value.value", "value.unit"], entry[:elements_read]
       end
 
       def test_users_of_an_alias_that_stops_at_select_add_no_path
@@ -30,7 +30,7 @@ module InfernoSuiteGenerator
         entry = trace(form)[BODY_HEIGHT].first
 
         assert_equal ["HeightCodes"], vias(entry)
-        assert_equal ["code"], entry[:elements_read]
+        assert_equal ["code", "code.coding.code"], entry[:elements_read]
       end
 
       def test_an_alias_on_an_item_is_not_visible_to_a_sibling

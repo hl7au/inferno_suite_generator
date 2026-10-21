@@ -30,7 +30,7 @@ module InfernoSuiteGenerator
 
         assert_equal "query", entry[:source]
         assert_equal ["medications"], link_ids(entry)
-        assert_equal ["medication"], entry[:elements_read]
+        assert_equal ["medication", "medication.reference"], entry[:elements_read]
       end
 
       def test_an_explicit_target_type
@@ -107,10 +107,10 @@ module InfernoSuiteGenerator
 
       def medication_entry
         {
-          source: "include", **form_header,
-          name: "MedicationStatement", defined_at: "root", query: MEDS_QUERY,
+          source: "include", **form_header, name: "MedicationStatement", defined_at: "root", query: MEDS_QUERY,
           include: "MedicationStatement:medication", target_by: "search_parameter", matched_by: "resource_type",
-          elements_read: [], used_in: [{ link_id: "medications", text: "Medications", extension: "initialExpression" }]
+          elements_read: ["id"],
+          used_in: [{ link_id: "medications", text: "Medications", extension: "initialExpression", reads: ["id"] }]
         }
       end
 
