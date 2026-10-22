@@ -77,6 +77,7 @@ module InfernoSuiteGenerator
         def title: () -> String
         def default_fhir_server: () -> String
         def links: () -> (Array[Hash[String, untyped]] | Array[untyped])
+        def plugins: () -> Hash[String, untyped]
         def package_archive_path: () -> String
         def extra_json_paths: () -> Array[String]
         def search_params_to_ignore: () -> Array[String]

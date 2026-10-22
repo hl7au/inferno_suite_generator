@@ -94,6 +94,7 @@ Internally, the project is organised as:
 - **Configuration/core** (`lib/inferno_suite_generator/core/`) – configuration loading, merging and helpers
 - **Templates** (`lib/inferno_suite_generator/templates/`) – ERB templates that define the emitted Ruby
 - **Shared test modules** (`lib/inferno_suite_generator/test_modules/`) – common behavior for generated tests
+- **Plugin framework** (`lib/inferno_suite_generator/plugins/`) – loading, running and tooling for plugins
 
 ---
 
@@ -112,6 +113,7 @@ At a high level, a config file contains:
 - **`configs.generic`** – global behavior tweaks and custom generators
 - **`configs.profiles`** – per‑profile overrides
 - **`configs.resources`** – per‑resource overrides (by FHIR resource type)
+- **`plugins`** – generator plugins to run, keyed by plugin id (see [Plugins](#plugins))
 
 ### IG section
 
@@ -224,6 +226,24 @@ Keyed by FHIR **resource type** (e.g. `"Observation"`, `"MedicationRequest"`). O
 See `config.example.json` and `config.example2.json` for a fully worked example.
 
 ---
+
+## Plugins
+
+A plugin is a gem or a folder with a `plugin.yml` manifest and a class that defines `generate(context)`. It runs inside the generator and gets the IG resources, the extracted metadata and demo data, the output directory and the merged config. It can bring its own extractors, templates, test generators and runtime code, plus its own tests and docs.
+
+Enable plugins in a top-level `plugins` config section, keyed by plugin id:
+
+```json
+"plugins": {
+  "my_checks": { "path": "plugins/my_checks", "options": { "strict": true } },
+  "shared": { "gem": "isg_shared_plugin" }
+}
+```
+
+- Plugins run in config order after all built-in tests and before groups and suites are generated, so the tests they add appear in the groups.
+- Plugin data goes to `plugins.yml` files in the suite directory and in each group directory, keyed by plugin id. The host's `metadata.yml` and `demodata.yml` are unchanged.
+
+See [documentation/plugins.md](documentation/plugins.md) for the contract, the context, the tooling classes and how to ship a plugin.
 
 ## Saving fetched resources (Resource Keeper)
 
