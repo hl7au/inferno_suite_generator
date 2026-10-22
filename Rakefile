@@ -8,7 +8,7 @@ RuboCop::RakeTask.new
 
 Rake::TestTask.new(:test) do |t|
   t.libs << "test"
-  t.pattern = "test/**/*_test.rb"
+  t.test_files = FileList["test/**/*_test.rb", "plugins/*/test/**/*_test.rb"]
 end
 
 namespace :plugins do
