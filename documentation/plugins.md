@@ -4,6 +4,7 @@ Source files:
 
 - [lib/inferno_suite_generator/plugins/](../lib/inferno_suite_generator/plugins/) (the plugin framework)
 - [lib/inferno_suite_generator.rb](../lib/inferno_suite_generator.rb) (Generator#load_plugins, #run_plugins)
+- [plugins/questionnaire_usage_tracing/](../plugins/questionnaire_usage_tracing/) (a bundled plugin, the reference example)
 
 ---
 
@@ -36,6 +37,7 @@ Add a top-level `plugins` section to any config file. It is keyed by plugin id, 
 
 ```json
 "plugins": {
+  "questionnaire_usage_tracing": { "builtin": "questionnaire_usage_tracing" },
   "local":  { "path": "plugins/local", "options": { "any": "value" } },
   "shared": { "gem": "isg_shared_plugin" },
   "off":    { "path": "plugins/off", "enabled": false }
