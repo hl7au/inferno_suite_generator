@@ -116,7 +116,8 @@ Helpers:
 | Plugins::Extractor | per-group data extraction: implement `extract` and return a hash, or nil to skip the group. `MyExtractor.extract(context)` returns `{ group_metadata => data }` |
 | Plugins::TestGenerator | one test file per group from an ERB template. Set `template_name`, `class_name_suffix` and `test_id_suffix`, and override `insert_index` to choose the test's place in the group |
 | Plugins::RuntimeMetadata | reading the plugin's plugins.yml section from a generated test at Inferno run time |
-| Plugins::GroupDescriptions | collecting the Markdown plugins add to group descriptions |
+| Plugins::GroupDescriptions | collecting the Markdown plugins add to group descriptions; `run_plugin` returns it in tests |
+| Plugins::Testing | plugin tests: build group and IG metadata, run the plugin into a temporary directory, read plugins.yml |
 | Plugins::Scaffold | creating a new plugin folder |
 
 Plugins::TestGenerator does not depend on the host's own generator classes. Templates and subclasses can call its public methods:
@@ -200,7 +201,14 @@ context.descriptions.group(context.groups.first, "## Usage\n\n...") # or one gro
 - The text goes only into the generated `<group>_group.rb` file. It isn't written to `plugins.yml`.
 - A group that gets no plugin text keeps exactly the description it had before.
 
-### Step 7: Create a plugin
+In plugin tests, `run_plugin` returns the collected Plugins::GroupDescriptions:
+
+```ruby
+descriptions = run_plugin(PLUGIN_ROOT, ig_metadata: build_ig_metadata(groups: [group]), base_output_dir: dir)
+descriptions.for(group) # => ["## Usage\n\n..."]
+```
+
+### Step 7: Create and test a plugin
 
 ```bash
 bundle exec rake 'plugins:new[my_plugin]'                  # creates plugins/my_plugin
@@ -209,7 +217,19 @@ bundle exec rake 'plugins:new[my_plugin,path/to/my_plugin]'
 
 Outside this repository, `require "inferno_suite_generator/plugins/scaffold"` and call `InfernoSuiteGenerator::Plugins::Scaffold.new(id: "my_plugin", destination: "plugins/my_plugin").create`.
 
-The skeleton has `plugin.yml`, an entrypoint, a Plugin class, an Extractor, a README and an AGENTS.md with instructions for coding agents. It runs as it is: it writes each group's resource type and profile URL to `plugins.yml`.
+The skeleton has `plugin.yml`, an entrypoint, a Plugin class, an Extractor, a test, a README and an AGENTS.md with instructions for coding agents. It runs as it is: it writes each group's resource type and profile URL to `plugins.yml`.
+
+Plugin tests use Plugins::Testing:
+
+```ruby
+include InfernoSuiteGenerator::Plugins::Testing
+
+group = build_group_metadata(interactions: [{ code: "read", expectation: "SHALL" }])
+run_plugin(PLUGIN_ROOT, ig_metadata: build_ig_metadata(groups: [group]), base_output_dir: dir)
+plugin_metadata(File.join(dir, "patient"), "my_plugin") # => { "resource" => "Patient", ... }
+```
+
+`run_plugin` loads the plugin through the real Loader. It registers a GeneratorConfigKeeper for the run (pass `config:` to set config values) and writes the `plugins.yml` files. In this repository, `bundle exec rake test` also runs `plugins/*/test/**/*_test.rb`. Plugin tests are left out of the packaged gem.
 
 ### Step 8: Ship a plugin as a gem
 

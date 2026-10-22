@@ -243,7 +243,7 @@ Enable plugins in a top-level `plugins` config section, keyed by plugin id:
 - Plugins run in config order after all built-in tests and before groups and suites are generated, so the tests they add appear in the groups.
 - Plugin data goes to `plugins.yml` files in the suite directory and in each group directory, keyed by plugin id. The host's `metadata.yml` and `demodata.yml` are unchanged.
 
-Create a plugin with `bundle exec rake 'plugins:new[my_plugin]'`. See [documentation/plugins.md](documentation/plugins.md) for the contract, the context, the tooling classes and how to ship a plugin.
+Create a plugin with `bundle exec rake 'plugins:new[my_plugin]'`. See [documentation/plugins.md](documentation/plugins.md) for the contract, the context, the tooling classes and how to test and ship a plugin.
 
 ## Saving fetched resources (Resource Keeper)
 
