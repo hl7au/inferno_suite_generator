@@ -164,7 +164,7 @@ module InfernoSuitePlugins
 
       def uses(usages)
         names = usages.filter_map { |usage| usage[:extension] }.uniq
-        names.map { |name| USES.fetch(name, name) }.join(", ") unless names.empty?
+        names.map { |name| USES.fetch(name) { name } }.join(", ") unless names.empty?
       end
 
       def reads(usages)
