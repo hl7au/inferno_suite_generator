@@ -117,6 +117,7 @@ Helpers:
 | Plugins::TestGenerator | one test file per group from an ERB template. Set `template_name`, `class_name_suffix` and `test_id_suffix`, and override `insert_index` to choose the test's place in the group |
 | Plugins::RuntimeMetadata | reading the plugin's plugins.yml section from a generated test at Inferno run time |
 | Plugins::GroupDescriptions | collecting the Markdown plugins add to group descriptions |
+| Plugins::Scaffold | creating a new plugin folder |
 
 Plugins::TestGenerator does not depend on the host's own generator classes. Templates and subclasses can call its public methods:
 
@@ -199,6 +200,17 @@ context.descriptions.group(context.groups.first, "## Usage\n\n...") # or one gro
 - The text goes only into the generated `<group>_group.rb` file. It isn't written to `plugins.yml`.
 - A group that gets no plugin text keeps exactly the description it had before.
 
-### Step 7: Ship a plugin as a gem
+### Step 7: Create a plugin
+
+```bash
+bundle exec rake 'plugins:new[my_plugin]'                  # creates plugins/my_plugin
+bundle exec rake 'plugins:new[my_plugin,path/to/my_plugin]'
+```
+
+Outside this repository, `require "inferno_suite_generator/plugins/scaffold"` and call `InfernoSuiteGenerator::Plugins::Scaffold.new(id: "my_plugin", destination: "plugins/my_plugin").create`.
+
+The skeleton has `plugin.yml`, an entrypoint, a Plugin class, an Extractor, a README and an AGENTS.md with instructions for coding agents. It runs as it is: it writes each group's resource type and profile URL to `plugins.yml`.
+
+### Step 8: Ship a plugin as a gem
 
 Put `plugin.yml` at the gem root and include it, the templates and the runtime files in `spec.files`. Users then enable it with `{ "gem": "<gem name>" }`. Depend on `inferno_suite_generator` in the gemspec, and set `host_version` in `plugin.yml` to the range you test against.
