@@ -95,6 +95,7 @@ Internally, the project is organised as:
 - **Templates** (`lib/inferno_suite_generator/templates/`) – ERB templates that define the emitted Ruby
 - **Shared test modules** (`lib/inferno_suite_generator/test_modules/`) – common behavior for generated tests
 - **Plugin framework** (`lib/inferno_suite_generator/plugins/`) – loading, running and tooling for plugins
+- **Bundled plugins** (`plugins/`) – plugins that ship with the generator, starting with `questionnaire_usage_tracing`
 
 ---
 
@@ -235,12 +236,14 @@ Enable plugins in a top-level `plugins` config section, keyed by plugin id:
 
 ```json
 "plugins": {
+  "questionnaire_usage_tracing": { "builtin": "questionnaire_usage_tracing" },
   "my_checks": { "path": "plugins/my_checks", "options": { "strict": true } },
   "shared": { "gem": "isg_shared_plugin" }
 }
 ```
 
 - Plugins run in config order after all built-in tests and before groups and suites are generated, so the tests they add appear in the groups.
+- The bundled `questionnaire_usage_tracing` plugin adds a "Used in questionnaires" section to each group that the IG's SDC questionnaires use. See [its README](plugins/questionnaire_usage_tracing/README.md).
 - Plugin data goes to `plugins.yml` files in the suite directory and in each group directory, keyed by plugin id. The host's `metadata.yml` and `demodata.yml` are unchanged.
 
 Create a plugin with `bundle exec rake 'plugins:new[my_plugin]'`. See [documentation/plugins.md](documentation/plugins.md) for the contract, the context, the tooling classes and how to test and ship a plugin.
