@@ -1,72 +1,65 @@
 # frozen_string_literal: true
 
+require_relative "forms"
 require_relative "query_search"
 
 module InfernoSuitePlugins
   module QuestionnaireUsageTracing
-    # The "Used in questionnaires" Markdown for one group's trace entries: a
-    # nested list of questionnaires, the sources in each that link to the
-    # profile, and the items that use each source. It uses only bold and plain
-    # text, since Inferno shows tables without borders and raw HTML as text.
+    # A "Used in questionnaires" list of trace entries for one group: the
+    # questionnaires, the sources in each that link to the profile, and the
+    # items that use each source. It uses only bold and plain text, since
+    # Inferno shows tables without borders and raw HTML as text.
     #
-    # A source no item uses is left out, unless it is a query that fetches
-    # other resources through `_include` or a template extracted from the
-    # whole form. So are uses that only define a variable: the items that read
-    # the variable are listed instead. Element paths the profile neither marks
-    # Must Support nor requires are marked "(not checked)".
+    # The plugin shows one per test, with the entries whose requests the test
+    # makes, and one in the group summary, with the entries no test makes.
+    #
+    # Only `shown?` entries are listed. Uses that only define a variable are
+    # left out: the items that read the variable are listed instead. Element
+    # paths the profile neither marks Must Support nor requires are marked
+    # "(not checked)".
     class UsageSection
+      HEADING = "## Used in questionnaires"
       NOT_CHECKED = "(not checked)"
 
-      def initialize(entries, group)
+      # A source no item uses is left out, unless it is a query that fetches
+      # other resources through `_include` or a template extracted from the
+      # whole form.
+      def self.shown?(entry)
+        source = entry[:source]
+        !ItemLines.new(entry[:used_in].to_a, nil).empty? || source == "template_extract" ||
+          (source == "query" && QuerySearch.includes(entry[:query]).any?)
+      end
+
+      # search_check: whether a query says how the group's search tests
+      # compare to it, which only the group summary needs.
+      def initialize(entries, group, intro: nil, search_check: false)
         @group = group
+        @intro = intro
+        @search_check = search_check
         @must_support = MustSupport.new(group)
-        @forms = entries.select { |entry| shown?(entry) }.group_by do |entry|
-          entry.values_at(:questionnaire_url, :questionnaire_id, :questionnaire_version)
-        end
+        @forms = Forms.new(entries.select { |entry| self.class.shown?(entry) })
       end
 
       def empty?
         @forms.empty?
       end
 
+      # The heading, the intro and the list.
       def markdown
-        lines = ["## Used in questionnaires", "", intro, ""]
-        @forms.each_value do |entries|
-          lines.push("- **#{form_title(entries.first)}**", *entries.flat_map { |entry| entry_lines(entry) })
-        end
-        "#{lines.join("\n")}\n"
+        "#{[HEADING, "", @intro, "", list].join("\n")}\n"
+      end
+
+      # The nested list alone, one line per string.
+      def list
+        @forms.flat_map do |title, entries|
+          ["- **#{title}**", *entries.flat_map { |entry| entry_lines(entry) }]
+        end.join("\n")
       end
 
       private
 
-      def intro
-        "These questionnaires in the IG read or create #{@group.profile_name || @group.resource} resources. A " \
-          "form can pre-fill an item only if the server returns the elements the item reads. Elements marked " \
-          "#{NOT_CHECKED} are neither Must Support nor required by the profile, so this group's tests do not " \
-          "check them."
-      end
-
-      def shown?(entry)
-        !item_lines(entry).empty? || entry[:source] == "template_extract" ||
-          (entry[:source] == "query" && QuerySearch.includes(entry[:query]).any?)
-      end
-
       def item_lines(entry)
         ItemLines.new(entry[:used_in].to_a, @must_support)
-      end
-
-      # The title, or the URL or id for an untitled form, with the version when
-      # another questionnaire shown has the same title, as an assembled modular
-      # form does.
-      def form_title(entry)
-        title = title_of(entry)
-        version = entry[:questionnaire_version]
-        same_title = @forms.values.count { |entries| title_of(entries.first) == title }
-        same_title > 1 && version ? "#{title}, version #{version}" : title
-      end
-
-      def title_of(entry)
-        entry[:questionnaire_title] || entry[:questionnaire_url] || entry[:questionnaire_id] || "Untitled questionnaire"
       end
 
       def entry_lines(entry)
@@ -98,7 +91,7 @@ module InfernoSuitePlugins
 
       def details(entry)
         query = entry[:query]
-        search = SearchCheck.new(query, @group).line if entry[:source] == "query"
+        search = SearchCheck.new(query, @group).line if @search_check && entry[:source] == "query" && !entry[:read]
         [query && "Request: #{query}", search, *items(entry)].compact
       end
 
@@ -137,6 +130,15 @@ module InfernoSuitePlugins
         "templateExtract" => "its answers fill the template"
       }.freeze
 
+      # The item's text, or its linkId when it has none. A usage with neither
+      # is on the questionnaire root.
+      def self.label(usage)
+        text = usage[:text].to_s.split.join(" ")
+        return text.gsub(/[*_`\[\]]/) { |match| "\\#{match}" } unless text.empty?
+
+        usage[:link_id]&.to_s || ROOT_LABEL
+      end
+
       def initialize(usages, must_support)
         @items = usages.reject { |usage| HIDDEN_USES.include?(usage[:extension]) }
                        .group_by { |usage| usage[:link_id] }.values
@@ -172,26 +174,18 @@ module InfernoSuitePlugins
         "reads #{paths.map { |path| read_label(path) }.join(", ")}" unless paths.empty?
       end
 
-      # The item's text, or its linkId when it has none. A usage with neither
-      # is on the questionnaire root.
       def label(usage)
-        text = usage[:text].to_s.split.join(" ")
-        return text.gsub(/[*_`\[\]]/) { |match| "\\#{match}" } unless text.empty?
-
-        usage[:link_id]&.to_s || ROOT_LABEL
+        self.class.label(usage)
       end
 
-      # The path with an extension the profile does not slice shortened to the
-      # last part of its URL, like `extension[individual-pronouns]`.
       def read_label(path)
-        label = @must_support.label(path)
-        shown = label.gsub(%r{\[url=(?:[^\]]*/)?([^\]/]+)\]}, '[\1]')
-        @must_support.covered?(label) ? shown : "#{shown} #{UsageSection::NOT_CHECKED}"
+        shown = @must_support.shown(path)
+        @must_support.checked?(path) ? shown : "#{shown} #{UsageSection::NOT_CHECKED}"
       end
     end
 
-    # Whether a group tests a search by the same parameters as an x-fhir-query,
-    # in any order.
+    # How a group's searches compare to an x-fhir-query that none of its
+    # search tests makes, for the group summary.
     class SearchCheck
       def initialize(query, group)
         @names = QuerySearch.params(query)
@@ -203,15 +197,15 @@ module InfernoSuitePlugins
         return if @names.empty?
 
         same = @tested.find { |names| names.to_set == @names.to_set }
-        return "This group tests the same search: #{label(same)}" if same
+        return "This group searches by the same parameters, #{label(same)}, but has no test for it" if same
 
-        "**Not tested by this group:** a search by #{label(@names)}#{others}"
+        "A search by #{label(@names)}#{others}"
       end
 
       private
 
       def others
-        "; it tests #{@tested.map { |names| label(names) }.join(", ")}" unless @tested.empty?
+        "; this group tests #{@tested.map { |names| label(names) }.join(", ")}" unless @tested.empty?
       end
 
       def label(names)
@@ -252,6 +246,17 @@ module InfernoSuitePlugins
       def covered?(label)
         ALWAYS_PRESENT.include?(label) || @paths.include?(without_choice_types(label)) ||
           segments(label).any? { |segment| segment.match?(EXTENSION_SLICE) }
+      end
+
+      # The label with an extension the profile does not slice shortened to
+      # the last part of its URL, like `extension[individual-pronouns]`.
+      def shown(path)
+        label(path).gsub(%r{\[url=(?:[^\]]*/)?([^\]/]+)\]}, '[\1]')
+      end
+
+      # Whether the group's tests check the trace path.
+      def checked?(path)
+        covered?(label(path))
       end
 
       private

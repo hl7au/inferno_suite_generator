@@ -4,47 +4,6 @@ require_relative "support"
 
 module InfernoSuitePlugins
   module QuestionnaireUsageTracing
-    # Entries and a Patient group shared by the `UsageSection` tests.
-    module UsageSectionFixtures
-      include TracerFixtures
-
-      INDIGENOUS_STATUS = "http://hl7.org.au/fhir/StructureDefinition/indigenous-status"
-      PRONOUNS = "http://hl7.org/fhir/StructureDefinition/individual-pronouns"
-      LOCATION_QUERY = "PractitionerRole?_id={{%role.id}}&_include=PractitionerRole:location"
-
-      # The Markdown without its heading and intro.
-      def section(entries, group: patient_group)
-        UsageSection.new(entries, group).markdown.lines.drop(4).join
-      end
-
-      def launch_entry(reads: ["birthDate"],
-                       used_in: [{ link_id: "dob", text: "Date of birth", extension: "initialExpression", reads: }])
-        { source: "launch_context", **form_header, name: "patient", used_in: }
-      end
-
-      def variable_usage
-        { link_id: "group", text: "Group", extension: "variable", reads: ["name"] }
-      end
-
-      def query_entry(query, used_in: [{ link_id: "name", text: "Name", extension: "initialExpression" }])
-        { source: "query", **form_header, name: "Patients", query:, used_in: }
-      end
-
-      def template_entry(patch:, template_codes: [],
-                         used_in: [{ link_id: "height", text: "Height", extension: "templateExtract" }])
-        { source: "template_extract", **form_header, name: "height", patch:, template_codes:, used_in: }
-      end
-
-      def patient_group(searches: [{ names: ["_id"] }, { names: %w[family gender] }])
-        InfernoSuiteGenerator::Generator::GroupMetadata.new(
-          resource: "Patient", profile_url: AU_CORE_PATIENT, searches:, mandatory_elements: ["Patient.gender"],
-          must_supports: { elements: [{ path: "birthDate" }, { path: "deceasedBoolean" }],
-                           slices: [{ slice_id: "Patient.deceased[x]:deceasedBoolean", path: "deceased[x]" }],
-                           extensions: [{ id: "Patient.extension:indigenousStatus", url: INDIGENOUS_STATUS }] }
-        )
-      end
-    end
-
     # Verifies the `UsageSection` Markdown for each kind of source, the search
     # check, and which sources it leaves out.
     class UsageSectionTest < Minitest::Test
@@ -58,26 +17,32 @@ module InfernoSuitePlugins
         MARKDOWN
       end
 
-      def test_a_query_shows_its_request_and_that_the_group_tests_its_search
+      def test_a_query_shows_its_request_and_that_the_group_has_the_search_but_no_test
         markdown = section([query_entry("Patient?gender:not=male&_sort=-birthdate&family={{%name}}")])
 
         assert_includes markdown, <<~MARKDOWN
           - **Query Patients**: searches Patient resources
               - Request: Patient?gender:not=male&_sort=-birthdate&family={{%name}}
-              - This group tests the same search: family + gender
+              - This group searches by the same parameters, family + gender, but has no test for it
               - **Name**: pre-fills the answer
         MARKDOWN
       end
 
-      def test_a_query_whose_search_the_group_does_not_test
-        assert_includes section([query_entry("Patient?name={{%name}}&_count=1")]),
-                        "- **Not tested by this group:** a search by name; it tests _id, family + gender\n"
+      def test_a_test_section_leaves_the_search_check_out
+        markdown = section([query_entry("Patient?gender=male&family={{%name}}")], search_check: false)
+
+        assert_includes markdown, "- Request: Patient?gender=male&family={{%name}}\n    - **Name**"
       end
 
-      def test_a_group_without_searches_says_only_that_the_search_is_not_tested
+      def test_a_query_whose_search_the_group_does_not_test
+        assert_includes section([query_entry("Patient?name={{%name}}&_count=1")]),
+                        "- A search by name; this group tests _id, family + gender\n"
+      end
+
+      def test_a_group_without_searches_says_only_what_the_query_searches_by
         markdown = section([query_entry("Patient?_id=1")], group: patient_group(searches: []))
 
-        assert_includes markdown, "- **Not tested by this group:** a search by _id\n"
+        assert_includes markdown, "- A search by _id\n"
       end
 
       def test_a_query_no_item_reads_is_shown_only_when_it_includes_other_resources
@@ -140,7 +105,7 @@ module InfernoSuitePlugins
         group = patient_group(searches: [{ names: %w[patient code] }])
 
         assert_includes section([query_entry("Patient/{{%patient.id}}/Observation?code=x")], group:),
-                        "- This group tests the same search: patient + code\n"
+                        "- This group searches by the same parameters, patient + code, but has no test for it\n"
       end
 
       def test_questionnaires_without_a_url_stay_apart

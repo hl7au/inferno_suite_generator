@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
+require "tmpdir"
 require "inferno_suite_generator"
+require "inferno_suite_generator/plugins/testing"
 require_relative "../lib/questionnaire_usage_tracing"
 
 module InfernoSuitePlugins
@@ -156,6 +158,96 @@ module InfernoSuitePlugins
       def fhirpath_variable(name, fhirpath)
         { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
           "valueExpression" => { "name" => name, "language" => "text/fhirpath", "expression" => fhirpath } }
+      end
+    end
+
+    # Entries and a Patient group shared by the `UsageSection`,
+    # `ElementReads` and `GroupSummary` tests.
+    module UsageSectionFixtures
+      include TracerFixtures
+
+      INDIGENOUS_STATUS = "http://hl7.org.au/fhir/StructureDefinition/indigenous-status"
+      PRONOUNS = "http://hl7.org/fhir/StructureDefinition/individual-pronouns"
+      LOCATION_QUERY = "PractitionerRole?_id={{%role.id}}&_include=PractitionerRole:location"
+
+      # The list as the group summary shows it, with the search check.
+      def section(entries, group: patient_group, search_check: true)
+        list = UsageSection.new(entries, group, search_check:).list
+        list.empty? ? "" : "#{list}\n"
+      end
+
+      def launch_entry(reads: ["birthDate"],
+                       used_in: [{ link_id: "dob", text: "Date of birth", extension: "initialExpression", reads: }])
+        { source: "launch_context", **form_header, name: "patient", used_in: }
+      end
+
+      def variable_usage
+        { link_id: "group", text: "Group", extension: "variable", reads: ["name"] }
+      end
+
+      def query_entry(query, used_in: [{ link_id: "name", text: "Name", extension: "initialExpression" }])
+        { source: "query", **form_header, name: "Patients", query:, used_in: }
+      end
+
+      def template_entry(patch:, template_codes: [],
+                         used_in: [{ link_id: "height", text: "Height", extension: "templateExtract" }])
+        { source: "template_extract", **form_header, name: "height", patch:, template_codes:, used_in: }
+      end
+
+      def patient_group(searches: [{ names: ["_id"] }, { names: %w[family gender] }])
+        InfernoSuiteGenerator::Generator::GroupMetadata.new(
+          resource: "Patient", profile_url: AU_CORE_PATIENT, searches:, mandatory_elements: ["Patient.gender"],
+          must_supports: { elements: [{ path: "birthDate" }, { path: "deceasedBoolean" }],
+                           slices: [{ slice_id: "Patient.deceased[x]:deceasedBoolean", path: "deceased[x]" }],
+                           extensions: [{ id: "Patient.extension:indigenousStatus", url: INDIGENOUS_STATUS }] }
+        )
+      end
+    end
+
+    # A temporary suite directory and a Patient group whose profile marks
+    # birthDate Must Support, for tests that run the plugin the way the host
+    # does.
+    module PluginRunFixtures
+      include TracerFixtures
+      include InfernoSuiteGenerator::Plugins::Testing
+
+      PLUGIN_ROOT = File.expand_path("..", __dir__)
+      PLUGIN_ID = "questionnaire_usage_tracing"
+
+      def setup
+        @dir = Dir.mktmpdir
+        @group = build_group_metadata(resource: "Patient", profile_url: AU_CORE_PATIENT,
+                                      must_supports: { elements: [{ path: "birthDate" }] })
+      end
+
+      def teardown
+        FileUtils.remove_entry(@dir)
+      end
+
+      # Runs the plugin over the form and returns the descriptions it added.
+      def run_tracing(form = patient_form, groups: [@group], profiles: { AU_CORE_PATIENT => profile("Patient") })
+        _groups, ig_resources = suite_for(profiles)
+        ig_resources.add(FHIR::Questionnaire.new(form))
+        run_plugin(PLUGIN_ROOT, ig_metadata: build_ig_metadata(groups:), ig_resources:, base_output_dir: @dir)
+      end
+
+      def add_test(group, id, kind, **details)
+        group.add_test(id:, file_name: "#{id}.rb", kind:, **details)
+      end
+
+      # Writes the Patient group file with the descriptions and returns its path.
+      def generate_group_file(descriptions)
+        FileUtils.mkdir_p(File.join(@dir, "patient"))
+        with_config_keeper do
+          InfernoSuiteGenerator::Generator::GroupGenerator.generate(build_ig_metadata(groups: [@group]), @dir,
+                                                                    descriptions)
+        end
+        File.join(@dir, "patient_group.rb")
+      end
+
+      def patient_form(text: "Date of birth")
+        questionnaire(extension: [launch_context("patient", "Patient")],
+                      item: [item("dob", text, expression("initialExpression", "%patient.birthDate.toString()"))])
       end
     end
   end

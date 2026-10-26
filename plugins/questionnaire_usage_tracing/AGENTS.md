@@ -7,7 +7,8 @@ This folder is a plugin that ships with inferno_suite_generator. Keep every chan
 - `plugin.yml` is the source of truth for the id, version, entrypoint and class. Bump `version` when the generated output changes.
 - `InfernoSuitePlugins::QuestionnaireUsageTracing::Plugin#generate(context)` is the only entry point. `context` is an `InfernoSuiteGenerator::Plugins::Context`.
 - Write plugin data only through `context.metadata`. It ends up under `questionnaire_usage_tracing` in each group's `plugins.yml`.
-- Add text to a group's description only through `context.descriptions`, with plain Markdown. The host escapes it for the group template, so don't escape it here.
+- Add text to a group's or a test's description only through `context.descriptions` (`group` and `test`), with plain Markdown. The host escapes it for the group template, so don't escape it here.
+- Find a group's tests only through `context.test_index(group)`, never by building or parsing test ids.
 - Never edit the host's `metadata.yml` or `demodata.yml`.
 
 ## Markdown
