@@ -1,0 +1,31 @@
+# frozen_string_literal: true
+
+require 'inferno_suite_generator/plugins/runtime_metadata'
+require_relative '../plugins/profile_read/profile_read_test'
+
+module <%= suite_module_name %>
+  module <%= module_name %>
+    class <%= class_name %> < Inferno::Test
+      include InfernoSuitePlugins::ProfileRead::ProfileReadTest
+
+      title <%= title.inspect %>
+      description <%= description.inspect %>
+      id :<%= test_id %><% if optional? %>
+      optional<% end %>
+
+      input :<%= ids_input_name %>,
+            title: <%= input_title.inspect %>,
+            description: <%= input_description.inspect %>,
+            default: <%= default_ids.inspect %>,
+            optional: true
+
+      def self.plugin_metadata
+        @plugin_metadata ||= InfernoSuiteGenerator::Plugins::RuntimeMetadata.load(__dir__, 'profile_read')
+      end
+
+      run do
+        run_profile_read_test(<%= ids_input_name %>)
+      end
+    end
+  end
+end

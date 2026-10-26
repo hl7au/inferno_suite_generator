@@ -1,0 +1,7 @@
+id: profile_read
+name: Profile read
+version: 0.1.0
+description: Generates a read test for every profile that reads each given id and validates the response against the profile
+entrypoint: lib/profile_read.rb
+class: InfernoSuitePlugins::ProfileRead::Plugin
+host_version: ">= 0.1.0"
