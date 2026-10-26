@@ -64,6 +64,53 @@ module InfernoSuiteGenerator
 
         assert_equal ["## One"], @descriptions.for(build_group_metadata)
       end
+
+      def test_keeps_test_texts_in_add_order_across_plugins
+        group = group_with_tests("example_patient_read_test")
+        @descriptions.for_plugin("first").test(group, "example_patient_read_test", "## One")
+        @descriptions.for_plugin("second").test(group, :example_patient_read_test, "## Two")
+
+        assert_equal ["## One", "## Two"], @descriptions.for_test(group, "example_patient_read_test")
+        assert_equal "## One\n\n## Two", @descriptions.test_section(group, :example_patient_read_test)
+      end
+
+      def test_test_texts_are_kept_apart_from_group_and_other_test_texts
+        group = group_with_tests("example_patient_read_test", "example_patient_validation_test")
+        writer = @descriptions.for_plugin("first")
+        writer.group(group, "Group text")
+        writer.test(group, "example_patient_read_test", "Read text")
+
+        assert_equal ["Group text"], @descriptions.for(group)
+        assert_equal ["Read text"], @descriptions.for_test(group, "example_patient_read_test")
+        assert_nil @descriptions.test_section(group, "example_patient_validation_test")
+      end
+
+      def test_test_section_escapes_text_for_the_group_template
+        group = group_with_tests("example_patient_read_test")
+        @descriptions.for_plugin("first").test(group, "example_patient_read_test", "Uses (see \#{x})")
+
+        assert_equal "Uses \\(see \\\#{x}\\)", @descriptions.test_section(group, "example_patient_read_test")
+      end
+
+      def test_ignores_blank_test_text_even_for_an_unknown_test
+        @descriptions.for_plugin("first").test(@group, "missing_test", " ")
+
+        assert_empty @descriptions.for_test(@group, "missing_test")
+      end
+
+      def test_raises_for_a_test_the_group_does_not_have
+        error = assert_raises(Error) do
+          @descriptions.for_plugin("first").test(@group, "missing_test", "## Text")
+        end
+
+        assert_includes error.message, "Plugin first adds a description to test missing_test"
+      end
+
+      private
+
+      def group_with_tests(*ids)
+        build_group_metadata(tests: ids.map { |id| { id:, file_name: "#{id}.rb" } })
+      end
     end
   end
 end

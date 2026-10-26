@@ -10,7 +10,8 @@ module InfernoSuiteGenerator
   class Generator
     class GroupGenerator < BasicTestGenerator
       class << self
-        # descriptions: the Plugins::GroupDescriptions plugins added to, appended to each group's description.
+        # descriptions: the Plugins::GroupDescriptions plugins added to, appended to each group's description
+        # and to the descriptions of its tests.
         def generate(ig_metadata, base_output_dir, descriptions = Plugins::GroupDescriptions.new)
           ig_metadata.ordered_groups
                      .compact
@@ -106,6 +107,12 @@ module InfernoSuiteGenerator
       def description
         section = descriptions.section(group_metadata)
         section ? "#{built_in_description}\n#{section}\n" : built_in_description
+      end
+
+      # The escaped Markdown plugins added to the test, or nil. The template appends it to the test's own
+      # description in a `test from:` block, so a test without plugin text keeps a plain `test from:` line.
+      def test_description(test_id)
+        descriptions.test_section(group_metadata, test_id)
       end
 
       private

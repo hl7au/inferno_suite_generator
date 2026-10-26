@@ -102,11 +102,12 @@ Inferno runs a group's tests in the order of the group's test list, and later te
 | base_output_dir | the generated suite directory |
 | config | Generator::GeneratorConfigKeeper, the merged config |
 | metadata | a writer for this plugin's plugins.yml sections |
-| descriptions | a writer for Markdown appended to group descriptions |
+| descriptions | a writer for Markdown appended to group and test descriptions |
 
 Helpers:
 
 - `context.groups`: the IG groups minus those excluded by `skip` / `skip_generation`
+- `context.test_index(group)`: a Plugins::TestIndex that finds the group's tests by kind (Step 4)
 - `context.template_path(name)`: a file in the plugin's templates directory
 - `context.install_runtime`: copies the plugin's `runtime/` folder to `<suite dir>/plugins/<id>/`, so tests generated from a folder plugin can `require_relative '../plugins/<id>/<file>'` without the plugin being installed where Inferno runs
 
@@ -118,7 +119,8 @@ Helpers:
 | Plugins::Extractor | per-group data extraction: implement `extract` and return a hash, or nil to skip the group. `MyExtractor.extract(context)` returns `{ group_metadata => data }` |
 | Plugins::TestGenerator | one test file per group from an ERB template. Set `template_name`, `class_name_suffix` and `test_id_suffix`, and override `insert_index` to choose the test's place in the group |
 | Plugins::RuntimeMetadata | reading the plugin's plugins.yml section from a generated test at Inferno run time |
-| Plugins::GroupDescriptions | collecting the Markdown plugins add to group descriptions; `run_plugin` returns it in tests |
+| Plugins::TestIndex | finding a group's tests by kind and details instead of by id, such as its read test or the search test for some parameters |
+| Plugins::GroupDescriptions | collecting the Markdown plugins add to group and test descriptions; `run_plugin` returns it in tests |
 | Plugins::Testing | plugin tests: build group and IG metadata, run the plugin into a temporary directory, read plugins.yml |
 | Plugins::Scaffold | creating a new plugin folder |
 
@@ -136,7 +138,27 @@ Plugins::TestGenerator does not depend on the host's own generator classes. Temp
 | output_file_directory, base_output_file_name, output_file_name | where the test file is written |
 | insert_index(tests) | the test's position in the group's test list; the end by default |
 
-`TestGenerator#generate` writes the file and inserts `{ id:, file_name: }` into the group's test list at `insert_index`, so the group requires and runs it. When `insert_index` runs, the list already holds every built-in test. `generate` also appends the same entry to `tests` in the plugin's section of the group's `plugins.yml`. If the group already has a test with the same id, from the host or another plugin, it raises Plugins::Error instead.
+`TestGenerator#generate` writes the file and inserts `{ id:, file_name: }` into the group's test list at `insert_index`, so the group requires and runs it. When `insert_index` runs, the list already holds every built-in test. `generate` also appends the same entry to `tests` in the plugin's section of the group's `plugins.yml`. If the group already has a test with the same id, from the host or another plugin, it raises Plugins::Error instead. TestIndex finds the test under the plugin id as its kind.
+
+Plugins::TestIndex finds tests by what they are. Each built-in generator records its test's kind, the generator's template type, and the details that tell tests of one kind apart. The records stay in memory and are not written to `metadata.yml`:
+
+```ruby
+index = context.test_index(group)
+index.find("read")                                    # => "au_core_v200_patient_read_test", or nil
+index.find("search", search_names: %w[patient code])  # array details match in any order
+index.find("include", include_targets: ["Patient"])
+index.all("patch")                                    # every match, in group order
+```
+
+| Kind | Details |
+|---|---|
+| read, validation, must_support, reference_resolution, create | none |
+| search, multiple_or_search, multiple_and_search, chain_search, provenance_revinclude_search | search_names |
+| include | search_names, include_targets |
+| patch, update | option, the `test_id_option` from the config |
+| a plugin id | none; a test that plugin's TestGenerator added |
+
+Tests from `configs.generic.register_generators` have no kind, so TestIndex doesn't find them.
 
 A complete plugin, for example one that adds a read test to every group with a read interaction, in four steps:
 
@@ -186,7 +208,7 @@ def self.plugin_metadata
 end
 ```
 
-### Step 6: Group descriptions
+### Step 6: Group and test descriptions
 
 A plugin can add Markdown to the description of any group it generates tests for:
 
@@ -203,11 +225,34 @@ context.descriptions.group(context.groups.first, "## Usage\n\n...") # or one gro
 - The text goes only into the generated `<group>_group.rb` file. It isn't written to `plugins.yml`.
 - A group that gets no plugin text keeps exactly the description it had before.
 
+A plugin can also add Markdown to the description of one of a group's tests, such as a test found with TestIndex:
+
+```ruby
+read_test = context.test_index(group).find("read")
+context.descriptions.test(group, read_test, "## Usage\n\n...") if read_test
+```
+
+- Test files are written before plugins run, so the host doesn't change them. The group file appends the text instead, in a block on that test's `test from:` line, which Inferno runs on the group's copy of the test:
+
+  ```ruby
+  test from: :au_core_v200_patient_read_test do
+    description [description, %(
+  ## Usage
+  ...
+    )].compact.map(&:strip).join("\n\n")
+  end
+  ```
+
+- The text comes after the test's own description, separated by a blank line. Escaping, blank text and ordering work as for group text.
+- A test without plugin text keeps a plain `test from:` line.
+- `test` raises Plugins::Error when the group has no test with that id.
+
 In plugin tests, `run_plugin` returns the collected Plugins::GroupDescriptions:
 
 ```ruby
 descriptions = run_plugin(PLUGIN_ROOT, ig_metadata: build_ig_metadata(groups: [group]), base_output_dir: dir)
-descriptions.for(group) # => ["## Usage\n\n..."]
+descriptions.for(group)               # => ["## Usage\n\n..."]
+descriptions.for_test(group, test_id) # => ["## Usage\n\n..."]
 ```
 
 ### Step 7: Create and test a plugin

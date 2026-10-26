@@ -123,6 +123,7 @@ module InfernoSuiteGenerator
 
       def register_test(tests, test)
         tests.insert(insert_index(tests), test)
+        group_metadata.test_kinds[test_id] = { kind: context.plugin_id }
         context.metadata.group(group_metadata, { "tests" => [test] })
       end
 
