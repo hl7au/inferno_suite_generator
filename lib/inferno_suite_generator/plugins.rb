@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Tooling for generator plugins. See documentation/plugins.md.
+# Tooling for generator plugins.
 require_relative "plugins/error"
 require_relative "plugins/manifest"
 require_relative "plugins/base"
