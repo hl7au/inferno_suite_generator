@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require_relative "test_index"
 
 module InfernoSuiteGenerator
   module Plugins
@@ -14,7 +15,8 @@ module InfernoSuiteGenerator
     #   base_output_dir - the generated suite directory, e.g. lib/au_core_test_kit/generated/2.0.0
     #   config          - Generator::GeneratorConfigKeeper, the merged generator config
     #   metadata        - MetadataStore::Writer bound to this plugin, for plugins.yml files
-    #   descriptions    - GroupDescriptions::Writer bound to this plugin, for Markdown appended to group descriptions
+    #   descriptions    - GroupDescriptions::Writer bound to this plugin, for Markdown appended to group and test
+    #                     descriptions
     Context = Data.define(
       :manifest, :options, :ig_resources, :ig_metadata, :ig_demodata, :base_output_dir, :config, :metadata,
       :descriptions
@@ -26,6 +28,13 @@ module InfernoSuiteGenerator
       # Groups the host generates tests for: the IG groups minus those excluded by skip / skip_generation.
       def groups
         ig_metadata.groups.reject { |group| config.exclude_resource?(group.profile_url, group.resource) }
+      end
+
+      # A TestIndex over the group's tests, to find one by kind, such as its read test or the search test for
+      # some parameters.
+      # :reek:UtilityFunction
+      def test_index(group_metadata)
+        TestIndex.new(group_metadata)
       end
 
       def template_path(file_name)
