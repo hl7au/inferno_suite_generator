@@ -80,6 +80,10 @@ module InfernoSuiteGenerator
         includes.map { |include| include["target_resource"] }.join(", ")
       end
 
+      def test_details
+        { **super, include_targets: includes.map { |include| include["target_resource"] } }
+      end
+
       def include_params_string
         includes.map { |include| include["parameter"] }.join(", ")
       end

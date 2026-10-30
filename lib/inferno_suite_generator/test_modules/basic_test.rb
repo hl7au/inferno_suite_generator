@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "forwardable"
 require_relative "../decorators/parameters_parameter_decorator"
 require_relative "../utils/basic_test_helpers"
 require_relative "../utils/kept_resources_repository"

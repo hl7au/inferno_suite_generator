@@ -78,19 +78,29 @@ module InfernoSuiteGenerator
         NON_USCDI_RESOURCES.key?(resource) && NON_USCDI_RESOURCES[resource].include?(reformatted_version)
       end
 
-      def add_test(id:, file_name:)
+      # kind is the generator's template type, like "search" or "read", and details what tells tests of one
+      # kind apart, like search_names. Both stay in memory for plugins (Plugins::TestIndex) and are not
+      # written to metadata.yml.
+      def add_test(id:, file_name:, kind: nil, **details)
         self.tests ||= []
 
-        test_metadata = {
-          id:,
-          file_name:
-        }
+        test_metadata = { id:, file_name: }
+        test_kinds[id] = { kind:, **details } if kind
 
         if delayed? && id.include?("read")
           self.tests.unshift(test_metadata)
         else
           self.tests << test_metadata
         end
+      end
+
+      # The kind and details add_test recorded for the test, {} for a test added without a kind.
+      def test_kind(id)
+        test_kinds.fetch(id) { {} }
+      end
+
+      def test_kinds
+        @test_kinds ||= {}
       end
 
       def to_hash
