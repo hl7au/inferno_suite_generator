@@ -86,7 +86,10 @@ module InfernoSuiteGenerator
     end
 
     def load_plugins
-      self.plugin_runner = Plugins::Runner.new(Plugins::Loader.new(Registry.get(:config_keeper).plugins).load)
+      defined_plugins = Registry.get(:config_keeper).plugins
+      loaded_plugins = Plugins::Loader.new(defined_plugins).load
+
+      self.plugin_runner = Plugins::Runner.new(loaded_plugins)
     end
 
     def run_plugins

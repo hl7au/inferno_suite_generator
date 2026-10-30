@@ -246,7 +246,7 @@ Enable plugins in a top-level `plugins` config section, keyed by plugin id:
 - The bundled `questionnaire_usage_tracing` plugin adds a "Used in questionnaires" section to each test that makes the same requests as the IG's SDC questionnaires, and a summary to each group they use. See [its README](plugins/questionnaire_usage_tracing/README.md).
 - Plugin data goes to `plugins.yml` files in the suite directory and in each group directory, keyed by plugin id. The host's `metadata.yml` and `demodata.yml` are unchanged.
 
-Create a plugin with `bundle exec rake 'plugins:new[my_plugin]'`. See [documentation/plugins.md](documentation/plugins.md) for the contract, the context, the tooling classes and how to test and ship a plugin.
+Create a plugin with `bundle exec rake 'plugins:new[my_plugin]'`. It writes a working skeleton with a README, an `AGENTS.md` and a passing test built on `InfernoSuiteGenerator::Plugins::Testing`.
 
 ## Saving fetched resources (Resource Keeper)
 
