@@ -9,7 +9,7 @@ require_relative "../version"
 module InfernoSuiteGenerator
   module Plugins
     # Creates a new folder plugin from the templates in plugins/scaffold/: plugin.yml, the plugin class, an
-    # extractor, a README and an AGENTS.md. "__id__" in a template path becomes the plugin id.
+    # extractor, a test, a README and an AGENTS.md. "__id__" in a template path becomes the plugin id.
     #
     #   InfernoSuiteGenerator::Plugins::Scaffold.new(id: "my_plugin", destination: "plugins/my_plugin").create
     class Scaffold

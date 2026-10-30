@@ -64,6 +64,13 @@ AllCops:
     - "test/group_metadata_extractor_update_create_test.rb"
     - "documentation/*"
 
+# Plugins keep their tests in plugins/<id>/test/, which RuboCop's default test exclusions do not cover.
+Style/Documentation:
+  Exclude:
+    - "spec/**/*"
+    - "test/**/*"
+    - "plugins/*/test/**/*"
+
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
