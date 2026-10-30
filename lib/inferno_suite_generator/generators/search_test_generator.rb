@@ -87,6 +87,10 @@ module InfernoSuiteGenerator
         search_params.map { |param| param[:name] }
       end
 
+      def test_details
+        { search_names: search_param_names }
+      end
+
       def search_param_names_array
         array_of_strings(search_param_names)
       end
