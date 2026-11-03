@@ -62,6 +62,7 @@ Every later step of Generator#generate reads ig_metadata:
 - IGDemodataExtractor (extract_demodata) uses resource_types_for_references, which reads references from all groups.
 - SearchTestGenerator, ReadTestGenerator, ValidationTestGenerator, MustSupportTestGenerator, ReferenceResolutionTestGenerator, IncludeSearchTestGenerator, ProvenanceRevincludeSearchTestGenerator, ChainSearchTestGenerator, MultipleAndSearchTestGenerator, CreateTestGenerator, UpdateTestGenerator and PatchTestGenerator iterate ig_metadata.groups. MultipleOrSearchTestGenerator uses ig_metadata.search_groups.
 - The test generators call GroupMetadata#add_test, which fills tests on the same in-memory objects.
+- Plugins get the same object as context.ig_metadata, and can add tests to its groups (see [plugins.md](plugins.md)).
 - GroupGenerator iterates ig_metadata.ordered_groups (Patient group, then non-delayed, then delayed groups) and writes a per-group metadata.yml that includes the tests.
 - SuiteGenerator uses ordered_groups, patch_interaction_exists?, ig_test_id_prefix, ig_module_name_prefix, reformatted_version, ig_title, ig_version and ig_id.
 - use_tests uses ig_test_id_prefix and ig_version to build the require line in the main file.

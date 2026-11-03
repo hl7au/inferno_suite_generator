@@ -48,7 +48,7 @@ The output has two parts:
 
 The generated files and the tests list feed later steps:
 
-- GroupGenerator (generate_groups) reads group_metadata.tests. It adds a require_relative for each file_name and a "test from: :TEST_ID" line for each id to the group file. It then writes the group's metadata.yml, which includes the tests list.
+- GroupGenerator (generate_groups) reads group_metadata.tests. It adds a require_relative for each file_name and a "test from: :TEST_ID" line for each id to the group file. If a plugin added text to the test's description, that line gets a block that appends it. It then writes the group's metadata.yml, which includes the tests list.
 - The generated test runs at Inferno runtime through PatchTest#perform_fhirpath_patch_json_test. That method takes patch bodies from demodata.yml (patch_body_list, written by extract_demodata) or from the extra_bundle suite input. It takes resource IDs from teardown_candidates or from demodata resource_ids.
 
 The generator only decides which tests exist and how they are named. Patch payloads stay out of the generated code, so they can change without a new generation.
@@ -63,7 +63,7 @@ Why add an IDs input only for some groups? GroupMetadata#needs_ids_input? is tru
 
 ### Step 0: Entry point
 
-1. Generator#generate calls generate_patch_tests after generate_update_tests and before generate_groups.
+1. Generator#generate calls generate_patch_tests after generate_update_tests. run_plugins and then generate_groups come next.
 2. It calls PatchTestGenerator.generate(ig_metadata, base_output_dir, ig_resources).
 3. base_output_dir is File.join(Registry.get(:config_keeper).result_folder, ig_metadata.ig_version).
 
@@ -121,9 +121,10 @@ The methods patchset and create_patch_data exist on PatchTestGenerator but the t
 
 ### Step 6: Register the test
 
-1. group_metadata.add_test(id: test_id, file_name: base_output_file_name).
+1. group_metadata.add_test(id: test_id, file_name: base_output_file_name, kind: template_type, option: test_id_option).
 2. add_test creates the tests array if needed.
-3. The entry is appended. It goes to the front only if group_metadata.delayed? is true and the id contains "read".
+3. kind and option are kept in GroupMetadata#test_kinds, where plugins find them through Plugins::TestIndex. They stay in memory and are not written to metadata.yml.
+4. The { id:, file_name: } entry is appended. It goes to the front only if group_metadata.delayed? is true and the id contains "read".
 
 ### Step 7: Return
 
@@ -167,7 +168,8 @@ flowchart TD
     S --> G
 
     Z --> Y["GroupMetadata#tests and files on disk"]
-    Y --> X1["generate_groups<br/>test from and require_relative"]
+    Y --> X3["run_plugins<br/>can add tests and description text"]
+    X3 --> X1["generate_groups<br/>test from and require_relative"]
     Y --> X2["Inferno runtime<br/>perform_fhirpath_patch_json_test"]
 ```
 
@@ -203,7 +205,7 @@ sequenceDiagram
                 end
                 P->>R: suite_module_name
                 P->>FS: mkdir_p and File.write test file
-                P->>M: add_test(id, file_name)
+                P->>M: add_test(id, file_name, kind, option)
             end
         end
     end

@@ -64,6 +64,7 @@ After running, you will have:
 - Extracted metadata (`metadata.yml`)
 - Extracted demo/example data (`demodata.yml`)
 - Generated tests, groups and suites wired into your test kit
+- `plugins.yml` files, if an enabled plugin writes data (see [Plugins](#plugins))
 ---
 
 ## How generation works (high‑level)
@@ -82,9 +83,11 @@ Given one or more configuration files, the generator:
     - Validation and must support
     - Reference resolution
     - Create / update / patch (when example data is available)
-5. **Builds groups and suites**
+5. **Runs plugins**
+   Runs any enabled [plugins](#plugins), which can add tests, data and description text.
+6. **Builds groups and suites**
    Groups tests by resource, composes them into suites, and wires them into your Inferno app.
-6. **Integrates with your test kit**
+7. **Integrates with your test kit**
    Uses templates and shared modules to emit code that fits Inferno’s conventions.
 
 Internally, the project is organised as:
@@ -241,9 +244,19 @@ Enable plugins in a top-level `plugins` config section, keyed by plugin id:
 ```
 
 - Plugins run in config order after all built-in tests and before groups and suites are generated, so the tests they add appear in the groups.
+- Set `"enabled": false` on an entry to turn a plugin off without removing it.
 - Plugin data goes to `plugins.yml` files in the suite directory and in each group directory, keyed by plugin id. The host's `metadata.yml` and `demodata.yml` are unchanged.
+- Plugins can append Markdown to group and test descriptions through `context.descriptions`, and find a group's tests through `context.test_index`.
 
-Create a plugin with `bundle exec rake 'plugins:new[my_plugin]'`. It writes a working skeleton with a README, an `AGENTS.md` and a passing test built on `InfernoSuiteGenerator::Plugins::Testing`.
+To create a plugin in a test kit, run:
+
+```bash
+bundle exec ruby -e 'require "inferno_suite_generator/plugins/scaffold"; puts InfernoSuiteGenerator::Plugins::Scaffold.new(id: "my_plugin", destination: "plugins/my_plugin").create'
+```
+
+It writes a working skeleton with a README, an `AGENTS.md` and a passing test built on `InfernoSuiteGenerator::Plugins::Testing`. When working on this gem itself, `bundle exec rake 'plugins:new[my_plugin]'` does the same.
+
+See the [plugins guide](documentation/plugins.md) for how plugins work, the manifest and context reference, and how to ship one as a gem.
 
 ## Saving fetched resources (Resource Keeper)
 

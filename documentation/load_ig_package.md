@@ -39,6 +39,7 @@ Everything later in the pipeline depends on this index:
 - IGMetadataExtractor (extract_metadata) uses ig, capability_statement, cs_resources, profile_by_url, search_param_by_resource_and_code, value_set_by_url and others to build ig_metadata, which drives all test generators.
 - IGDemodataExtractor (extract_demodata) looks up example resources with get_resources_by_type.
 - CreateTestGenerator and PatchTestGenerator get ig_resources directly to find example payloads.
+- Plugins get it as context.ig_resources (see [plugins.md](plugins.md)).
 
 Loading everything once into memory lets the rest of the generator run plain Ruby lookups and avoid touching the filesystem again.
 
@@ -50,7 +51,7 @@ Why silence FHIR.logger? Parsing hundreds of IG resources makes fhir_models log 
 
 ### Step 0: Entry point
 
-1. Generator#generate calls load_ig_package first.
+1. Generator#generate calls load_ig_package right after load_plugins.
 2. FHIR.logger is replaced with a logger that writes to /dev/null. This is global and permanent for the process.
 3. IGLoader.new(ig_deps_path) stores the path and gets the config from Registry.get(:config_keeper).
 4. IGLoader#load calls load_ig.

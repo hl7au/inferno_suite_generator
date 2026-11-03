@@ -45,7 +45,7 @@ The output is an IGDemodata instance. Internally it holds:
 
 ## 2. Why
 
-No later step of Generator#generate reads Generator#ig_demodata. The consumers are the generated tests, which load demodata.yml:
+The only later step of Generator#generate that reads Generator#ig_demodata is run_plugins, which passes it to plugins as context.ig_demodata (see [plugins.md](plugins.md)). The other consumers are the generated tests, which load demodata.yml:
 
 - The read, search, create, update and patch templates define self.demodata. It loads File.join(File.dirname(__dir__), "demodata.yml"), which is base_output_dir, and wraps it in IGDemodata.new.
 - BasicTest#demo_resources copies resource_ids into scratch[:resource_ids]. available_resource_id and available_resource_id_list take ids from it for update and patch tests. register_resource_id adds new ids to it after read, create and update-new tests.
