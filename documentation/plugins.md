@@ -10,7 +10,18 @@ Sometimes a team needs more than that:
 - extra data in the suite, for example which forms use a profile
 - extra text in a group's or a test's description in Inferno
 
-Without plugins, the only ways to get this are to fork the generator or to use `configs.generic.register_generators`, which still works. A plugin does it from its own folder or gem, with its own version, tests and docs. The host's code stays the same, and so do its `metadata.yml` and `demodata.yml`.
+Without plugins, the only ways to get this are to fork the generator or to use `configs.generic.register_generators`, which still works. A plugin does it from its own folder or gem, with its own version, tests and docs. The host's code stays the same, and so do the suite's `metadata.yml` and `demodata.yml`.
+
+For example, a tester looking at a read test can't see that an SDC questionnaire pre-fills "Date of birth" from the same request. They also can't see that no test checks an element the form reads. Showing this takes a lot of questionnaire tracing code, and only IGs with questionnaires need it, so it doesn't belong in the generator's core. [Example: tracing questionnaire usage](#example-tracing-questionnaire-usage) shows how a plugin does it.
+
+This gives a team:
+
+- **A smaller core.** Work for one kind of IG lives in its own folder, not in code every test kit shares.
+- **An opt-in feature.** A plugin runs only if the config turns it on. With no plugins, the host generates the same groups and tests as before.
+- **Early errors.** The host checks each plugin before the slow IG work starts.
+- **Stable lookups.** A plugin finds tests by what they do, so it doesn't depend on how the host builds test ids.
+- **Its own tests.** `Plugins::Testing` runs a plugin the way the host does, without a full generator run.
+- **Its own releases.** A plugin has its own version and states which generator versions it works with.
 
 ## What a plugin can add
 
@@ -161,6 +172,120 @@ The section is keyed by id, so a later config file can change one plugin's entry
 }
 ```
 
+## Example: tracing questionnaire usage
+
+The `questionnaire_usage_tracing` plugin finds the SDC questionnaires in the IG that use each group's profile. It then adds a "Used in questionnaires" section to the tests that make the same requests, and to the group.
+
+This plugin isn't part of the gem yet. It's on the `packages-system-profiles-usage-tracing` branch, in `plugins/questionnaire_usage_tracing/`, and the `builtin` config below only works there. The rest of this section shows how it uses each part of the plugin system.
+
+### 1. Turn it on
+
+It has no options, so it takes one line of config:
+
+```json
+"plugins": {
+  "questionnaire_usage_tracing": { "builtin": "questionnaire_usage_tracing" }
+}
+```
+
+### 2. Declare it
+
+```yaml
+id: questionnaire_usage_tracing
+name: Questionnaire usage tracing
+version: 0.1.0
+entrypoint: lib/questionnaire_usage_tracing.rb
+class: InfernoSuitePlugins::QuestionnaireUsageTracing::Plugin
+host_version: ">= 0.1.0"
+```
+
+### 3. Implement `generate`
+
+```ruby
+def generate(context)
+  traces = Tracer.new(context.ig_resources, context.groups).trace
+  router = Router.new(context)
+  tests = TestSections.new(context)
+  context.groups.each do |group|
+    entries = traces[group.profile_url]
+    GroupTrace.new(group, entries, router, tests).write(context) if entries
+  end
+  tests.write
+end
+```
+
+The plugin needs to see every built-in test and to add its text before the group files are written. Plugins run at exactly that point, so it needs no change to the host.
+
+### 4. Read what the host built
+
+`context.ig_resources` gives it the questionnaires, and `context.groups` gives it the groups the suite generates. `Tracer` matches each questionnaire's queries, launch contexts and templates to those groups. It logs the ones it can't match and leaves them out.
+
+### 5. Find the right test
+
+`Router` asks `context.test_index(group)` for the test that makes each request, so it never builds a test id:
+
+| What the questionnaire uses | The lookup |
+|---|---|
+| A launch context, or a query that reads by id | `find("read")` |
+| A search query | `find("search", search_names: names)` |
+| An `_include` | in the group that makes the search, `find("include", search_names: names, include_targets: targets)`, then `find("include", include_targets: targets)` |
+| A template | `find("create")`, or for a FHIRPath Patch `find("patch")`, then `find("update")` |
+
+The elements that form items read go to `find("must_support")` if the profile checks them. If no test makes a request, the group summary lists it under **Not tested by this group**.
+
+### 6. Write the outputs
+
+It uses two of the four outputs, data and description text:
+
+- `context.descriptions.test(group, test_id, markdown)` adds a section to each test it found.
+- `context.descriptions.group(group, markdown)` adds a summary to the group.
+- `context.metadata.group(group, entries: entries)` records what it found in the group's `plugins.yml`:
+
+  ```yaml
+  questionnaire_usage_tracing:
+    entries:
+    - source: launch_context
+      questionnaire_url: http://example.org/Questionnaire/form
+      questionnaire_version: 0.1.0
+      questionnaire_title: Example form
+      name: patient
+      elements_read:
+      - birthDate
+      used_in:
+      - link_id: dob
+        text: Date of birth
+        extension: initialExpression
+        reads:
+        - birthDate
+      tested_by:
+      - au_core_v200_patient_read_test
+      - au_core_v200_patient_must_support_test
+  ```
+
+A group that no questionnaire uses gets no entry, and its description and its tests' descriptions don't change.
+
+### 7. Test it
+
+The plugin keeps its tests in its own `test/` folder. `plugin_test.rb` runs the whole plugin with `run_plugin` and checks what it wrote:
+
+```ruby
+def test_entries_name_the_tests_that_list_them
+  add_test(@group, "patient_read_test", "read")
+  add_test(@group, "patient_must_support_test", "must_support")
+  run_tracing
+
+  entries = plugin_metadata(File.join(@dir, "patient"), PLUGIN_ID)["entries"]
+
+  assert_equal %w[patient_read_test patient_must_support_test], entries.first["tested_by"]
+end
+```
+
+`add_test` and `run_tracing` are the plugin's own helpers. `run_tracing` calls `run_plugin` with a small IG built by hand.
+
+### What this example doesn't show
+
+This plugin doesn't use `TestGenerator`, `Extractor`, runtime files or plugin options, and it isn't loaded from a `path` or a `gem`. For those, see [Make a new plugin](#make-a-new-plugin) and the [Reference](#reference).
+
 ## Make a new plugin
 
 1. Create the skeleton. In a test kit, call `Scaffold` directly:
@@ -207,7 +332,7 @@ Put `plugin.yml` at the gem root and include it, the templates and the runtime f
 
 These cases are not allowed, or have no effect:
 
-- **Change `metadata.yml` or `demodata.yml`.** The host writes them before plugins run. Plugin data goes to `plugins.yml`.
+- **Change the suite's `metadata.yml` or `demodata.yml`.** The host writes them before plugins run. Plugin data goes to `plugins.yml`. Each group's own `metadata.yml` is written after plugins run, so a test a plugin adds appears in that file's test list.
 - **Change the built-in description.** A plugin can only add text after it. It can't change, remove or reorder the built-in sections.
 - **Add a test with an id the group already has.** `TestGenerator` raises `Plugins::Error` if the host or another plugin already added that test. Turn off one of the two.
 - **Describe a test the group doesn't have.** `context.descriptions.test` raises `Plugins::Error`.
