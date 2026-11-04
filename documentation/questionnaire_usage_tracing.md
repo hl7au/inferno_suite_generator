@@ -73,6 +73,132 @@ entries:
 
 Groups no questionnaire uses get no `questionnaire_usage.yml`, and their descriptions and their tests' descriptions don't change.
 
+## How it runs
+
+`QuestionnaireUsage.generate` runs these steps in order. In the diagrams here, a dotted line attaches a note to a step.
+
+```mermaid
+flowchart TD
+    n0@{ shape: brace, label: "Runs when a kit opts in" }
+    n1(["Start tracing"])
+    n2{"No recorded tests?"}
+    n3(["Stop with an error"])
+    n4>"Trace sources"]
+    n5>"Decide delivery"]
+    n6>"Write sections"]
+    n7@{ shape: doc, label: "Write trace files" }
+    n8(["Done"])
+    n0 -.- n1
+    n1 --> n2
+    n2 -->|"yes"| n3
+    n2 -->|"no"| n4
+    n4 --> n5
+    n5 --> n6
+    n6 --> n7
+    n7 --> n8
+```
+
+### Trace each questionnaire
+
+`Tracer#trace` returns `{ profile_url => [TraceEntry] }`. A source that matches no group gets no entry.
+
+```mermaid
+flowchart TD
+    n0>"Overview"]
+    n1["Start an empty trace"]
+    n2(("Next form"))
+    n3{"Questionnaire left?"}
+    n4["Read the form"]
+    n5@{ shape: curv-trap, label: "Warn about module forms" }
+    n6[["Trace queries and includes"]]
+    n7[["Trace launch contexts"]]
+    n8[["Trace extraction templates"]]
+    n9(["Return traces by profile"])
+    n10@{ shape: brace, label: "Links a source to groups" }
+    n11@{ shape: brace, label: "Finds the items reading it" }
+    n0 --> n1
+    n1 --> n2
+    n2 --> n3
+    n3 -->|"yes"| n4
+    n3 -->|"no"| n9
+    n4 --> n5
+    n5 --> n6
+    n6 --> n7
+    n7 --> n8
+    n8 --> n2
+    n10 -.- n6
+    n11 -.- n7
+```
+
+### Decide which tests list each entry
+
+`Delivery.new` makes these decisions. "Pick Must Support reads", "Find the request test" and "Record the placement" run for each entry of the group, and only a shown entry gets a request test. [How it picks a test](#how-it-picks-a-test) has the rules.
+
+```mermaid
+flowchart TD
+    n0>"Overview"]
+    n1["Prepare the test lookup"]
+    n2["Find each entry's groups"]
+    n3["Decide checked, once per entry"]
+    n4(("Next group"))
+    n5{"Traced group left?"}
+    n6["Load the group's own rules"]
+    n7["Pick Must Support reads"]
+    n8[["Find the request test"]]
+    n9["Record the placement"]
+    n10(["Delivery is ready"])
+    n11@{ shape: brace, label: "Any group's check counts" }
+    n12@{ shape: brace, label: "Each kind picks its lookup" }
+    n13@{ shape: brace, label: "Outputs ask by test too" }
+    n0 --> n1
+    n1 --> n2
+    n2 --> n3
+    n3 --> n4
+    n4 --> n5
+    n5 -->|"yes"| n6
+    n5 -->|"no"| n10
+    n6 --> n7
+    n7 --> n8
+    n8 --> n9
+    n9 --> n4
+    n11 -.- n3
+    n12 -.- n8
+    n13 -.- n10
+```
+
+### Write the "Used in questionnaires" sections
+
+`Sections#write` only collects the text in `Generator::GroupDescriptions`. `GroupGenerator` writes it to the group files later.
+
+```mermaid
+flowchart TD
+    n0>"Overview"]
+    n1(("Next group"))
+    n2{"Traced group left?"}
+    n3["Add Must Support section"]
+    n4["Add group summary"]
+    n5(("Next test"))
+    n6{"Request test left?"}
+    n7["Add test section"]
+    n8(["Text is collected"])
+    n9@{ shape: brace, label: "Says what no test covers" }
+    n10@{ shape: brace, label: "Intro depends on test kind" }
+    n11@{ shape: brace, label: "Reaches group files later" }
+    n0 --> n1
+    n1 --> n2
+    n2 -->|"yes"| n3
+    n2 -->|"no"| n5
+    n3 --> n4
+    n4 --> n1
+    n5 --> n6
+    n6 -->|"yes"| n7
+    n6 -->|"no"| n8
+    n7 --> n5
+    n9 -.- n4
+    n10 -.- n7
+    n11 -.- n8
+```
+
 ## How it picks a test
 
 Each trace entry of a group takes two paths: its request goes to one test (`Router#source_test`), and the elements its items read go to the Must Support test or the group summary (`Delivery::Placement#reads`). `Delivery` makes these decisions once, before anything is rendered, and the test sections, the group summaries and the trace files all read them.
