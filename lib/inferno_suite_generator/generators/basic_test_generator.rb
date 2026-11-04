@@ -119,8 +119,15 @@ module InfernoSuiteGenerator
 
         group_metadata.add_test(
           id: test_id,
-          file_name: base_output_file_name
+          file_name: base_output_file_name,
+          kind: template_type,
+          **test_details
         )
+      end
+
+      # What tells this test apart from other tests of its kind in the group, recorded by add_test.
+      def test_details
+        {}
       end
 
       private
