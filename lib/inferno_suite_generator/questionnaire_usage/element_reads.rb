@@ -12,14 +12,13 @@ module InfernoSuiteGenerator
     #   - **GP Chronic Condition Management Plan**
     #     - **birthDate**: Date of birth, Age
     #
-    # Elements come in the order the form first reads them. Uses that only
-    # define a variable are left out, as in `ItemLines`.
+    # Elements come in the order the form first reads them.
     class ElementReads
       MAX_ITEMS = 10
 
       def initialize(entries, group)
         @must_support = MustSupport.new(group)
-        @forms = Forms.new(entries.select { |entry| UsageSection.shown?(entry) })
+        @forms = Forms.new(entries)
       end
 
       # The nested list of the elements the group's tests check, or with
@@ -42,19 +41,13 @@ module InfernoSuiteGenerator
 
       # `{ shown label => [first trace path, item labels] }`.
       def elements(entries)
-        usages(entries).each_with_object({}) do |usage, by_label|
+        entries.flat_map(&:item_uses).each_with_object({}) do |usage, by_label|
           item = ItemLines.label(usage)
           usage[:reads].to_a.each do |path|
             items = (by_label[@must_support.shown(path)] ||= [path, []]).last
             items << item unless items.include?(item)
           end
         end
-      end
-
-      # :reek:UtilityFunction
-      def usages(entries)
-        entries.flat_map { |entry| entry[:used_in].to_a }
-               .reject { |usage| ItemLines::HIDDEN_USES.include?(usage[:extension]) }
       end
 
       # Up to `MAX_ITEMS` labels, then a count of the rest.

@@ -143,6 +143,7 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
 - `lib/inferno_suite_generator/questionnaire_usage.rb`: `QuestionnaireUsage.generate`, which traces the IG and writes the results
 - `lib/inferno_suite_generator/questionnaire_usage/`:
   - `tracer.rb`: finds the sources in each questionnaire and the items that use them
+  - `trace_entry.rb`: one source, with a class per kind that says whether it's shown, which test makes its request and how a section names it. Add a kind of source here.
   - `ast.rb`: reads FHIRPath expressions to find the variables and element paths they use
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
   - `query_search.rb`: splits a FHIR query into its resource type and search parameters
@@ -153,7 +154,7 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
   - `element_reads.rb`: renders the elements items read, for the Must Support test and the group summary
   - `test_sections.rb`: adds the section of each test that makes a request
   - `group_summary.rb`: renders the group's section
-  - `forms.rb`: groups entries by questionnaire and titles them
+  - `forms.rb`: groups the shown entries by questionnaire and titles them
 - `lib/inferno_suite_generator/core/test_index.rb`: finds a group's tests by kind and details
 - `lib/inferno_suite_generator/core/group_descriptions.rb`: collects and escapes the added description text
 - `test/questionnaire_usage/`: unit tests for each class, plus `generate_test.rb`, which runs the tracing the way the generator does

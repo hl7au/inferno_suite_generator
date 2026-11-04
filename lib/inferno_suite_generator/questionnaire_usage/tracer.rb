@@ -4,14 +4,15 @@ require_relative "ast"
 require_relative "log"
 require_relative "profile_matcher"
 require_relative "query_search"
+require_relative "trace_entry"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Finds the questionnaire sources that link to each profile in the suite and
     # the items that use them.
     #
-    # `trace` returns `{ profile_url => [trace entries] }`. Every `Questionnaire`
-    # in `ig_resources` is traced.
+    # `trace` returns `{ profile_url => [TraceEntry] }`. Every `Questionnaire` in
+    # `ig_resources` is traced.
     class Tracer
       ASSEMBLE_CONTEXT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembleContext"
 
@@ -81,7 +82,7 @@ module InfernoSuiteGenerator
         return unless result
 
         used_in, elements_read = query.usages { |type| !query.other_include_types.include?(type) }
-        add(traces, result, query.entry("query", matched_by: result[:matched_by], elements_read:, used_in:))
+        add(traces, result, query.entry(TraceEntry::Query, matched_by: result[:matched_by], elements_read:, used_in:))
       end
 
       def add_include(traces, query, include)
@@ -90,8 +91,8 @@ module InfernoSuiteGenerator
         return unless result
 
         used_in, elements_read = target == query.resource_type ? [[], []] : query.usages { |type| type == target }
-        add(traces, result, query.entry("include", include: include[:value], target_by: include[:target_by],
-                                                   matched_by: result[:matched_by], elements_read:, used_in:))
+        add(traces, result, query.entry(TraceEntry::Include, include: include[:value], target_by: include[:target_by],
+                                                             matched_by: result[:matched_by], elements_read:, used_in:))
       end
 
       # One entry per type of the launch context that has groups. `%name` is
@@ -99,17 +100,20 @@ module InfernoSuiteGenerator
       # `%user.where(resourceType = 'PractitionerRole')`, counts for that
       # type only.
       def add_launch_context(traces, form, launch_context)
+        context = "#{form.label} launch context #{launch_context[:name]}"
+        launch_context[:types].each do |type|
+          result = @matcher.match(type, any_of_type: true, context:)
+          add(traces, result, launch_context_entry(form, launch_context, type, result[:matched_by])) if result
+        end
+      end
+
+      def launch_context_entry(form, launch_context, type, matched_by)
         name = launch_context[:name]
         source = { name:, owner: launch_context[:owner], bundle: false }
-        launch_context[:types].each do |type|
-          result = @matcher.match(type, any_of_type: true, context: "#{form.label} launch context #{name}")
-          next unless result
-
-          accept = ->(chain_type) { chain_type.nil? || chain_type == type }
-          used_in, elements_read = Usages.new(form, source, accept).call
-          add(traces, result, { source: "launch_context", **form.header, name:, defined_at: launch_context[:defined_at],
-                                matched_by: result[:matched_by], elements_read:, used_in: })
-        end
+        accept = ->(chain_type) { chain_type.nil? || chain_type == type }
+        used_in, elements_read = Usages.new(form, source, accept).call
+        TraceEntry::LaunchContext.new(**form.header, name:, defined_at: launch_context[:defined_at], matched_by:,
+                                                     elements_read:, used_in:)
       end
 
       def add_template(traces, template)
@@ -156,11 +160,11 @@ module InfernoSuiteGenerator
           Usages.new(@form, source, accept).call
         end
 
-        # A trace entry: the fields shared by `query` and `include` entries,
-        # then `fields`. `read: true` marks a read.
-        def entry(source, **fields)
-          { source:, **@form.header, name: @variable[:name], defined_at: @variable[:defined_at],
-            query: @variable[:expression], **(read? ? { read: true } : {}), **fields }
+        # A trace entry of this kind: the fields shared by query and include
+        # entries, then `fields`. `read: true` marks a read.
+        def entry(kind, **fields)
+          kind.new(**@form.header, name: @variable[:name], defined_at: @variable[:defined_at],
+                                   query: @variable[:expression], **(read? ? { read: true } : {}), **fields)
         end
 
         # `{ value:, target:, target_by: }` for each target type of each
@@ -265,8 +269,9 @@ module InfernoSuiteGenerator
         def entry(matched_by)
           owner = @extract[:owner]
           used_in = @form.root?(owner) ? [] : [Form.usage(owner, "templateExtract")]
-          { source: "template_extract", **@form.header, name: @template["id"] || @reference.delete_prefix("#"),
-            defined_at: @extract[:defined_at], template_codes:, patch: patch?, matched_by:, used_in: }
+          TraceEntry::Template.new(**@form.header, name: @template["id"] || @reference.delete_prefix("#"),
+                                                   defined_at: @extract[:defined_at], template_codes:, patch: patch?,
+                                                   matched_by:, used_in:)
         end
 
         private

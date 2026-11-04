@@ -39,7 +39,7 @@ module InfernoSuiteGenerator
       def write_trace_file(base_output_dir)
         path = File.join(base_output_dir, Generator::Naming.snake_case_for_profile(@group), FILE_NAME)
         FileUtils.mkdir_p(File.dirname(path))
-        entries = @placements.map { |placement| placement.entry.merge(tested_by: placement.tests.map(&:test_id)) }
+        entries = @placements.map { |placement| placement.entry.to_h.merge(tested_by: placement.tests.map(&:test_id)) }
         File.write(path, YAML.dump({ entries: }.deep_stringify_keys))
       end
     end

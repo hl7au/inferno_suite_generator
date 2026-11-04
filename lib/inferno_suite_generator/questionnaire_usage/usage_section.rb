@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "forms"
-require_relative "query_search"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
@@ -13,22 +12,12 @@ module InfernoSuiteGenerator
     # The tracing shows one per test, with the entries whose requests the test
     # makes, and one in the group summary, with the entries no test makes.
     #
-    # Only `shown?` entries are listed. Uses that only define a variable are
-    # left out: the items that read the variable are listed instead. Element
-    # paths the profile neither marks Must Support nor requires are marked
-    # "(not checked)".
+    # Only `TraceEntry#shown?` entries are listed, each with its `item_uses`.
+    # Element paths the profile neither marks Must Support nor requires are
+    # marked "(not checked)".
     class UsageSection
       HEADING = "## Used in questionnaires"
       NOT_CHECKED = "(not checked)"
-
-      # A source no item uses is left out, unless it is a query that fetches
-      # other resources through `_include` or a template extracted from the
-      # whole form.
-      def self.shown?(entry)
-        source = entry[:source]
-        !ItemLines.new(entry[:used_in].to_a, nil).empty? || source == "template_extract" ||
-          (source == "query" && QuerySearch.includes(entry[:query]).any?)
-      end
 
       # search_check: whether a query says how the group's search tests
       # compare to it, which only the group summary needs.
@@ -39,7 +28,7 @@ module InfernoSuiteGenerator
         @intro = intro
         @search_check = search_check
         @must_support = AnyMustSupport.new(checked_by)
-        @forms = Forms.new(entries.select { |entry| self.class.shown?(entry) })
+        @forms = Forms.new(entries)
       end
 
       def empty?
@@ -60,62 +49,28 @@ module InfernoSuiteGenerator
 
       private
 
-      def item_lines(entry)
-        ItemLines.new(entry[:used_in].to_a, @must_support)
-      end
-
       def entry_lines(entry)
-        ["  - #{heading(entry)}", *details(entry).map { |line| "    - #{line}" }]
-      end
-
-      def heading(entry)
-        name = entry[:name]
-        resource = @group.resource
-        case entry[:source]
-        when "query" then "**Query #{name}**: #{query_action(entry)}"
-        when "include" then "**Query #{name}**: fetches #{resource} resources through _include=#{entry[:include]}"
-        when "launch_context" then "**Launch context #{name}**: the #{resource} the form is opened for"
-        when "template_extract" then "**Extraction template #{name}**: #{template_action(entry)}"
-        end
-      end
-
-      def query_action(entry)
-        entry[:read] ? "reads one #{@group.resource} by id" : "searches #{@group.resource} resources"
-      end
-
-      def template_action(entry)
-        resource = @group.resource
-        return "updates an existing #{resource} with a FHIRPath Patch" if entry[:patch]
-
-        codes = entry[:template_codes].to_a
-        "creates a new #{resource}#{" with code #{codes.join(", ")}" unless codes.empty?} from the answers"
+        ["  - #{entry.heading(@group.resource)}", *details(entry).map { |line| "    - #{line}" }]
       end
 
       def details(entry)
-        query = entry[:query]
-        search = SearchCheck.new(query, @group).line if @search_check && entry[:source] == "query" && !entry[:read]
+        query = entry.query
+        params = entry.search_params if @search_check
+        search = SearchCheck.new(params, @group).line if params
         [query && "Request: #{query}", search, *items(entry)].compact
       end
 
       def items(entry)
-        lines = item_lines(entry)
-        lines.empty? ? [unused(entry)] : lines.lines
-      end
-
-      def unused(entry)
-        return "Its answers come from the whole form" if entry[:source] == "template_extract"
-
-        "No item reads its results; it fetches #{QuerySearch.includes(entry[:query]).join(", ")} through _include"
+        uses = entry.item_uses
+        uses.empty? ? [entry.unused_line] : ItemLines.new(uses, @must_support).lines
       end
     end
 
     # One list line per item that uses a source, in document order, like
     # `**Height**: pre-fills the answer, shows or hides the item; reads value.value`.
-    # An item that uses the source in several extensions gets one line. Uses
-    # that only define a variable are left out.
+    # An item that uses the source in several extensions gets one line.
     class ItemLines
       MAX = 25
-      HIDDEN_USES = %w[variable].freeze
       ROOT_LABEL = "The whole form"
 
       # What an item does with the source, by the short name of the extension
@@ -141,14 +96,10 @@ module InfernoSuiteGenerator
         usage[:link_id]&.to_s || ROOT_LABEL
       end
 
+      # usages: a `TraceEntry#item_uses`.
       def initialize(usages, must_support)
-        @items = usages.reject { |usage| HIDDEN_USES.include?(usage[:extension]) }
-                       .group_by { |usage| usage[:link_id] }.values
+        @items = usages.group_by { |usage| usage[:link_id] }.values
         @must_support = must_support
-      end
-
-      def empty?
-        @items.empty?
       end
 
       # Up to `MAX` lines, then one that counts the rest.
@@ -189,8 +140,9 @@ module InfernoSuiteGenerator
     # How a group's searches compare to an x-fhir-query that none of its
     # search tests makes, for the group summary.
     class SearchCheck
-      def initialize(query, group)
-        @names = QuerySearch.params(query)
+      # names: the query's `TraceEntry#search_params`.
+      def initialize(names, group)
+        @names = names
         @tested = group.searches.to_a.map { |search| search[:names] }
       end
 

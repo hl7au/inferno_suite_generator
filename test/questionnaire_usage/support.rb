@@ -101,10 +101,11 @@ module InfernoSuiteGenerator
       HEIGHT_QUERY = "Observation?code=8302-2&_sort=-date&patient={{%patient.id}}"
       WEIGHT_QUERY = "Observation?code=29463-7&_sort=-date&patient={{%patient.id}}"
 
+      # `{ profile_url => [trace file fields] }`.
       def trace(form, profiles: observation_profiles, resources: [])
         groups, ig_resources = suite_for(profiles)
         [FHIR::Questionnaire.new(form), *resources].each { |resource| ig_resources.add(resource) }
-        Tracer.new(ig_resources, groups).trace
+        Tracer.new(ig_resources, groups).trace.transform_values { |entries| entries.map(&:to_h) }
       end
 
       def questionnaire(extension: [], item: [], contained: [])
@@ -175,22 +176,26 @@ module InfernoSuiteGenerator
         list.empty? ? "" : "#{list}\n"
       end
 
-      def launch_entry(reads: ["birthDate"],
+      def launch_entry(reads: ["birthDate"], header: form_header,
                        used_in: [{ link_id: "dob", text: "Date of birth", extension: "initialExpression", reads: }])
-        { source: "launch_context", **form_header, name: "patient", used_in: }
+        TraceEntry::LaunchContext.new(**header, name: "patient", used_in:)
       end
 
       def variable_usage
         { link_id: "group", text: "Group", extension: "variable", reads: ["name"] }
       end
 
-      def query_entry(query, used_in: [{ link_id: "name", text: "Name", extension: "initialExpression" }])
-        { source: "query", **form_header, name: "Patients", query:, used_in: }
+      def query_entry(query, used_in: [{ link_id: "name", text: "Name", extension: "initialExpression" }], **fields)
+        TraceEntry::Query.new(**form_header, name: "Patients", query:, used_in:, **fields)
+      end
+
+      def include_entry(query, used_in: [{ link_id: "name", text: "Name", extension: "initialExpression" }], **fields)
+        TraceEntry::Include.new(**form_header, name: "Roles", query:, used_in:, **fields)
       end
 
       def template_entry(patch:, template_codes: [],
                          used_in: [{ link_id: "height", text: "Height", extension: "templateExtract" }])
-        { source: "template_extract", **form_header, name: "height", patch:, template_codes:, used_in: }
+        TraceEntry::Template.new(**form_header, name: "height", patch:, template_codes:, used_in:)
       end
 
       def patient_group(searches: [{ names: ["_id"] }, { names: %w[family gender] }])

@@ -1,22 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "../core/test_index"
-require_relative "query_search"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Finds the test that makes a trace entry's request, through
-    # `Generator::TestIndex`:
-    #
-    # - a launch context, or a query that reads one resource by id: the read test
-    # - a search query: the search test by the same parameters, in any order
-    # - an `_include`: the include test for the entry's type in the group of
-    #   the query's own type, preferably the one that searches by the query's
-    #   parameters
-    # - a template: the create test, or for a FHIRPath Patch the patch test,
-    #   then the update test
-    #
-    # The test can be in another group than the entry, for an `_include`.
+    # Finds the test that makes a request, through `Generator::TestIndex`. Each
+    # `TraceEntry` picks the lookup its request needs. Every lookup returns a
+    # Destination, or `nil` when no test makes the request.
     class Router
       # Where an entry's text goes. `label` names the test in the group summary.
       Destination = Data.define(:group, :test_id, :kind, :label)
@@ -25,39 +15,43 @@ module InfernoSuiteGenerator
         @groups = groups
       end
 
-      # The Destination for the entry of `group`, or `nil` when no test makes
-      # its request.
+      # The Destination for the entry of `group`.
       def source_test(group, entry)
-        case entry[:source]
-        when "launch_context" then own(group, "read")
-        when "query" then query_test(group, entry)
-        when "include" then include_test(group, entry)
-        when "template_extract" then template_test(group, entry)
-        end
+        entry.request_test(self, group)
       end
 
       def must_support_test(group)
         own(group, "must_support", label: "Must Support")
       end
 
-      private
+      def read_test(group)
+        own(group, "read")
+      end
 
-      def query_test(group, entry)
-        query = entry[:query]
-        return own(group, "read") if entry[:read]
-
-        names = QuerySearch.params(query)
+      # The search test by the same parameters, in any order.
+      def search_test(group, names)
         destination = own(group, "search", search_names: names) unless names.empty?
         destination&.with(label: "search by #{group.test_kind(destination.test_id)[:search_names].join(" + ")}")
       end
 
-      def include_test(group, entry)
-        query = entry[:query]
-        type = QuerySearch.target(query)[:resource_type]
-        names = QuerySearch.params(query)
-        @groups.lazy.select { |base| base.resource == type }
+      # The include test for the group's type in a group of `searched_type`,
+      # preferably the one that searches by the same parameters. It can be in
+      # another group than `group`.
+      def include_test(group, searched_type, names)
+        @groups.lazy.select { |base| base.resource == searched_type }
                .filter_map { |base| include_in(base, names, group.resource) }.first
       end
+
+      def create_test(group)
+        own(group, "create")
+      end
+
+      # A FHIRPath Patch goes to the patch test, then the update test.
+      def patch_test(group)
+        own(group, "patch") || own(group, "update")
+      end
+
+      private
 
       def include_in(base, names, target)
         index = Generator::TestIndex.new(base)
@@ -65,12 +59,6 @@ module InfernoSuiteGenerator
         id = index.find("include", search_names: names, include_targets: targets) ||
              index.find("include", include_targets: targets)
         Destination.new(base, id, "include", "search with _include in #{base.title || base.resource}") if id
-      end
-
-      def template_test(group, entry)
-        return own(group, "create") unless entry[:patch]
-
-        own(group, "patch") || own(group, "update")
       end
 
       # The group's test of this kind, labeled by the kind unless `label` says otherwise.

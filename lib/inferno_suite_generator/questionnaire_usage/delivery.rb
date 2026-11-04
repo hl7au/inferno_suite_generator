@@ -2,16 +2,12 @@
 
 require_relative "element_reads"
 require_relative "router"
-require_relative "usage_section"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Decides which tests list each trace entry, once and before anything is
     # rendered, so the test sections, the group summaries and the trace files
     # can't disagree.
-    #
-    # Entries that link to several groups are shared between them, which this
-    # class compares by identity. Callers don't need to.
     class Delivery
       # One trace entry of one group. `request` is the Router::Destination of
       # the test that makes its request, and `must_support` the group's Must
@@ -19,7 +15,7 @@ module InfernoSuiteGenerator
       # `nil` when no test lists the entry for that reason.
       Placement = Data.define(:group, :entry, :request, :must_support) do
         def shown?
-          UsageSection.shown?(entry)
+          entry.shown?
         end
 
         # The tests whose descriptions list the entry.
@@ -57,7 +53,7 @@ module InfernoSuiteGenerator
 
       # :reek:UtilityFunction
       def listing(placements)
-        TestListing.new(destination: placements.first.request, entries: placements.map(&:entry).uniq(&:object_id),
+        TestListing.new(destination: placements.first.request, entries: placements.map(&:entry).uniq,
                         groups: placements.map(&:group).uniq)
       end
 
@@ -65,7 +61,7 @@ module InfernoSuiteGenerator
         reads = ElementReads.new(entries, group)
         must_support = router.must_support_test(group)
         entries.map do |entry|
-          request = router.source_test(group, entry) if UsageSection.shown?(entry)
+          request = router.source_test(group, entry) if entry.shown?
           Placement.new(group:, entry:, request:, must_support: (must_support if reads.checks?(entry)))
         end
       end

@@ -67,8 +67,8 @@ module InfernoSuiteGenerator
       end
 
       def test_an_include_entry
-        entry = { source: "include", questionnaire_title: FORM_TITLE, name: "Roles", query: LOCATION_QUERY,
-                  include: "PractitionerRole:location", used_in: [{ link_id: "loc", text: "Location" }] }
+        entry = include_entry(LOCATION_QUERY, include: "PractitionerRole:location",
+                                              used_in: [{ link_id: "loc", text: "Location" }])
 
         assert_includes section([entry]), <<~MARKDOWN
           - **Query Roles**: fetches Patient resources through _include=PractitionerRole:location
@@ -89,7 +89,7 @@ module InfernoSuiteGenerator
       end
 
       def test_questionnaires_with_the_same_title_show_their_version
-        assembled = launch_entry.merge(questionnaire_version: "0.1.0-assembled")
+        assembled = launch_entry(header: form_header.merge(questionnaire_version: "0.1.0-assembled"))
         markdown = section([launch_entry, assembled])
 
         assert_includes markdown, "- **#{FORM_TITLE}, version 0.1.0**\n"
@@ -97,8 +97,9 @@ module InfernoSuiteGenerator
       end
 
       def test_untitled_questionnaires_with_the_same_url_show_their_version
-        untitled = launch_entry.except(:questionnaire_title)
-        markdown = section([untitled, untitled.merge(questionnaire_version: "0.2.0")])
+        untitled = form_header.except(:questionnaire_title)
+        markdown = section([launch_entry(header: untitled),
+                            launch_entry(header: untitled.merge(questionnaire_version: "0.2.0"))])
 
         assert_includes markdown, "- **#{FORM_URL}, version 0.1.0**\n"
         assert_includes markdown, "- **#{FORM_URL}, version 0.2.0**\n"
@@ -118,8 +119,8 @@ module InfernoSuiteGenerator
       end
 
       def test_questionnaires_without_a_url_stay_apart
-        first = launch_entry.except(:questionnaire_url).merge(questionnaire_id: "first")
-        second = launch_entry.except(:questionnaire_url, :questionnaire_title).merge(questionnaire_id: "second")
+        first = launch_entry(header: form_header.except(:questionnaire_url).merge(questionnaire_id: "first"))
+        second = launch_entry(header: { questionnaire_version: "0.1.0", questionnaire_id: "second" })
         markdown = section([first, second])
 
         assert_includes markdown, "- **#{FORM_TITLE}**\n"
@@ -127,7 +128,7 @@ module InfernoSuiteGenerator
       end
 
       def test_a_read_says_it_reads_one_resource
-        entry = query_entry("Patient/{{%patient.id}}").merge(read: true)
+        entry = query_entry("Patient/{{%patient.id}}", read: true)
 
         assert_includes section([entry]), "- **Query Patients**: reads one Patient by id\n"
       end

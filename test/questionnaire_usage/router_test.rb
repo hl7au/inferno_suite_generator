@@ -21,24 +21,26 @@ module InfernoSuiteGenerator
       end
 
       def test_a_launch_context_and_a_read_go_to_the_read_test
-        assert_equal "patient_read", test_id(@patient, source: "launch_context")
-        assert_equal "patient_read", test_id(@patient, source: "query", query: "Patient/{{%patient.id}}", read: true)
+        assert_equal "patient_read", test_id(@patient, TraceEntry::LaunchContext.new)
+        read = TraceEntry::Query.new(query: "Patient/{{%patient.id}}", read: true)
+
+        assert_equal "patient_read", test_id(@patient, read)
       end
 
       def test_a_search_goes_to_the_search_test_by_the_same_parameters_in_any_order
-        destination = route(@patient, source: "query", query: "Patient?gender=male&family={{%name}}&_count=1")
+        destination = route(@patient, TraceEntry::Query.new(query: "Patient?gender=male&family={{%name}}&_count=1"))
 
         assert_equal "patient_search_1", destination.test_id
         assert_equal "search by family + gender", destination.label
       end
 
       def test_a_search_no_test_makes_goes_nowhere
-        assert_nil route(@patient, source: "query", query: "Patient?name=x")
-        assert_nil route(@patient, source: "query", query: "Patient?_sort=-birthdate")
+        assert_nil route(@patient, TraceEntry::Query.new(query: "Patient?name=x"))
+        assert_nil route(@patient, TraceEntry::Query.new(query: "Patient?_sort=-birthdate"))
       end
 
       def test_an_include_goes_to_the_include_test_of_the_searching_group
-        destination = route(@location, source: "include", query: LOCATION_QUERY, include: "PractitionerRole:location")
+        destination = route(@location, TraceEntry::Include.new(query: LOCATION_QUERY))
 
         assert_equal @role, destination.group
         assert_equal "practitionerrole_include_2", destination.test_id
@@ -48,13 +50,13 @@ module InfernoSuiteGenerator
       def test_an_include_falls_back_to_any_include_test_for_its_type
         query = "PractitionerRole?organization=x&_include=PractitionerRole:location"
 
-        assert_equal "practitionerrole_include_1", test_id(@location, source: "include", query:)
+        assert_equal "practitionerrole_include_1", test_id(@location, TraceEntry::Include.new(query:))
       end
 
       def test_templates_go_to_the_create_test_or_for_a_patch_to_the_patch_then_update_test
-        assert_equal "patient_create", test_id(@patient, source: "template_extract", patch: false)
-        assert_equal "patient_update", test_id(@patient, source: "template_extract", patch: true)
-        assert_nil route(@location, source: "template_extract", patch: false)
+        assert_equal "patient_create", test_id(@patient, TraceEntry::Template.new(patch: false))
+        assert_equal "patient_update", test_id(@patient, TraceEntry::Template.new(patch: true))
+        assert_nil route(@location, TraceEntry::Template.new(patch: false))
       end
 
       def test_the_must_support_test
@@ -64,12 +66,12 @@ module InfernoSuiteGenerator
 
       private
 
-      def route(group, **entry)
+      def route(group, entry)
         @router.source_test(group, entry)
       end
 
-      def test_id(group, **entry)
-        route(group, **entry)&.test_id
+      def test_id(group, entry)
+        route(group, entry)&.test_id
       end
 
       # A group with tests of these kinds, each kind with one details hash or a list of them.

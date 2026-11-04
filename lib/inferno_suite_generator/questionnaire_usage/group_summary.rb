@@ -46,9 +46,9 @@ module InfernoSuiteGenerator
       end
 
       def forms_list
-        by_form = @placements.group_by { |placement| Forms.key(placement.entry) }
+        by_form = @placements.group_by { |placement| placement.entry.form_key }
         Forms.new(entries(@placements)).map do |title, form_entries|
-          labels = test_labels(by_form[Forms.key(form_entries.first)])
+          labels = test_labels(by_form[form_entries.first.form_key])
           next "- **#{title}**: no test in this group makes its requests" if labels.empty?
 
           "- **#{title}**: see the #{sentence(labels)} #{labels.size == 1 ? "test" : "tests"}"

@@ -57,8 +57,7 @@ module InfernoSuiteGenerator
 
       def test_a_shared_include_is_listed_once_with_every_group_it_was_traced_for
         role, first, second = shared_include_groups
-        entry = { source: "include", **form_header, name: "Q", query: ROLE_QUERY, include: "PractitionerRole:location",
-                  used_in: [{ link_id: "name", text: "Name", extension: "initialExpression" }] }
+        entry = include_entry(ROLE_QUERY)
         delivery = Delivery.new([role, first, second], { "first" => [entry], "second" => [entry] })
 
         listing = delivery.test_listings.sole
