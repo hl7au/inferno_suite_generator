@@ -45,5 +45,5 @@ One trace entry of one group, with the tests that list it: its request test, and
 _Avoid_: Destination, which names only one of those tests
 
 **Checked element**:
-An element path a group's tests check: its profile marks it Must Support or requires it, it is `id`, or it sits inside an extension the profile marks Must Support.
+An element path a group's tests check: its profile marks it Must Support or requires it, it is `id`, or it is an extension the profile marks Must Support or that extension's value. For a trace entry shared by several groups, an element is checked when any of them checks it.
 _Avoid_: Must Support element, which leaves out required elements and `id`

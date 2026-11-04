@@ -3,7 +3,8 @@
 module InfernoSuiteGenerator
   module QuestionnaireUsage
     # The element paths the tests of one or more groups check: the ones their
-    # profiles mark Must Support or require, and `id`.
+    # profiles mark Must Support or require, `id`, and the value of a Must
+    # Support extension.
     #
     # A path counts as checked when any of the groups checks it, and is labeled
     # as the group that checks it names it, so a slice one profile defines keeps
@@ -27,9 +28,12 @@ module InfernoSuiteGenerator
 
       # The rule for one group's profile.
       #
-      # Trace paths name an extension as `extension[url=U]`. A path inside an
-      # extension the profile slices counts as checked, since the extension's
-      # own profile defines what it holds.
+      # Trace paths name an extension as `extension[url=U]`. The Must Support test
+      # looks only for the URL of an extension the profile slices, so inside one
+      # only what the validation test holds it to counts as checked: its value,
+      # or the `value` part of a complex extension. Other parts, like `period`,
+      # are optional, and what a value holds isn't known here, since the
+      # extension's definition may not be loaded.
       #
       # A trace path names a choice element by its type, like `valueQuantity`,
       # where the profile has `value[x]`, so it is compared as `value`.
@@ -37,6 +41,8 @@ module InfernoSuiteGenerator
         ALWAYS_PRESENT = %w[id].freeze
         EXTENSION_URL = /\A((?:modifierE|e)xtension)\[url=(.+)\]\z/
         EXTENSION_SLICE = /\A(?:modifierE|e)xtension:/
+        # After the slice: nothing, the value, or the `value` part and its value.
+        EXTENSION_REQUIRED = /\A(?:extension\[url=value\](?:\.value(?:[A-Z]\w*)?)?|value(?:[A-Z]\w*)?)?\z/
 
         def initialize(group)
           must_supports = group.must_supports || {}
@@ -52,11 +58,16 @@ module InfernoSuiteGenerator
 
         def checked?(path)
           name = sliced(path)
-          ALWAYS_PRESENT.include?(name) || @paths.include?(without_choice_types(name)) ||
-            segments(name).any? { |segment| segment.match?(EXTENSION_SLICE) }
+          ALWAYS_PRESENT.include?(name) || @paths.include?(without_choice_types(name)) || required_by_extension?(name)
         end
 
         private
+
+        def required_by_extension?(name)
+          steps = segments(name)
+          slice = steps.rindex { |segment| segment.match?(EXTENSION_SLICE) }
+          slice && steps.drop(slice + 1).join(".").match?(EXTENSION_REQUIRED)
+        end
 
         # The path with each extension the profile slices named by its slice.
         def sliced(path)

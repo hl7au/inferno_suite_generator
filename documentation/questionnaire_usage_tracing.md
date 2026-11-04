@@ -121,7 +121,7 @@ An include test belongs to group B, so it lists entries traced for group G. An `
 ```mermaid
 flowchart TD
     usage["Each item use of a shown entry,<br/>except a variable definition"] --> path["Each element path it reads"]
-    path --> checked{"Checked by the profile?<br/>Must Support, mandatory, id,<br/>or inside a Must Support extension slice"}
+    path --> checked{"Checked by the profile?<br/>Must Support, mandatory, id,<br/>or the value of a Must Support extension slice"}
     checked -- yes --> ms{"G has a<br/>Must Support test?"}
     ms -- yes --> mstest["Must Support test section:<br/>element: items that read it"]
     ms -- no --> itemonly["Only in the item lines<br/>of the request's section"]

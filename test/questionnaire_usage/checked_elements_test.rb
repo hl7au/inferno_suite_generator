@@ -12,6 +12,14 @@ module InfernoSuiteGenerator
         "extension[url=#{INDIGENOUS_STATUS}]"
       end
 
+      def pronouns
+        "extension[url=#{PRONOUNS}]"
+      end
+
+      def pronouns_group
+        group(extensions: [{ id: "Patient.extension:individualPronouns", url: PRONOUNS }])
+      end
+
       def group(elements: [], mandatory: [], extensions: [])
         InfernoSuiteGenerator::Generator::GroupMetadata.new(
           resource: "Patient", mandatory_elements: mandatory,
@@ -98,9 +106,26 @@ module InfernoSuiteGenerator
     class CheckedElementsExtensionTest < Minitest::Test
       include CheckedElementsFixtures
 
-      def test_a_must_support_extension_and_what_it_holds_count_as_checked
+      def test_a_must_support_extension_and_its_value_count_as_checked
         assert_checked patient_group, indigenous
         assert_checked patient_group, "#{indigenous}.value"
+        assert_checked patient_group, "#{indigenous}.valueCoding"
+      end
+
+      def test_a_path_inside_the_value_of_an_extension_does_not_count
+        refute_checked patient_group, "#{indigenous}.value.code"
+      end
+
+      def test_the_value_part_of_a_complex_extension_counts_as_checked
+        assert_checked pronouns_group, "#{pronouns}.extension[url=value]"
+        assert_checked pronouns_group, "#{pronouns}.extension[url=value].value"
+        refute_checked pronouns_group, "#{pronouns}.extension[url=value].value.text"
+      end
+
+      def test_the_optional_parts_of_a_complex_extension_do_not_count
+        refute_checked pronouns_group, "#{pronouns}.extension[url=comment]"
+        refute_checked pronouns_group, "#{pronouns}.extension[url=comment].value"
+        refute_checked pronouns_group, "#{pronouns}.extension[url=period].value.start"
       end
 
       def test_an_extension_the_profile_does_not_slice_does_not_count
