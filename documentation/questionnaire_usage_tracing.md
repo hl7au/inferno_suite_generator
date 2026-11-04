@@ -73,7 +73,7 @@ Groups no questionnaire uses get no `questionnaire_usage.yml`, and their descrip
 
 ## How it picks a test
 
-Each trace entry of a group takes two paths: its request goes to one test (`Router#source_test`), and the elements its items read go to the Must Support test or the group summary (`ElementReads`).
+Each trace entry of a group takes two paths: its request goes to one test (`Router#source_test`), and the elements its items read go to the Must Support test or the group summary (`ElementReads`). `Delivery` makes these decisions once, before anything is rendered, and the test sections, the group summaries and the trace files all read them.
 
 ### The request
 
@@ -114,7 +114,7 @@ flowchart TD
     update -- not found --> none
 ```
 
-An include test belongs to group B, so it lists entries traced for group G. All lookups go through `Generator::TestIndex`, which finds tests by the kind and details the generators recorded.
+An include test belongs to group B, so it lists entries traced for group G. An `_include` links to every group of its target type, so the test lists the entry once, and an element counts as checked when any of those groups checks it. All lookups go through `Generator::TestIndex`, which finds tests by the kind and details the generators recorded.
 
 ### The elements
 
@@ -147,10 +147,11 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
   - `query_search.rb`: splits a FHIR query into its resource type and search parameters
   - `router.rb`: finds the test that makes each source's request
-  - `group_trace.rb`: one group's entries and the tests they go to, and writes its trace file
+  - `delivery.rb`: decides which tests list each entry
+  - `group_trace.rb`: writes one group's Must Support section, trace file and summary
   - `usage_section.rb`: renders the list of sources and their items
   - `element_reads.rb`: renders the elements items read, for the Must Support test and the group summary
-  - `test_sections.rb`: collects the sources routed to each test and adds its section
+  - `test_sections.rb`: adds the section of each test that makes a request
   - `group_summary.rb`: renders the group's section
   - `forms.rb`: groups entries by questionnaire and titles them
 - `lib/inferno_suite_generator/core/test_index.rb`: finds a group's tests by kind and details

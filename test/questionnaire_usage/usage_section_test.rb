@@ -17,6 +17,15 @@ module InfernoSuiteGenerator
         MARKDOWN
       end
 
+      def test_an_element_is_checked_when_any_group_checks_it_and_shows_as_that_group_names_it
+        other = InfernoSuiteGenerator::Generator::GroupMetadata.new(resource: "Patient", profile_url: "other")
+        entry = launch_entry(reads: ["extension[url=#{INDIGENOUS_STATUS}].value", "contact"])
+
+        list = UsageSection.new([entry], other, checked_by: [other, patient_group]).list
+
+        assert_includes list, "reads extension:indigenousStatus.value, contact (not checked)"
+      end
+
       def test_a_query_shows_its_request_and_that_the_group_has_the_search_but_no_test
         markdown = section([query_entry("Patient?gender:not=male&_sort=-birthdate&family={{%name}}")])
 

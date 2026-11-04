@@ -97,6 +97,18 @@ module InfernoSuiteGenerator
         assert_includes descriptions.for(location).first, "see the search with _include in Role test"
       end
 
+      def test_an_include_names_the_profiles_it_fetches_not_the_group_of_the_test
+        role, location = include_groups
+        add_test(role, "role_include_test", "include", search_names: ["practitioner"], include_targets: ["Location"])
+        descriptions = run_tracing(location_form, groups: [role, location],
+                                                  profiles: { ROLE => profile("PractitionerRole"),
+                                                              LOCATION => profile("Location") })
+        section = descriptions.for_test(role, "role_include_test").first
+
+        refute_includes section, "this group's tests"
+        assert_includes section, "neither Must Support nor required by any Location profile in this suite"
+      end
+
       def test_the_generated_group_file_appends_to_the_test
         add_test(@group, "patient_read_test", "read")
         path = generate_group_file(run_tracing)
@@ -121,6 +133,69 @@ module InfernoSuiteGenerator
                       expression("initialExpression",
                                  "%PractitionerRoleLocation.entry.resource.ofType(Location).first().name"))]
         )
+      end
+    end
+
+    # Runs the tracing over an `_include` that links to two Observation groups,
+    # of which only the last marks `status` Must Support.
+    class GenerateSharedIncludeTest < Minitest::Test
+      include RunFixtures
+
+      BASE = "http://example.org/StructureDefinition/base"
+      UNCHECKING = "http://example.org/StructureDefinition/obs-unchecking"
+      CHECKING = "http://example.org/StructureDefinition/obs-checking"
+
+      def test_a_shared_include_counts_an_element_as_checked_when_any_of_its_groups_checks_it
+        section = trace_shared_include { |descriptions, base, _checking| descriptions.for_test(base, "base_include") }
+
+        assert_includes section.first, "**Status**: pre-fills the answer; reads status\n"
+        assert_includes section.first, "**Note**: pre-fills the answer; reads note (not checked)"
+      end
+
+      def test_the_must_support_test_and_the_trace_files_agree_with_a_shared_include
+        section = trace_shared_include do |descriptions, _base, checking|
+          descriptions.for_test(checking, "checking_must_support")
+        end
+
+        assert_includes section.first, "**status**: Status"
+        assert_equal [["base_include"]], tested_by("obs_unchecking")
+        assert_equal [%w[base_include checking_must_support]], tested_by("obs_checking")
+      end
+
+      private
+
+      def tested_by(directory)
+        trace_entries(File.join(@dir, directory)).map { |entry| entry["tested_by"] }
+      end
+
+      # Traces an `_include` that links to two Observation groups and returns
+      # what the block reads from the descriptions.
+      def trace_shared_include
+        base, unchecking, checking = shared_include_groups
+        add_test(base, "base_include", "include", search_names: ["patient"], include_targets: ["Observation"])
+        add_test(checking, "checking_must_support", "must_support")
+        descriptions = run_tracing(shared_include_form, groups: [base, unchecking, checking],
+                                                        profiles: { BASE => profile("MedicationRequest"),
+                                                                    UNCHECKING => profile("Observation"),
+                                                                    CHECKING => profile("Observation") })
+        with_config_keeper { yield descriptions, base, checking }
+      end
+
+      # Only the last Observation group marks `status` Must Support.
+      def shared_include_groups
+        [build_group_metadata(name: "base", resource: "MedicationRequest", profile_url: BASE, title: "Base"),
+         build_group_metadata(name: "obs_unchecking", resource: "Observation", profile_url: UNCHECKING,
+                              must_supports: { elements: [] }),
+         build_group_metadata(name: "obs_checking", resource: "Observation", profile_url: CHECKING,
+                              must_supports: { elements: [{ path: "status" }] })]
+      end
+
+      def shared_include_form
+        query = "MedicationRequest?patient={{%patient.id}}&_include=MedicationRequest:reason:Observation"
+        reading = ->(path) { expression("initialExpression", "%Q.entry.resource.ofType(Observation).first().#{path}") }
+        questionnaire(extension: [query_variable("Q", query)],
+                      item: [item("status", "Status", reading.call("status")),
+                             item("note", "Note", reading.call("note"))])
       end
     end
   end

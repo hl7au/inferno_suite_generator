@@ -32,11 +32,13 @@ module InfernoSuiteGenerator
 
       # search_check: whether a query says how the group's search tests
       # compare to it, which only the group summary needs.
-      def initialize(entries, group, intro: nil, search_check: false)
+      # checked_by: the groups whose tests can check the elements. A test can
+      # make the request of entries traced for several groups of one type.
+      def initialize(entries, group, intro: nil, search_check: false, checked_by: [group])
         @group = group
         @intro = intro
         @search_check = search_check
-        @must_support = MustSupport.new(group)
+        @must_support = AnyMustSupport.new(checked_by)
         @forms = Forms.new(entries.select { |entry| self.class.shown?(entry) })
       end
 
@@ -305,6 +307,23 @@ module InfernoSuiteGenerator
       # Dot-separated steps, keeping the dots inside `[url=...]` together.
       def segments(path)
         path.scan(/(?:[^.\[]+|\[[^\]]*\])+/)
+      end
+    end
+
+    # The elements any of several groups checks. A path shows as the group that
+    # checks it names it, so a slice one profile defines keeps its name.
+    class AnyMustSupport
+      def initialize(groups)
+        @must_supports = groups.map { |group| MustSupport.new(group) }
+      end
+
+      def shown(path)
+        checking = @must_supports.find { |must_support| must_support.checked?(path) }
+        (checking || @must_supports.first).shown(path)
+      end
+
+      def checked?(path)
+        @must_supports.any? { |must_support| must_support.checked?(path) }
       end
     end
   end

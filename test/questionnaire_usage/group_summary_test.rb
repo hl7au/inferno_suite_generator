@@ -13,16 +13,14 @@ module InfernoSuiteGenerator
       MUST_SUPPORT = Router::Destination.new(nil, "patient_must_support", "must_support", "Must Support")
 
       def test_names_the_tests_that_list_each_questionnaire
-        entry = launch_entry
+        markdown = summary(placement(launch_entry, request: READ, must_support: MUST_SUPPORT))
 
-        assert_includes summary([entry], { entry => READ }),
-                        "- **#{FORM_TITLE}**: see the read and Must Support tests\n"
-        refute_includes summary([entry], { entry => READ }), "**Not tested by this group**"
+        assert_includes markdown, "- **#{FORM_TITLE}**: see the read and Must Support tests\n"
+        refute_includes markdown, "**Not tested by this group**"
       end
 
       def test_lists_the_sources_no_test_makes_with_the_search_check
-        entry = query_entry("Patient?name={{%name}}")
-        markdown = summary([entry], {}, must_support: nil)
+        markdown = summary(placement(query_entry("Patient?name={{%name}}")))
 
         assert_includes markdown, "- **#{FORM_TITLE}**: no test in this group makes its requests\n"
         assert_includes markdown, <<~MARKDOWN
@@ -40,7 +38,7 @@ module InfernoSuiteGenerator
       def test_lists_the_elements_no_test_checks
         entry = launch_entry(reads: %w[birthDate contact])
 
-        assert summary([entry], { entry => READ }).end_with?(<<~MARKDOWN)
+        assert summary(placement(entry, request: READ)).end_with?(<<~MARKDOWN)
           **Elements not checked**
 
           #{GroupSummary::NOT_CHECKED}
@@ -51,13 +49,17 @@ module InfernoSuiteGenerator
       end
 
       def test_is_empty_when_no_entry_is_shown
-        assert_predicate GroupSummary.new(patient_group, [launch_entry(used_in: [])], {}, nil), :empty?
+        assert_predicate GroupSummary.new(patient_group, [placement(launch_entry(used_in: []))]), :empty?
       end
 
       private
 
-      def summary(entries, destinations, must_support: MUST_SUPPORT)
-        GroupSummary.new(patient_group, entries, destinations.compare_by_identity, must_support).markdown
+      def placement(entry, request: nil, must_support: nil)
+        Delivery::Placement.new(group: patient_group, entry:, request:, must_support:)
+      end
+
+      def summary(*placements)
+        GroupSummary.new(patient_group, placements).markdown
       end
     end
   end

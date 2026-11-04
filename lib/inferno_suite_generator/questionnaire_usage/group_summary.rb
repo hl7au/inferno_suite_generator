@@ -19,24 +19,21 @@ module InfernoSuiteGenerator
       NOT_CHECKED = "The profile neither marks these elements Must Support nor requires them, so no test checks " \
                     "that the server returns them."
 
-      # destinations: `{ entry => Router::Destination or nil }`, compared by identity.
-      # must_support_test: the group's Must Support Router::Destination, or `nil`.
-      def initialize(group, entries, destinations, must_support_test)
+      # placements: the group's Delivery::Placements.
+      def initialize(group, placements)
         @group = group
-        @entries = entries.select { |entry| UsageSection.shown?(entry) }
-        @destinations = destinations
-        @must_support_test = must_support_test
+        @placements = placements.select(&:shown?)
       end
 
       def empty?
-        @entries.empty?
+        @placements.empty?
       end
 
       def markdown
         lines = [UsageSection::HEADING, "", intro, "", forms_list]
-        not_tested = UsageSection.new(@entries.reject { |entry| @destinations[entry] }, @group, search_check: true)
+        not_tested = UsageSection.new(entries(@placements.reject(&:request)), @group, search_check: true)
         lines.push("", "**Not tested by this group**", "", NOT_TESTED, "", not_tested.list) unless not_tested.empty?
-        not_checked = ElementReads.new(@entries, @group).list(checked: false)
+        not_checked = ElementReads.new(entries(@placements), @group).list(checked: false)
         lines.push("", "**Elements not checked**", "", NOT_CHECKED, "", not_checked) unless not_checked.empty?
         "#{lines.join("\n")}\n"
       end
@@ -49,18 +46,25 @@ module InfernoSuiteGenerator
       end
 
       def forms_list
-        Forms.new(@entries).map do |title, entries|
-          labels = test_labels(entries)
+        by_form = @placements.group_by { |placement| Forms.key(placement.entry) }
+        Forms.new(entries(@placements)).map do |title, form_entries|
+          labels = test_labels(by_form[Forms.key(form_entries.first)])
           next "- **#{title}**: no test in this group makes its requests" if labels.empty?
 
           "- **#{title}**: see the #{sentence(labels)} #{labels.size == 1 ? "test" : "tests"}"
         end.join("\n")
       end
 
-      def test_labels(entries)
-        labels = entries.filter_map { |entry| @destinations[entry]&.label }.uniq
-        checks_elements = !ElementReads.new(entries, @group).list(checked: true).empty?
-        @must_support_test && checks_elements ? [*labels, @must_support_test.label] : labels
+      # The tests that make a request first, then the Must Support test.
+      # :reek:UtilityFunction
+      def test_labels(placements)
+        tests = placements.filter_map(&:request) + placements.filter_map(&:must_support)
+        tests.map(&:label).uniq
+      end
+
+      # :reek:UtilityFunction
+      def entries(placements)
+        placements.map(&:entry)
       end
 
       # :reek:UtilityFunction

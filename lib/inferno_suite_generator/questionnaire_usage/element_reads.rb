@@ -33,6 +33,11 @@ module InfernoSuiteGenerator
         end.join("\n")
       end
 
+      # Whether the entry's items read an element the group's tests check.
+      def checks?(entry)
+        elements([entry]).any? { |_label, (path, _items)| @must_support.checked?(path) }
+      end
+
       private
 
       # `{ shown label => [first trace path, item labels] }`.

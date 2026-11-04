@@ -12,10 +12,12 @@ require_relative "questionnaire_usage/router"
 require_relative "questionnaire_usage/test_sections"
 require_relative "questionnaire_usage/group_summary"
 require_relative "questionnaire_usage/group_trace"
+require_relative "questionnaire_usage/delivery"
 
 module InfernoSuiteGenerator
   # Traces every Questionnaire in the IG over the suite's groups and splits
-  # each group's trace over its tests:
+  # each group's trace over its tests. Delivery decides which tests list each
+  # entry, and the outputs read its decisions:
   #
   # - each entry goes to the test that makes its request (Router), as a
   #   "Used in questionnaires" section in that test's description
@@ -27,14 +29,11 @@ module InfernoSuiteGenerator
   # each with the ids of the tests that list it as `tested_by`.
   module QuestionnaireUsage
     def self.generate(ig_resources:, groups:, descriptions:, base_output_dir:)
-      traces = Tracer.new(ig_resources, groups).trace
-      router = Router.new(groups)
-      tests = TestSections.new(descriptions)
-      groups.each do |group|
-        entries = traces[group.profile_url]
-        GroupTrace.new(group, entries, router, tests).write(descriptions, base_output_dir) if entries
+      delivery = Delivery.new(groups, Tracer.new(ig_resources, groups).trace)
+      delivery.each_group do |group, placements|
+        GroupTrace.new(group, placements).write(descriptions, base_output_dir)
       end
-      tests.write
+      TestSections.new(delivery.test_listings).write(descriptions)
     end
   end
 end

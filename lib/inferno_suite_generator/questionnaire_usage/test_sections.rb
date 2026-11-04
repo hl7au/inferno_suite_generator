@@ -4,36 +4,33 @@ require_relative "usage_section"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Collects the entries routed to each test and adds one "Used in
-    # questionnaires" section per test to its description. An entry several
-    # groups share, like an `_include` that links to two profiles of the same
-    # type, is listed once per test, against the first group it came from.
+    # Adds one "Used in questionnaires" section to the description of each test
+    # in the Delivery::TestListings. An element counts as checked when any group
+    # of the listing checks it.
     class TestSections
-      READS = "A form can pre-fill an item only if the server returns the elements the item reads. Elements " \
-              "marked #{UsageSection::NOT_CHECKED} are neither Must Support nor required by the profile, so this " \
-              "group's tests do not check them.".freeze
+      READS = "A form can pre-fill an item only if the server returns the elements the item reads."
+      GROUP_READS = "#{READS} Elements marked #{UsageSection::NOT_CHECKED} are neither Must Support nor required by " \
+                    "the profile, so this group's tests do not check them.".freeze
 
-      def initialize(descriptions)
-        @descriptions = descriptions
-        @tests = {}
+      def initialize(listings)
+        @listings = listings
       end
 
-      # Adds the entry of `group` to the test of the Router::Destination.
-      def add(destination, entry, group)
-        test = (@tests[destination.test_id] ||= { destination:, entries: [] })
-        test[:entries] << [entry, group] unless test[:entries].any? { |(added, _)| added.equal?(entry) }
-      end
-
-      def write
-        @tests.each_value { |test| write_test(test[:destination], test[:entries]) }
+      def write(descriptions)
+        @listings.each do |listing|
+          destination = listing.destination
+          section = section(listing)
+          descriptions.test(destination.group, destination.test_id, section.markdown) unless section.empty?
+        end
       end
 
       private
 
-      def write_test(destination, entries)
-        group = entries.first.last
-        section = UsageSection.new(entries.map(&:first), group, intro: intro(destination.kind, group.resource))
-        @descriptions.test(destination.group, destination.test_id, section.markdown) unless section.empty?
+      def section(listing)
+        groups = listing.groups
+        group = groups.first
+        UsageSection.new(listing.entries, group, intro: intro(listing.destination.kind, group.resource),
+                                                 checked_by: groups)
       end
 
       # :reek:UtilityFunction
@@ -41,13 +38,21 @@ module InfernoSuiteGenerator
         case kind
         when "read"
           "These questionnaires in the IG read #{resource} resources as this test does: by id, or as the " \
-          "resource a form is opened for. #{READS}"
-        when "search" then "These questionnaires in the IG make this search. #{READS}"
-        when "include"
-          "These questionnaires in the IG fetch #{resource} resources through this search's _include. #{READS}"
+          "resource a form is opened for. #{GROUP_READS}"
+        when "search" then "These questionnaires in the IG make this search. #{GROUP_READS}"
+        when "include" then include_intro(resource)
         when "create" then "These questionnaires in the IG create #{resource} resources from their answers."
         else "These questionnaires in the IG update existing #{resource} resources from their answers."
         end
+      end
+
+      # An include test belongs to another group than the entries it lists, and
+      # those can be traced for several profiles.
+      # :reek:UtilityFunction
+      def include_intro(resource)
+        "These questionnaires in the IG fetch #{resource} resources through this search's _include. #{READS} " \
+          "Elements marked #{UsageSection::NOT_CHECKED} are neither Must Support nor required by any #{resource} " \
+          "profile in this suite, so no test checks them."
       end
     end
   end
