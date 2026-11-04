@@ -125,11 +125,11 @@ module InfernoSuiteGenerator
       end
 
       def link_ids(entry)
-        entry[:used_in].map { |usage| usage[:link_id] }
+        entry[:used_in].map { |use| use[:link_id] }
       end
 
       def vias(entry)
-        entry[:used_in].map { |usage| usage[:via] }
+        entry[:used_in].map { |use| use[:via] }
       end
 
       def query_variable(name, query)
@@ -190,24 +190,29 @@ module InfernoSuiteGenerator
       end
 
       def launch_entry(reads: ["birthDate"], header: form_header,
-                       used_in: [{ link_id: "dob", text: "Date of birth", extension: "initialExpression", reads: }])
+                       used_in: [ItemUse.new(link_id: "dob", text: "Date of birth", extension: "initialExpression",
+                                             reads:)])
         TraceEntry::LaunchContext.new(**header, name: "patient", used_in:)
       end
 
-      def variable_usage
-        { link_id: "group", text: "Group", extension: "variable", reads: ["name"] }
+      def variable_use
+        ItemUse.new(link_id: "group", text: "Group", extension: "variable", reads: ["name"])
       end
 
-      def query_entry(query, used_in: [{ link_id: "name", text: "Name", extension: "initialExpression" }], **fields)
+      def name_use
+        ItemUse.new(link_id: "name", text: "Name", extension: "initialExpression")
+      end
+
+      def query_entry(query, used_in: [name_use], **fields)
         TraceEntry::Query.new(**form_header, name: "Patients", query:, used_in:, **fields)
       end
 
-      def include_entry(query, used_in: [{ link_id: "name", text: "Name", extension: "initialExpression" }], **fields)
+      def include_entry(query, used_in: [name_use], **fields)
         TraceEntry::Include.new(**form_header, name: "Roles", query:, used_in:, **fields)
       end
 
       def template_entry(patch:, template_codes: [],
-                         used_in: [{ link_id: "height", text: "Height", extension: "templateExtract" }])
+                         used_in: [ItemUse.new(link_id: "height", text: "Height", extension: "templateExtract")])
         TraceEntry::Template.new(**form_header, name: "height", patch:, template_codes:, used_in:)
       end
 

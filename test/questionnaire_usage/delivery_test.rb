@@ -32,7 +32,7 @@ module InfernoSuiteGenerator
       end
 
       def test_an_entry_that_is_not_shown_is_listed_by_no_test
-        assert_empty tested_by(launch_entry(used_in: [variable_usage]))
+        assert_empty tested_by(launch_entry(used_in: [variable_use]))
       end
 
       def test_an_entry_with_no_test_for_its_request_is_listed_by_no_test

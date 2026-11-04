@@ -13,15 +13,15 @@ module InfernoSuiteGenerator
     # share a source share its entry, and two entries are the same only if they
     # are the same object, so equal sources in a form stay apart.
     class TraceEntry
-      HIDDEN_USES = %w[variable].freeze
-
       def initialize(**fields)
         @fields = fields
       end
 
       # The fields of the trace file.
       def to_h
-        { source: self.class::SOURCE, **@fields }
+        fields = { source: self.class::SOURCE, **@fields }
+        fields[:used_in] &&= fields[:used_in].map(&:to_h)
+        fields
       end
 
       def name
@@ -38,10 +38,10 @@ module InfernoSuiteGenerator
         item_uses.any?
       end
 
-      # The uses sections list. Uses that only define a variable are left out:
+      # The ItemUses sections list. Uses that only define a variable are left out:
       # the items that read the variable are listed instead.
       def item_uses
-        @item_uses ||= @fields[:used_in].to_a.reject { |usage| HIDDEN_USES.include?(usage[:extension]) }
+        @item_uses ||= @fields[:used_in].to_a.reject(&:variable?)
       end
 
       # The parameters of the search it makes, or `nil` when it makes no search.

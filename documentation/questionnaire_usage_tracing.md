@@ -69,6 +69,8 @@ entries:
   - au_core_v200_patient_must_support_test
 ```
 
+`used_in` also records the variables items define, which sections leave out: they list the items that read the variable.
+
 Groups no questionnaire uses get no `questionnaire_usage.yml`, and their descriptions and their tests' descriptions don't change.
 
 ## How it picks a test
@@ -146,6 +148,7 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
 - `lib/inferno_suite_generator/questionnaire_usage/`:
   - `tracer.rb`: finds the sources in each questionnaire and the items that use them
   - `trace_entry.rb`: one source, with a class per kind that says whether it's shown, which test makes its request and how a section names it. Add a kind of source here.
+  - `item_use.rb`: one item reading a source: how sections name it, what it does to the item, and its trace file fields
   - `ast.rb`: reads FHIRPath expressions to find the variables and element paths they use
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
   - `query_search.rb`: splits a FHIR query into its resource type and search parameters

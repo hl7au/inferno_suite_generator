@@ -53,12 +53,12 @@ module InfernoSuiteGenerator
       end
 
       def test_sources_no_item_uses_are_left_out
-        assert_empty summary([launch_entry(used_in: []), launch_entry(used_in: [variable_usage])])
+        assert_empty summary([launch_entry(used_in: []), launch_entry(used_in: [variable_use])])
       end
 
       def test_an_include_entry
         entry = include_entry(LOCATION_QUERY, include: "PractitionerRole:location",
-                                              used_in: [{ link_id: "loc", text: "Location" }])
+                                              used_in: [ItemUse.new(link_id: "loc", text: "Location")])
 
         assert_includes summary([entry]), <<~MARKDOWN
           - **Query Roles**: fetches Patient resources through _include=PractitionerRole:location
@@ -130,25 +130,25 @@ module InfernoSuiteGenerator
       include TraceEntryFixtures
 
       def test_a_usage_on_the_root_is_named_as_the_whole_form
-        markdown = summary([launch_entry(used_in: [{ extension: "itemExtractionContext", reads: ["name"] }])])
+        markdown = summary([launch_entry(used_in: [ItemUse.new(extension: "itemExtractionContext", reads: ["name"])])])
 
         assert_includes markdown, "- **The whole form**: sets the extraction context; reads name (not checked)\n"
       end
 
       def test_an_item_without_text_is_named_by_its_link_id
-        markdown = summary([launch_entry(used_in: [{ link_id: "dob", extension: "maxValue" }])])
+        markdown = summary([launch_entry(used_in: [ItemUse.new(link_id: "dob", extension: "maxValue")])])
 
         assert_includes markdown, "- **dob**: maxValue\n"
       end
 
       def test_markdown_in_an_item_text_is_escaped
-        markdown = summary([launch_entry(used_in: [{ link_id: "dob", text: "Date *of* birth_x" }])])
+        markdown = summary([launch_entry(used_in: [ItemUse.new(link_id: "dob", text: "Date *of* birth_x")])])
 
         assert_includes markdown, "- **Date \\*of\\* birth\\_x**\n"
       end
 
       def test_items_beyond_the_limit_are_counted
-        used_in = (1..27).map { |index| { link_id: "item-#{index}", text: "Item #{index}" } }
+        used_in = (1..27).map { |index| ItemUse.new(link_id: "item-#{index}", text: "Item #{index}") }
         markdown = summary([launch_entry(used_in:)])
 
         assert_includes markdown, "**Item 25**"
@@ -162,9 +162,9 @@ module InfernoSuiteGenerator
       include TraceEntryFixtures
 
       def test_lists_each_element_with_the_items_that_read_it
-        entry = launch_entry(used_in: [usage("dob", "Date of birth", "birthDate"), usage("age", "Age", "birthDate"),
-                                       usage("dob", "Date of birth", "birthDate", extension: "calculatedExpression"),
-                                       usage("contact", "Contact", "contact")])
+        entry = launch_entry(used_in: [reading("dob", "Date of birth", "birthDate"), reading("age", "Age", "birthDate"),
+                                       reading("dob", "Date of birth", "birthDate", extension: "calculatedExpression"),
+                                       reading("contact", "Contact", "contact")])
 
         assert must_support([entry]).end_with?(<<~MARKDOWN)
           - **#{FORM_TITLE}**
@@ -174,15 +174,15 @@ module InfernoSuiteGenerator
       end
 
       def test_extensions_are_named_as_in_the_item_lines
-        entry = launch_entry(used_in: [usage("ind", "Status", "extension[url=#{INDIGENOUS_STATUS}].value"),
-                                       usage("pro", "Pronouns", "extension[url=#{PRONOUNS}].value")])
+        entry = launch_entry(used_in: [reading("ind", "Status", "extension[url=#{INDIGENOUS_STATUS}].value"),
+                                       reading("pro", "Pronouns", "extension[url=#{PRONOUNS}].value")])
 
         assert_includes must_support([entry]), "- **extension:indigenousStatus.value**: Status"
         assert_includes summary([entry]), "- **extension[individual-pronouns].value**: Pronouns"
       end
 
       def test_items_beyond_the_limit_are_counted
-        used_in = (1..12).map { |index| usage("item-#{index}", "Item #{index}", "birthDate") }
+        used_in = (1..12).map { |index| reading("item-#{index}", "Item #{index}", "birthDate") }
 
         assert must_support([launch_entry(used_in:)]).end_with?("Item 10, and 2 more\n")
       end
@@ -198,8 +198,8 @@ module InfernoSuiteGenerator
         section_of_test(entries, "must_support")
       end
 
-      def usage(link_id, text, *reads, extension: "initialExpression")
-        { link_id:, text:, extension:, reads: }
+      def reading(link_id, text, *reads, extension: "initialExpression")
+        ItemUse.new(link_id:, text:, extension:, reads:)
       end
     end
 

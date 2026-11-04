@@ -13,7 +13,7 @@ module InfernoSuiteGenerator
       def test_an_entry_is_shown_when_an_item_uses_it_beyond_a_variable
         assert_predicate launch_entry, :shown?
         refute_predicate launch_entry(used_in: []), :shown?
-        refute_predicate launch_entry(used_in: [variable_usage]), :shown?
+        refute_predicate launch_entry(used_in: [variable_use]), :shown?
       end
 
       def test_a_query_with_its_own_include_is_shown_without_items
@@ -30,9 +30,9 @@ module InfernoSuiteGenerator
       end
 
       def test_item_uses_leave_out_uses_that_only_define_a_variable
-        dob = { link_id: "dob", text: "Date of birth", extension: "initialExpression" }
+        dob = ItemUse.new(link_id: "dob", text: "Date of birth", extension: "initialExpression")
 
-        assert_equal [dob], launch_entry(used_in: [variable_usage, dob]).item_uses
+        assert_equal [dob], launch_entry(used_in: [variable_use, dob]).item_uses
       end
 
       def test_a_search_query_gives_its_search_parameters_and_a_read_gives_none

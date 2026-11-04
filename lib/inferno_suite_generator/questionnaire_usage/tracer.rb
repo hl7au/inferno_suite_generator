@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "ast"
+require_relative "item_use"
 require_relative "log"
 require_relative "profile_matcher"
 require_relative "query_search"
@@ -40,7 +41,7 @@ module InfernoSuiteGenerator
       end
 
       # A module form gets its `assembleContext` variables from the form it is
-      # assembled into, so their usages are traced in the assembled form only.
+      # assembled into, so the items that read them are traced in the assembled form only.
       def log_assemble_contexts(form, questionnaire)
         names = Array(questionnaire["extension"]).filter_map do |extension|
           extension["valueString"] if extension["url"] == ASSEMBLE_CONTEXT_URL
@@ -68,7 +69,7 @@ module InfernoSuiteGenerator
       #
       # An included resource of the query's own type can't be told apart from
       # the query's own resources by type, so chains of that type stay with the
-      # query entry, and its include entry has no usages.
+      # query entry, and its include entry has no item uses.
       def trace_query(traces, query)
         add_query(traces, query)
         query.includes.each { |include| add_include(traces, query, include) }
@@ -81,7 +82,7 @@ module InfernoSuiteGenerator
                                                      context: query.label)
         return unless result
 
-        used_in, elements_read = query.usages { |type| !query.other_include_types.include?(type) }
+        used_in, elements_read = query.item_uses { |type| !query.other_include_types.include?(type) }
         add(traces, result, query.entry(TraceEntry::Query, matched_by: result[:matched_by], elements_read:, used_in:))
       end
 
@@ -90,7 +91,7 @@ module InfernoSuiteGenerator
         result = @matcher.match(target, any_of_type: true, context: "#{query.label} include #{include[:value]}")
         return unless result
 
-        used_in, elements_read = target == query.resource_type ? [[], []] : query.usages { |type| type == target }
+        used_in, elements_read = target == query.resource_type ? [[], []] : query.item_uses { |type| type == target }
         add(traces, result, query.entry(TraceEntry::Include, include: include[:value], target_by: include[:target_by],
                                                              matched_by: result[:matched_by], elements_read:, used_in:))
       end
@@ -111,7 +112,7 @@ module InfernoSuiteGenerator
         name = launch_context[:name]
         source = { name:, owner: launch_context[:owner], bundle: false }
         accept = ->(chain_type) { chain_type.nil? || chain_type == type }
-        used_in, elements_read = Usages.new(form, source, accept).call
+        used_in, elements_read = ItemUses.new(form, source, accept).call
         TraceEntry::LaunchContext.new(**form.header, name:, defined_at: launch_context[:defined_at], matched_by:,
                                                      elements_read:, used_in:)
       end
@@ -155,9 +156,9 @@ module InfernoSuiteGenerator
         end
 
         # `[used_in, elements_read]` for the chains whose type the block takes.
-        def usages(&accept)
+        def item_uses(&accept)
           source = { name: @variable[:name], owner: @variable[:owner], bundle: !read? }
-          Usages.new(@form, source, accept).call
+          ItemUses.new(@form, source, accept).call
         end
 
         # A trace entry of this kind: the fields shared by query and include
@@ -268,7 +269,7 @@ module InfernoSuiteGenerator
 
         def entry(matched_by)
           owner = @extract[:owner]
-          used_in = @form.root?(owner) ? [] : [Form.usage(owner, "templateExtract")]
+          used_in = @form.root?(owner) ? [] : [ItemUse.of(owner, "templateExtract")]
           TraceEntry::Template.new(**@form.header, name: @template["id"] || @reference.delete_prefix("#"),
                                                    defined_at: @extract[:defined_at], template_codes:, patch: patch?,
                                                    matched_by:, used_in:)
@@ -287,7 +288,7 @@ module InfernoSuiteGenerator
         end
       end
 
-      # The usages of one source in one form: the items in its scope that read
+      # The item uses of one source in one form: the items in its scope that read
       # it, directly or through aliases, and the element paths they read.
       #
       # An alias is a `text/fhirpath` variable whose expression reads the source
@@ -297,7 +298,7 @@ module InfernoSuiteGenerator
       # A chain's own type counts only on a name that is a resource, or Bundle
       # entries, with the prefix `""`. An alias of a chain that ends at Bundle
       # entries, like `%q.entry.where(resource is Condition)`, is entries too.
-      class Usages
+      class ItemUses
         Name = Struct.new(:name, :owner, :bundle, :type, :prefix, :alias, keyword_init: true)
 
         # `source` is `{ name:, owner:, bundle: }`. `bundle: true` for a query,
@@ -313,7 +314,7 @@ module InfernoSuiteGenerator
         # `[used_in, elements_read]`
         def call
           resolve_aliases
-          used_in = @form.scope(@source.owner).flat_map { |owner| item_usages(owner) }
+          used_in = @form.scope(@source.owner).flat_map { |owner| uses_on(owner) }
           [used_in.uniq, @paths.reject(&:empty?).uniq]
         end
 
@@ -362,25 +363,27 @@ module InfernoSuiteGenerator
           name.prefix == "" && chain[:path].empty? && !chain[:stopped]
         end
 
-        # One usage per expression that reads the source. `via` names the alias
+        # One ItemUse per expression that reads the source. `via` names the alias
         # it went through, and is left out when the expression reads the source
         # directly. `reads` lists the element paths the expression reads, and is
         # left out when it reads none.
-        def item_usages(item)
-          usage_expressions(item).filter_map do |expression|
+        def uses_on(item)
+          use_expressions(item).filter_map do |expression|
             reads = reads_of(expression[:expression], item)
             next if reads.empty?
 
             paths = reads.flat_map { |read| read_paths(*read) }
             @paths.concat(paths)
-            Form.usage(item, expression[:extension], via: via(reads.map(&:first)), reads: paths.reject(&:empty?).uniq)
+            ItemUse.of(item, expression[:extension], via: via(reads.map(&:first)), reads: paths.reject(&:empty?).uniq)
           end
         end
 
-        # A root variable is not a usage: the items that read it are.
-        def usage_expressions(item)
+        # A root variable is not an item use: the items that read it are.
+        def use_expressions(item)
           expressions = @form.expressions(item)
-          @form.root?(item) ? expressions.reject { |expression| expression[:extension] == "variable" } : expressions
+          return expressions unless @form.root?(item)
+
+          expressions.reject { |expression| ItemUse.variable?(expression[:extension]) }
         end
 
         def via(names)
@@ -417,21 +420,12 @@ module InfernoSuiteGenerator
 
       # A questionnaire as a Hash, with the walks the tracer needs. The root and
       # the items that can define variables are its "owners".
-      #
-      # A usage on the root, like a root `itemExtractionContext`, has no
-      # `link_id` or `text`: every item has a `linkId`, and the root's `text` is
-      # its narrative.
       class Form
         VARIABLE_URL = "http://hl7.org/fhir/StructureDefinition/variable"
         LAUNCH_CONTEXT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext"
         TEMPLATE_EXTRACT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtract"
         FHIRPATH = "text/fhirpath"
         QUERY = "application/x-fhir-query"
-
-        def self.usage(item, extension, via: nil, reads: [])
-          text = item["text"] if item["text"].is_a?(String)
-          { link_id: item["linkId"], text:, extension:, via:, reads: (reads unless reads.empty?) }.compact
-        end
 
         def initialize(questionnaire)
           @questionnaire = questionnaire

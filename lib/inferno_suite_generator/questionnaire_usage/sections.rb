@@ -242,65 +242,37 @@ module InfernoSuiteGenerator
       # An item that uses the source in several extensions gets one line.
       class ItemLines
         MAX = 25
-        ROOT_LABEL = "The whole form"
 
-        # What an item does with the source, by the short name of the extension
-        # whose expression reads it.
-        USES = {
-          "initialExpression" => "pre-fills the answer",
-          "calculatedExpression" => "calculates the answer",
-          "itemPopulationContext" => "sets the population context",
-          "enableWhenExpression" => "shows or hides the item",
-          "answerExpression" => "lists the answer options",
-          "candidateExpression" => "suggests answers",
-          "contextExpression" => "gives context for answering",
-          "itemExtractionContext" => "sets the extraction context",
-          "templateExtract" => "its answers fill the template"
-        }.freeze
-
-        # The item's text, or its linkId when it has none. A usage with neither
-        # is on the questionnaire root.
-        def self.label(usage)
-          text = usage[:text].to_s.split.join(" ")
-          return text.gsub(/[*_`\[\]]/) { |match| "\\#{match}" } unless text.empty?
-
-          usage[:link_id]&.to_s || ROOT_LABEL
-        end
-
-        # usages: a `TraceEntry#item_uses`.
+        # uses: a `TraceEntry#item_uses`.
         # reads: the entry's `Delivery::Placement#reads`.
-        def initialize(usages, reads)
-          @items = usages.group_by { |usage| usage[:link_id] }.values
+        def initialize(uses, reads)
+          @items = uses.group_by(&:link_id).values
           @reads = reads
         end
 
         # Up to `MAX` lines, then one that counts the rest.
         def lines
           more = @items.size - MAX
-          [*@items.first(MAX).map { |usages| line(usages) },
+          [*@items.first(MAX).map { |uses| line(uses) },
            ("and #{more} more items, listed in questionnaire_usage.yml" if more.positive?)].compact
         end
 
         private
 
         # Leaves out a part the item has nothing for.
-        def line(usages)
-          details = [uses(usages), reads(usages)].compact.join("; ")
-          "**#{label(usages.first)}**#{": #{details}" unless details.empty?}"
+        def line(uses)
+          details = [actions(uses), reads(uses)].compact.join("; ")
+          "**#{uses.first.label}**#{": #{details}" unless details.empty?}"
         end
 
-        def uses(usages)
-          names = usages.filter_map { |usage| usage[:extension] }.uniq
-          names.map { |name| USES.fetch(name) { name } }.join(", ") unless names.empty?
+        def actions(uses)
+          actions = uses.filter_map(&:action).uniq
+          actions.join(", ") unless actions.empty?
         end
 
-        def reads(usages)
-          paths = usages.flat_map { |usage| usage[:reads].to_a }.uniq
+        def reads(uses)
+          paths = uses.flat_map(&:reads).uniq
           "reads #{paths.map { |path| read_label(path) }.join(", ")}" unless paths.empty?
-        end
-
-        def label(usage)
-          self.class.label(usage)
         end
 
         def read_label(path)
@@ -380,14 +352,14 @@ module InfernoSuiteGenerator
         def elements(placements, reads)
           placements.each_with_object({}) do |placement, by_label|
             listed = reads.call(placement)
-            placement.entry.item_uses.each { |usage| add_item(by_label, usage, listed) }
+            placement.entry.item_uses.each { |use| add_item(by_label, use, listed) }
           end
         end
 
         # :reek:UtilityFunction
-        def add_item(by_label, usage, listed)
-          item = ItemLines.label(usage)
-          listed.values_at(*usage[:reads].to_a).compact.each do |read|
+        def add_item(by_label, use, listed)
+          item = use.label
+          listed.values_at(*use.reads).compact.each do |read|
             items = (by_label[read.label] ||= [])
             items << item unless items.include?(item)
           end

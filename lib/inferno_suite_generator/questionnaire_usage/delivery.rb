@@ -90,7 +90,7 @@ module InfernoSuiteGenerator
 
       # :reek:UtilityFunction
       def element_reads(entry, checked_elements)
-        paths = entry.item_uses.flat_map { |usage| usage[:reads].to_a }.uniq
+        paths = entry.item_uses.flat_map(&:reads).uniq
         paths.to_h do |path|
           [path, ElementRead.new(path:, label: checked_elements.label(path), checked: checked_elements.checked?(path))]
         end
