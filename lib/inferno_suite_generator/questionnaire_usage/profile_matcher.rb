@@ -1,20 +1,13 @@
 # frozen_string_literal: true
 
 require_relative "log"
-require_relative "query_search"
+require_relative "fhir_query"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Finds the suite groups whose profile a questionnaire source links to.
     class ProfileMatcher
-      PARAMS = %i[code category].freeze
-
-      # The input for a query like `Observation?code=http://loinc.org|8302-2`,
-      # or a read like `Patient/{{%patient.id}}`, with `read:` from
-      # `QuerySearch.target`.
-      def self.from_query(query)
-        { **QuerySearch.target(query), codes: Codes.from_search(QuerySearch.pairs(query)) }
-      end
+      PARAMS = FhirQuery::CODE_PARAMS
 
       # The input for a contained template.
       def self.from_template(template)
@@ -89,17 +82,6 @@ module InfernoSuiteGenerator
 
         module_function
 
-        # `pairs` from `QuerySearch.pairs`. Query values are `system|code` or
-        # `code`. A comma means OR. Values with a `{{...}}` template are skipped.
-        def from_search(pairs)
-          codes = empty
-          pairs.each do |name, value|
-            key = param(name)
-            codes[key].concat(search_values(value)) if key
-          end
-          codes
-        end
-
         # A template's `code.coding` and `category[].coding`.
         def from_template(template)
           PARAMS.to_h { |param| [param, list(template[param.to_s]).flat_map { |concept| codings(concept) }] }
@@ -137,20 +119,6 @@ module InfernoSuiteGenerator
             codes[param].to_a.map { |value| "#{param}=#{value.values.compact.join("|")}" }
           end
           values.empty? ? "(no codes)" : values.join(", ")
-        end
-
-        def search_values(value)
-          return [] if value.include?("{{")
-
-          value.split(",").filter_map { |token| query_value(token) }
-        end
-
-        def query_value(token)
-          parts = token.split("|", 2)
-          return if parts.last.to_s.empty?
-
-          system = parts.first if parts.size == 2
-          { system: system.to_s.empty? ? nil : system, code: parts.last }
         end
 
         # Codes fixed on one element: a `pattern[x]`/`fixed[x]` CodeableConcept

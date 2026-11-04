@@ -4,40 +4,6 @@ require_relative "support"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Verifies `ProfileMatcher` builds its input from queries.
-    class ProfileMatcherInputTest < Minitest::Test
-      include ProfileMatcherFixtures
-
-      def test_from_query_reads_codes_with_and_without_system
-        input = ProfileMatcher.from_query("Observation?code=#{LOINC}|8302-2,8306-3&_sort=-date&category=vital-signs")
-
-        assert_equal "Observation", input[:resource_type]
-        assert_equal({ code: [{ system: LOINC, code: "8302-2" }, { system: nil, code: "8306-3" }],
-                       category: [{ system: nil, code: "vital-signs" }] }, input[:codes])
-      end
-
-      def test_from_query_skips_templated_values
-        input = ProfileMatcher.from_query("Observation?code={{%codes}}&patient={{%patient.id}}")
-
-        assert_equal({ code: [], category: [] }, input[:codes])
-      end
-
-      def test_from_query_reads_the_type_of_a_read
-        input = ProfileMatcher.from_query("Patient/{{%patient.id}}")
-
-        assert_equal "Patient", input[:resource_type]
-        assert input[:read]
-      end
-
-      def test_from_query_reads_the_type_of_a_compartment_search
-        input = ProfileMatcher.from_query("Patient/{{%patient.id}}/Observation?code=8302-2")
-
-        assert_equal "Observation", input[:resource_type]
-        refute input[:read]
-        assert_equal [{ system: nil, code: "8302-2" }], input[:codes][:code]
-      end
-    end
-
     # Verifies `ProfileMatcher` picks the groups a source links to, from the
     # resource type and the `code` and `category` values the profiles fix.
     class ProfileMatcherTest < Minitest::Test

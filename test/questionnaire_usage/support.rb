@@ -85,8 +85,8 @@ module InfernoSuiteGenerator
       end
 
       def match_urls(matcher, query)
-        input = ProfileMatcher.from_query(query)
-        result = matcher.match(input[:resource_type], codes: input[:codes])
+        parsed = FhirQuery.new(query)
+        result = matcher.match(parsed.resource_type, codes: parsed.codes)
         result && { groups: result[:groups].map(&:profile_url), matched_by: result[:matched_by] }
       end
     end
@@ -204,11 +204,11 @@ module InfernoSuiteGenerator
       end
 
       def query_entry(query, used_in: [name_use], **fields)
-        TraceEntry::Query.new(**form_header, name: "Patients", query:, used_in:, **fields)
+        TraceEntry::Query.new(**form_header, name: "Patients", query: FhirQuery.new(query), used_in:, **fields)
       end
 
       def include_entry(query, used_in: [name_use], **fields)
-        TraceEntry::Include.new(**form_header, name: "Roles", query:, used_in:, **fields)
+        TraceEntry::Include.new(**form_header, name: "Roles", query: FhirQuery.new(query), used_in:, **fields)
       end
 
       def template_entry(patch:, template_codes: [],

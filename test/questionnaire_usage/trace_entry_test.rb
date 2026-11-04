@@ -37,18 +37,22 @@ module InfernoSuiteGenerator
 
       def test_a_search_query_gives_its_search_parameters_and_a_read_gives_none
         assert_equal %w[family gender], query_entry("Patient?family={{%name}}&gender=male").search_params
-        assert_nil query_entry("Patient/{{%patient.id}}", read: true).search_params
+        assert_nil query_entry("Patient/{{%patient.id}}").search_params
         assert_nil launch_entry.search_params
       end
 
       def test_only_a_query_or_include_has_a_request
-        assert_equal LOCATION_QUERY, include_entry(LOCATION_QUERY).query
+        assert_equal LOCATION_QUERY, include_entry(LOCATION_QUERY).query.to_s
         assert_nil launch_entry.query
       end
 
       def test_the_trace_file_fields_start_with_the_source
         assert_equal %i[source questionnaire_url questionnaire_version questionnaire_title name used_in],
                      launch_entry.to_h.keys
+      end
+
+      def test_the_trace_file_has_the_text_of_the_query
+        assert_equal LOCATION_QUERY, include_entry(LOCATION_QUERY).to_h[:query]
       end
 
       def test_each_kind_names_its_source_in_the_trace_file

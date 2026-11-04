@@ -3,7 +3,7 @@
 require_relative "core/test_index"
 require_relative "questionnaire_usage/log"
 require_relative "questionnaire_usage/ast"
-require_relative "questionnaire_usage/query_search"
+require_relative "questionnaire_usage/fhir_query"
 require_relative "questionnaire_usage/item_use"
 require_relative "questionnaire_usage/trace_entry"
 require_relative "questionnaire_usage/profile_matcher"

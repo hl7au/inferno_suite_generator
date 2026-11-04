@@ -1,10 +1,11 @@
 # frozen_string_literal: true
 
+require "forwardable"
 require_relative "ast"
+require_relative "fhir_query"
 require_relative "item_use"
 require_relative "log"
 require_relative "profile_matcher"
-require_relative "query_search"
 require_relative "trace_entry"
 
 module InfernoSuiteGenerator
@@ -72,7 +73,7 @@ module InfernoSuiteGenerator
       # query entry, and its include entry has no item uses.
       def trace_query(traces, query)
         add_query(traces, query)
-        query.includes.each { |include| add_include(traces, query, include) }
+        query.include_targets.each { |include| add_include(traces, query, include) }
       end
 
       # A read, like `Patient/{{%patient.id}}`, has no codes to tell profiles
@@ -133,29 +134,23 @@ module InfernoSuiteGenerator
 
       # One x-fhir-query variable of a form, with its `_include` targets.
       class Query
-        attr_reader :resource_type, :codes
+        extend Forwardable
+
+        def_delegators :@query, :resource_type, :codes, :read?
 
         def initialize(form, variable, ig_resources)
           @form = form
           @variable = variable
           @ig_resources = ig_resources
-          input = ProfileMatcher.from_query(variable[:expression])
-          @resource_type = input[:resource_type]
-          @codes = input[:codes]
-          @read = input[:read]
+          @query = FhirQuery.new(variable[:expression])
         end
 
         def label
           "#{@form.label} query #{@variable[:name]}"
         end
 
-        # Whether the query reads one resource by id, so `%Name` is that
-        # resource instead of a Bundle.
-        def read?
-          @read
-        end
-
         # `[used_in, elements_read]` for the chains whose type the block takes.
+        # A read gives one resource, so its `%Name` is that resource, not a Bundle.
         def item_uses(&accept)
           source = { name: @variable[:name], owner: @variable[:owner], bundle: !read? }
           ItemUses.new(@form, source, accept).call
@@ -165,7 +160,7 @@ module InfernoSuiteGenerator
         # entries, then `fields`. `read: true` marks a read.
         def entry(kind, **fields)
           kind.new(**@form.header, name: @variable[:name], defined_at: @variable[:defined_at],
-                                   query: @variable[:expression], **(read? ? { read: true } : {}), **fields)
+                                   query: @query, **(read? ? { read: true } : {}), **fields)
         end
 
         # `{ value:, target:, target_by: }` for each target type of each
@@ -173,23 +168,22 @@ module InfernoSuiteGenerator
         # `Source:param:Target`, else the SearchParameter's `target` list, else
         # the types the form picks out with `entry.resource.ofType(T)` or
         # `entry.resource.where(resourceType = 'T')`.
-        def includes
-          @includes ||= include_values.flat_map { |value| targets_of(value) }
+        def include_targets
+          @include_targets ||= include_values.flat_map { |value| targets_of(value) }
         end
 
         # The `_include` target types other than the query's own.
         def other_include_types
-          @other_include_types ||= includes.map { |include| include[:target] } - [@resource_type]
+          @other_include_types ||= include_targets.map { |include| include[:target] } - [resource_type]
         end
 
         private
 
         def include_values
-          query = @variable[:expression]
-          QuerySearch.other_includes(query).each do |name, value|
-            log("skipping #{name}=#{value} in #{label}: only _include of #{@resource_type} is traced")
+          @query.other_includes.each do |name, value|
+            log("skipping #{name}=#{value} in #{label}: only _include of #{resource_type} is traced")
           end
-          QuerySearch.includes(query)
+          @query.includes
         end
 
         def targets_of(value)
@@ -211,7 +205,7 @@ module InfernoSuiteGenerator
           fhirpath = @form.fhirpath
           expressions.select { |expression| fhirpath.references(expression).include?(name) }
                      .flat_map { |expression| fhirpath.paths(expression, name, bundle: true) }
-                     .flat_map { |chain| chain[:types] }.uniq - [@resource_type]
+                     .flat_map { |chain| chain[:types] }.uniq - [resource_type]
         end
 
         # Variables are `variable` extensions, so the owners' expressions

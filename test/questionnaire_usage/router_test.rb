@@ -6,7 +6,7 @@ module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Verifies which test `Router` picks for each kind of source.
     class RouterTest < Minitest::Test
-      include TracerFixtures
+      include TraceEntryFixtures
 
       LOCATION_QUERY = "PractitionerRole?practitioner={{%user.id}}&_include=PractitionerRole:location"
 
@@ -22,25 +22,25 @@ module InfernoSuiteGenerator
 
       def test_a_launch_context_and_a_read_go_to_the_read_test
         assert_equal "patient_read", test_id(@patient, TraceEntry::LaunchContext.new)
-        read = TraceEntry::Query.new(query: "Patient/{{%patient.id}}", read: true)
+        read = query_entry("Patient/{{%patient.id}}")
 
         assert_equal "patient_read", test_id(@patient, read)
       end
 
       def test_a_search_goes_to_the_search_test_by_the_same_parameters_in_any_order
-        destination = route(@patient, TraceEntry::Query.new(query: "Patient?gender=male&family={{%name}}&_count=1"))
+        destination = route(@patient, query_entry("Patient?gender=male&family={{%name}}&_count=1"))
 
         assert_equal "patient_search_1", destination.test_id
         assert_equal "search by family + gender", destination.label
       end
 
       def test_a_search_no_test_makes_goes_nowhere
-        assert_nil route(@patient, TraceEntry::Query.new(query: "Patient?name=x"))
-        assert_nil route(@patient, TraceEntry::Query.new(query: "Patient?_sort=-birthdate"))
+        assert_nil route(@patient, query_entry("Patient?name=x"))
+        assert_nil route(@patient, query_entry("Patient?_sort=-birthdate"))
       end
 
       def test_an_include_goes_to_the_include_test_of_the_searching_group
-        destination = route(@location, TraceEntry::Include.new(query: LOCATION_QUERY))
+        destination = route(@location, include_entry(LOCATION_QUERY))
 
         assert_equal @role, destination.group
         assert_equal "practitionerrole_include_2", destination.test_id
@@ -50,7 +50,7 @@ module InfernoSuiteGenerator
       def test_an_include_falls_back_to_any_include_test_for_its_type
         query = "PractitionerRole?organization=x&_include=PractitionerRole:location"
 
-        assert_equal "practitionerrole_include_1", test_id(@location, TraceEntry::Include.new(query:))
+        assert_equal "practitionerrole_include_1", test_id(@location, include_entry(query))
       end
 
       def test_templates_go_to_the_create_test_or_for_a_patch_to_the_patch_then_update_test

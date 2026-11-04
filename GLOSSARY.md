@@ -18,6 +18,10 @@ The test in a group that looks for the elements its profile marks Must Support.
 Something in a questionnaire that links it to a resource type: an `x-fhir-query` variable, a launch context or a template extract.
 _Avoid_: Reference, dependency
 
+**FHIR query**:
+An `x-fhir-query` parsed once when its source is traced. It says what the query asks for: its resource type, whether it reads one resource, and its search parameters, `_include` values and codes.
+_Avoid_: Query, which here names the kind of source
+
 **Trace entry**:
 The record of one source for one resource type, with the items that use it. A query has one for its own type and one for each `_include` target, and the groups a source links to share its entries.
 _Avoid_: Usage, trace item

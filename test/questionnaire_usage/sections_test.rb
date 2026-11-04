@@ -118,7 +118,7 @@ module InfernoSuiteGenerator
       end
 
       def test_a_read_says_it_reads_one_resource
-        entry = query_entry("Patient/{{%patient.id}}", read: true)
+        entry = query_entry("Patient/{{%patient.id}}")
 
         assert_includes summary([entry]), "- **Query Patients**: reads one Patient by id\n"
       end

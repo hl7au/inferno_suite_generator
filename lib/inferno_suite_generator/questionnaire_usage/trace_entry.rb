@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "query_search"
-
 module InfernoSuiteGenerator
   module QuestionnaireUsage
     # One questionnaire source traced for the groups whose profile it links to.
@@ -20,6 +18,7 @@ module InfernoSuiteGenerator
       # The fields of the trace file.
       def to_h
         fields = { source: self.class::SOURCE, **@fields }
+        fields[:query] &&= fields[:query].to_s
         fields[:used_in] &&= fields[:used_in].map(&:to_h)
         fields
       end
@@ -28,7 +27,7 @@ module InfernoSuiteGenerator
         @fields[:name]
       end
 
-      # The x-fhir-query of a query or an `_include`, else `nil`.
+      # The FhirQuery of a query or an `_include`, else `nil`.
       def query
         @fields[:query]
       end
@@ -88,11 +87,11 @@ module InfernoSuiteGenerator
         end
 
         def request_test(router, group)
-          read? ? router.read_test(group) : router.search_test(group, params)
+          read? ? router.read_test(group) : router.search_test(group, query.search_params)
         end
 
         def search_params
-          params unless read?
+          query.search_params unless read?
         end
 
         def heading(resource)
@@ -107,11 +106,11 @@ module InfernoSuiteGenerator
         private
 
         def read?
-          @fields[:read]
+          query.read?
         end
 
         def includes
-          @includes ||= QuerySearch.includes(query)
+          query.includes
         end
       end
 
@@ -121,7 +120,7 @@ module InfernoSuiteGenerator
         SOURCE = "include"
 
         def request_test(router, group)
-          router.include_test(group, QuerySearch.target(query)[:resource_type], params)
+          router.include_test(group, query.resource_type, query.search_params)
         end
 
         def heading(resource)
@@ -162,13 +161,6 @@ module InfernoSuiteGenerator
           codes = @fields[:template_codes].to_a
           "creates a new #{resource}#{" with code #{codes.join(", ")}" unless codes.empty?} from the answers"
         end
-      end
-
-      private
-
-      # The parameters that select resources in the query.
-      def params
-        @params ||= QuerySearch.params(query)
       end
     end
   end

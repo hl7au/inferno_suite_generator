@@ -88,7 +88,7 @@ flowchart TD
     source -- launch_context --> read["G's read test"]
     source -- query --> isread{"read: true?<br/>like Patient/id"}
     isread -- yes --> read
-    isread -- no --> params{"QuerySearch.params<br/>empty?"}
+    isread -- no --> params{"FhirQuery#search_params<br/>empty?"}
     params -- yes --> none
     params -- no --> search["G's search test with the<br/>same names, in any order"]
 
@@ -151,7 +151,7 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
   - `item_use.rb`: one item reading a source: how sections name it, what it does to the item, and its trace file fields
   - `ast.rb`: reads FHIRPath expressions to find the variables and element paths they use
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
-  - `query_search.rb`: splits a FHIR query into its resource type and search parameters
+  - `fhir_query.rb`: one x-fhir-query, parsed once: its resource type, whether it's a read, its search parameters, `_include` values and codes
   - `router.rb`: finds the test that makes each source's request
   - `delivery.rb`: decides which tests list each entry and which elements count as checked
   - `sections.rb`: writes every "Used in questionnaires" section a delivery decided on: the test sections, the Must Support sections and the group summaries
