@@ -73,7 +73,7 @@ Groups no questionnaire uses get no `questionnaire_usage.yml`, and their descrip
 
 ## How it picks a test
 
-Each trace entry of a group takes two paths: its request goes to one test (`Router#source_test`), and the elements its items read go to the Must Support test or the group summary (`ElementReads`). `Delivery` makes these decisions once, before anything is rendered, and the test sections, the group summaries and the trace files all read them.
+Each trace entry of a group takes two paths: its request goes to one test (`Router#source_test`), and the elements its items read go to the Must Support test or the group summary (`Delivery::Placement#reads`). `Delivery` makes these decisions once, before anything is rendered, and the test sections, the group summaries and the trace files all read them.
 
 ### The request
 
@@ -151,13 +151,9 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
   - `query_search.rb`: splits a FHIR query into its resource type and search parameters
   - `router.rb`: finds the test that makes each source's request
   - `delivery.rb`: decides which tests list each entry and which elements count as checked
-  - `group_trace.rb`: writes one group's Must Support section, trace file and summary
-  - `usage_section.rb`: renders the list of sources and their items
+  - `sections.rb`: writes every "Used in questionnaires" section a delivery decided on: the test sections, the Must Support sections and the group summaries
+  - `trace_files.rb`: writes each group's `questionnaire_usage.yml`
   - `checked_elements.rb`: the rule for which element paths a group's tests check and how they are named, used by `delivery.rb`
-  - `element_reads.rb`: renders the elements items read, for the Must Support test and the group summary
-  - `test_sections.rb`: adds the section of each test that makes a request
-  - `group_summary.rb`: renders the group's section
-  - `forms.rb`: groups the shown placements by questionnaire and titles them
 - `lib/inferno_suite_generator/core/test_index.rb`: finds a group's tests by kind and details
 - `lib/inferno_suite_generator/core/group_descriptions.rb`: collects and escapes the added description text
 - `test/questionnaire_usage/`: unit tests for each class, plus `generate_test.rb`, which runs the tracing the way the generator does

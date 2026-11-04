@@ -6,7 +6,7 @@ module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Verifies which tests list each trace entry, without rendering anything.
     class DeliveryTest < Minitest::Test
-      include UsageSectionFixtures
+      include TraceEntryFixtures
 
       ROLE_QUERY = "PractitionerRole?practitioner={{%user.id}}&_include=PractitionerRole:location"
 
@@ -74,6 +74,32 @@ module InfernoSuiteGenerator
         assert_equal 2, listing.placements.size
       end
 
+      private
+
+      def tested_by(entry, group: @patient)
+        _group, placements = Delivery.new([group], { group.profile_url => [entry] }).to_enum(:each_group).first
+        placements.sole.tests.map(&:test_id)
+      end
+
+      def add_test(group, id, kind, **details)
+        group.add_test(id:, file_name: "#{id}.rb", kind:, **details)
+      end
+
+      def shared_include_groups
+        role = location_group("PractitionerRole", "role")
+        add_test(role, "role_include", "include", search_names: ["practitioner"], include_targets: ["Location"])
+        [role, location_group("Location", "first"), location_group("Location", "second")]
+      end
+
+      def location_group(resource, profile_url)
+        InfernoSuiteGenerator::Generator::GroupMetadata.new(resource:, profile_url:, title: profile_url, searches: [])
+      end
+    end
+
+    # Verifies what Delivery decides for an entry traced for several groups.
+    class DeliverySharedEntryTest < Minitest::Test
+      include TraceEntryFixtures
+
       def test_a_shared_entry_has_one_answer_for_every_group
         shared_placements.each do |placement|
           assert placement.reads.fetch("birthDate").checked
@@ -88,6 +114,16 @@ module InfernoSuiteGenerator
         assert_nil unchecking.must_support
         assert_equal ["birthDate"], checking.must_support_reads.keys
         assert_equal "checking_must_support", checking.must_support.test_id
+      end
+
+      def test_a_shared_read_is_named_as_the_group_that_checks_it_names_it
+        path = "extension[url=#{INDIGENOUS_STATUS}].value"
+        entry = launch_entry(reads: [path])
+        traces = { "unchecking" => [entry], AU_CORE_PATIENT => [entry] }
+
+        _group, placements = Delivery.new([unchecking_group, patient_group], traces).to_enum(:each_group).first
+
+        assert_equal "extension:indigenousStatus.value", placements.sole.reads.fetch(path).label
       end
 
       def test_a_group_names_its_must_support_reads_itself
@@ -117,23 +153,8 @@ module InfernoSuiteGenerator
         InfernoSuiteGenerator::Generator::GroupMetadata.new(resource: "Patient", profile_url: "unchecking")
       end
 
-      def tested_by(entry, group: @patient)
-        _group, placements = Delivery.new([group], { group.profile_url => [entry] }).to_enum(:each_group).first
-        placements.sole.tests.map(&:test_id)
-      end
-
       def add_test(group, id, kind, **details)
         group.add_test(id:, file_name: "#{id}.rb", kind:, **details)
-      end
-
-      def shared_include_groups
-        role = location_group("PractitionerRole", "role")
-        add_test(role, "role_include", "include", search_names: ["practitioner"], include_targets: ["Location"])
-        [role, location_group("Location", "first"), location_group("Location", "second")]
-      end
-
-      def location_group(resource, profile_url)
-        InfernoSuiteGenerator::Generator::GroupMetadata.new(resource:, profile_url:, title: profile_url, searches: [])
       end
     end
   end

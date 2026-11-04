@@ -161,25 +161,32 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Entries and a Patient group shared by the `UsageSection`,
-    # `ElementReads` and `GroupSummary` tests.
-    module UsageSectionFixtures
+    # Entries and a Patient group shared by the `Sections` and `Delivery` tests.
+    module TraceEntryFixtures
       include TracerFixtures
 
       INDIGENOUS_STATUS = "http://hl7.org.au/fhir/StructureDefinition/indigenous-status"
       PRONOUNS = "http://hl7.org/fhir/StructureDefinition/individual-pronouns"
       LOCATION_QUERY = "PractitionerRole?_id={{%role.id}}&_include=PractitionerRole:location"
 
-      # The list as the group summary shows it, with the search check.
-      def section(entries, group: patient_group, search_check: true)
-        list = UsageSection.new(placements_of(entries, group:), group, search_check:).list
-        list.empty? ? "" : "#{list}\n"
+      # The GroupDescriptions `Sections` writes for entries traced for the group
+      # alone.
+      def written(entries, group)
+        delivery = Delivery.new([group], { group.profile_url => entries })
+        InfernoSuiteGenerator::Generator::GroupDescriptions.new.tap { |added| Sections.new(delivery).write(added) }
       end
 
-      # The Delivery::Placements of the entries traced for the group alone.
-      def placements_of(entries, group: patient_group)
-        _group, placements = Delivery.new([group], { group.profile_url => entries }).to_enum(:each_group).first
-        placements
+      # The group's summary for the entries, "" when it has none. A group with no
+      # tests lists every source in full under "Not tested by this group".
+      def summary(entries, group: patient_group)
+        written(entries, group).for(group).join
+      end
+
+      # The section `Sections` writes to a test of this kind, "" when it has none.
+      def section_of_test(entries, kind, group: patient_group, **details)
+        id = "patient_#{kind}"
+        group.add_test(id:, file_name: "#{id}.rb", kind:, **details)
+        written(entries, group).for_test(group, id).join
       end
 
       def launch_entry(reads: ["birthDate"], header: form_header,
@@ -249,7 +256,7 @@ module InfernoSuiteGenerator
 
       # The entries in the group directory's trace file.
       def trace_entries(directory)
-        YAML.safe_load_file(File.join(directory, QuestionnaireUsage::GroupTrace::FILE_NAME))["entries"]
+        YAML.safe_load_file(File.join(directory, QuestionnaireUsage::TraceFiles::FILE_NAME))["entries"]
       end
 
       # Writes the Patient group file with the descriptions and returns its path.

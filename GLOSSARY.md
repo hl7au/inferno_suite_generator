@@ -47,3 +47,12 @@ _Avoid_: Destination, which names only one of those tests
 **Checked element**:
 An element path a group's tests check: its profile marks it Must Support or requires it, it is `id`, or it is an extension the profile marks Must Support or that extension's value. For a trace entry shared by several groups, an element is checked when any of them checks it.
 _Avoid_: Must Support element, which leaves out required elements and `id`
+
+### What tracing writes
+
+**Section**:
+The "Used in questionnaires" Markdown added to a description: a test section for a test that makes a request, a Must Support section, or a group summary.
+_Avoid_: Usage section, which named only the list of sources
+
+**Trace file**:
+A group's `questionnaire_usage.yml`, with its trace entries and the tests that list each.

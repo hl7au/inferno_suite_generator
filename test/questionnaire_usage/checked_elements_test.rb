@@ -6,7 +6,7 @@ module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Groups and assertions shared by the `CheckedElements` tests.
     module CheckedElementsFixtures
-      include UsageSectionFixtures
+      include TraceEntryFixtures
 
       def indigenous
         "extension[url=#{INDIGENOUS_STATUS}]"

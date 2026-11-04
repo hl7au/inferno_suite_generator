@@ -6,7 +6,7 @@ module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Verifies what each kind of trace entry says about itself.
     class TraceEntryTest < Minitest::Test
-      include UsageSectionFixtures
+      include TraceEntryFixtures
 
       INCLUDING = "Patient?family={{%name}}&_include=Patient:general-practitioner"
 

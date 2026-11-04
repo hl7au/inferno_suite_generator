@@ -45,7 +45,7 @@ module InfernoSuiteGenerator
         descriptions = run_tracing(questionnaire)
 
         assert_empty descriptions.for(@group)
-        refute_path_exists File.join(@dir, "patient", QuestionnaireUsage::GroupTrace::FILE_NAME)
+        refute_path_exists File.join(@dir, "patient", QuestionnaireUsage::TraceFiles::FILE_NAME)
       end
 
       def test_the_generated_group_file_is_valid_ruby_with_the_section
