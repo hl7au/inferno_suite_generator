@@ -21,7 +21,10 @@ module InfernoSuiteGenerator
         other = InfernoSuiteGenerator::Generator::GroupMetadata.new(resource: "Patient", profile_url: "other")
         entry = launch_entry(reads: ["extension[url=#{INDIGENOUS_STATUS}].value", "contact"])
 
-        list = UsageSection.new([entry], other, checked_by: [other, patient_group]).list
+        delivery = Delivery.new([other, patient_group], { "other" => [entry], AU_CORE_PATIENT => [entry] })
+        _group, placements = delivery.to_enum(:each_group).first
+
+        list = UsageSection.new(placements, other).list
 
         assert_includes list, "reads extension:indigenousStatus.value, contact (not checked)"
       end
@@ -61,7 +64,8 @@ module InfernoSuiteGenerator
       end
 
       def test_sources_no_item_uses_are_left_out
-        section = UsageSection.new([launch_entry(used_in: []), launch_entry(used_in: [variable_usage])], patient_group)
+        section = UsageSection.new(placements_of([launch_entry(used_in: []), launch_entry(used_in: [variable_usage])]),
+                                   patient_group)
 
         assert_predicate section, :empty?
       end

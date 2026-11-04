@@ -30,7 +30,7 @@ module InfernoSuiteGenerator
 
       def write_must_support(descriptions)
         test = @placements.filter_map(&:must_support).first
-        section = MustSupportSection.new(@placements.map(&:entry), @group)
+        section = MustSupportSection.new(@placements, @group)
         descriptions.test(@group, test.test_id, section.markdown) if test && !section.empty?
       end
 

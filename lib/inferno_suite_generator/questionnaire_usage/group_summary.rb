@@ -31,9 +31,9 @@ module InfernoSuiteGenerator
 
       def markdown
         lines = [UsageSection::HEADING, "", intro, "", forms_list]
-        not_tested = UsageSection.new(entries(@placements.reject(&:request)), @group, search_check: true)
+        not_tested = UsageSection.new(@placements.reject(&:request), @group, search_check: true)
         lines.push("", "**Not tested by this group**", "", NOT_TESTED, "", not_tested.list) unless not_tested.empty?
-        not_checked = ElementReads.new(entries(@placements), @group).list(checked: false)
+        not_checked = ElementReads.new(@placements).not_checked
         lines.push("", "**Elements not checked**", "", NOT_CHECKED, "", not_checked) unless not_checked.empty?
         "#{lines.join("\n")}\n"
       end
@@ -46,9 +46,8 @@ module InfernoSuiteGenerator
       end
 
       def forms_list
-        by_form = @placements.group_by { |placement| placement.entry.form_key }
-        Forms.new(entries(@placements)).map do |title, form_entries|
-          labels = test_labels(by_form[form_entries.first.form_key])
+        Forms.new(@placements).map do |title, placements|
+          labels = test_labels(placements)
           next "- **#{title}**: no test in this group makes its requests" if labels.empty?
 
           "- **#{title}**: see the #{sentence(labels)} #{labels.size == 1 ? "test" : "tests"}"
@@ -60,11 +59,6 @@ module InfernoSuiteGenerator
       def test_labels(placements)
         tests = placements.filter_map(&:request) + placements.filter_map(&:must_support)
         tests.map(&:label).uniq
-      end
-
-      # :reek:UtilityFunction
-      def entries(placements)
-        placements.map(&:entry)
       end
 
       # :reek:UtilityFunction

@@ -51,7 +51,7 @@ module InfernoSuiteGenerator
         listing = Delivery.new([@patient], { @patient.profile_url => [entry] }).test_listings.first
 
         assert_equal "patient_read", listing.destination.test_id
-        assert_equal [entry], listing.entries
+        assert_equal [entry], listing.placements.map(&:entry)
         assert_equal [@patient], listing.groups
       end
 
@@ -63,17 +63,59 @@ module InfernoSuiteGenerator
         listing = delivery.test_listings.sole
 
         assert_equal "role_include", listing.destination.test_id
-        assert_equal 1, listing.entries.size
+        assert_equal [entry], listing.placements.map(&:entry)
         assert_equal [first, second], listing.groups
       end
 
       def test_two_equal_entries_of_a_group_stay_apart
         entries = [launch_entry, launch_entry]
+        listing = Delivery.new([@patient], { @patient.profile_url => entries }).test_listings.sole
 
-        assert_equal 2, Delivery.new([@patient], { @patient.profile_url => entries }).test_listings.sole.entries.size
+        assert_equal 2, listing.placements.size
+      end
+
+      def test_a_shared_entry_has_one_answer_for_every_group
+        shared_placements.each do |placement|
+          assert placement.reads.fetch("birthDate").checked
+          refute placement.reads.fetch("contact").checked
+        end
+      end
+
+      def test_only_the_group_that_checks_an_element_lists_it_in_its_must_support_test
+        unchecking, checking = shared_placements
+
+        assert_empty unchecking.must_support_reads
+        assert_nil unchecking.must_support
+        assert_equal ["birthDate"], checking.must_support_reads.keys
+        assert_equal "checking_must_support", checking.must_support.test_id
+      end
+
+      def test_a_group_names_its_must_support_reads_itself
+        entry = launch_entry(reads: ["extension[url=#{INDIGENOUS_STATUS}].value"])
+        traces = { "unchecking" => [entry], AU_CORE_PATIENT => [entry] }
+
+        _group, placements = Delivery.new([unchecking_group, patient_group], traces).to_enum(:each_group).to_a.last
+
+        assert_equal ["extension:indigenousStatus.value"], placements.sole.must_support_reads.values.map(&:label)
       end
 
       private
+
+      # The placements of one entry traced for a group that doesn't check
+      # birthDate and one that does, in that order.
+      def shared_placements
+        checking = patient_group
+        add_test(checking, "checking_must_support", "must_support")
+        unchecking = unchecking_group
+        add_test(unchecking, "unchecking_must_support", "must_support")
+        entry = launch_entry(reads: %w[birthDate contact])
+        delivery = Delivery.new([unchecking, checking], { "unchecking" => [entry], AU_CORE_PATIENT => [entry] })
+        delivery.to_enum(:each_group).map { |_group, placements| placements.sole }
+      end
+
+      def unchecking_group
+        InfernoSuiteGenerator::Generator::GroupMetadata.new(resource: "Patient", profile_url: "unchecking")
+      end
 
       def tested_by(entry, group: @patient)
         _group, placements = Delivery.new([group], { group.profile_url => [entry] }).to_enum(:each_group).first

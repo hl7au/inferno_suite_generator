@@ -37,11 +37,11 @@ The test that makes the same request as a trace entry's source, or for a templat
 _Avoid_: Source test, matching test
 
 **Delivery**:
-The decision of which tests list each trace entry. The test descriptions, group summaries and trace files all state this one decision.
+The decision of which tests list each trace entry and which elements its items read count as checked. The test descriptions, group summaries and trace files all state this one decision.
 _Avoid_: Routing, which only picks the request test
 
 **Placement**:
-One trace entry of one group, with the tests that list it: its request test, and the group's Must Support test when its items read a checked element.
+One trace entry of one group, with the tests that list it: its request test, and the group's Must Support test when its items read an element that group's tests check. It also records whether each element its items read is checked.
 _Avoid_: Destination, which names only one of those tests
 
 **Checked element**:

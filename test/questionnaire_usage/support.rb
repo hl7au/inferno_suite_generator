@@ -172,8 +172,14 @@ module InfernoSuiteGenerator
 
       # The list as the group summary shows it, with the search check.
       def section(entries, group: patient_group, search_check: true)
-        list = UsageSection.new(entries, group, search_check:).list
+        list = UsageSection.new(placements_of(entries, group:), group, search_check:).list
         list.empty? ? "" : "#{list}\n"
+      end
+
+      # The Delivery::Placements of the entries traced for the group alone.
+      def placements_of(entries, group: patient_group)
+        _group, placements = Delivery.new([group], { group.profile_url => entries }).to_enum(:each_group).first
+        placements
       end
 
       def launch_entry(reads: ["birthDate"], header: form_header,

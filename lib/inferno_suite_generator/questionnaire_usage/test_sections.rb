@@ -5,8 +5,7 @@ require_relative "usage_section"
 module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Adds one "Used in questionnaires" section to the description of each test
-    # in the Delivery::TestListings. An element counts as checked when any group
-    # of the listing checks it.
+    # in the Delivery::TestListings.
     class TestSections
       READS = "A form can pre-fill an item only if the server returns the elements the item reads."
       GROUP_READS = "#{READS} Elements marked #{UsageSection::NOT_CHECKED} are neither Must Support nor required by " \
@@ -27,10 +26,8 @@ module InfernoSuiteGenerator
       private
 
       def section(listing)
-        groups = listing.groups
-        group = groups.first
-        UsageSection.new(listing.entries, group, intro: intro(listing.destination.kind, group.resource),
-                                                 checked_by: groups)
+        group = listing.groups.first
+        UsageSection.new(listing.placements, group, intro: intro(listing.destination.kind, group.resource))
       end
 
       # :reek:UtilityFunction

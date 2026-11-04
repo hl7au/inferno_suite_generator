@@ -162,6 +162,17 @@ module InfernoSuiteGenerator
         assert_equal [%w[base_include checking_must_support]], tested_by("obs_checking")
       end
 
+      def test_the_group_summary_agrees_with_the_include_test_on_a_shared_include
+        summaries = trace_shared_include do |descriptions, _base, checking, unchecking|
+          [unchecking, checking].map { |group| descriptions.for(group).join }
+        end
+
+        summaries.each do |summary|
+          refute_includes summary, "**status**: Status"
+          assert_includes summary, "**note**: Note"
+        end
+      end
+
       private
 
       def tested_by(directory)
@@ -178,7 +189,7 @@ module InfernoSuiteGenerator
                                                         profiles: { BASE => profile("MedicationRequest"),
                                                                     UNCHECKING => profile("Observation"),
                                                                     CHECKING => profile("Observation") })
-        with_config_keeper { yield descriptions, base, checking }
+        with_config_keeper { yield descriptions, base, checking, unchecking }
       end
 
       # Only the last Observation group marks `status` Must Support.

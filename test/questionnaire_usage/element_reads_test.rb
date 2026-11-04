@@ -42,16 +42,18 @@ module InfernoSuiteGenerator
       end
 
       def test_the_must_support_section_has_a_heading_or_is_empty
-        section = MustSupportSection.new([launch_entry], patient_group)
+        section = MustSupportSection.new(placements_of([launch_entry]), patient_group)
 
         assert section.markdown.start_with?("## Used in questionnaires\n\nItems in these questionnaires read")
-        assert_predicate MustSupportSection.new([launch_entry(reads: ["contact"])], patient_group), :empty?
+        assert_predicate MustSupportSection.new(placements_of([launch_entry(reads: ["contact"])]), patient_group),
+                         :empty?
       end
 
       private
 
       def list(entries, checked:)
-        ElementReads.new(entries, patient_group).list(checked:)
+        reads = ElementReads.new(placements_of(entries))
+        checked ? reads.must_support : reads.not_checked
       end
 
       def usage(link_id, text, *reads, extension: "initialExpression")

@@ -55,7 +55,7 @@ module InfernoSuiteGenerator
       private
 
       def placement(entry, request: nil, must_support: nil)
-        Delivery::Placement.new(group: patient_group, entry:, request:, must_support:)
+        placements_of([entry]).sole.with(request:, must_support:)
       end
 
       def summary(*placements)

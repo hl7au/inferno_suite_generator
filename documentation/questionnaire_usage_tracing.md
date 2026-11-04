@@ -41,12 +41,12 @@ For each group a questionnaire uses, the trace is split over the group's tests. 
 
 The generator finds these tests through `Generator::TestIndex`. It writes:
 
-- A "Used in questionnaires" section in the description of each of those tests. It's a nested list of questionnaires, the sources in each that the test makes the request of, and the items that use each source. Elements the profile neither marks Must Support nor requires are marked "(not checked)".
+- A "Used in questionnaires" section in the description of each of those tests. It's a nested list of questionnaires, the sources in each that the test makes the request of, and the items that use each source. Elements that no group the entry links to marks Must Support or requires are marked "(not checked)".
 - A section in the Must Support test listing the Must Support elements the items read, each with the items that read it.
 - A "Used in questionnaires" section at the end of the group description, with:
   - each questionnaire and the tests that list it
   - **Not tested by this group**: the sources no test makes the request of, in full, with how the group's searches compare to a query's
-  - **Elements not checked**: the elements items read that the profile neither marks Must Support nor requires, each with the items that read it
+  - **Elements not checked**: the elements items read that no group the entry links to marks Must Support or requires, each with the items that read it
 - An `entries` list in `<group dir>/questionnaire_usage.yml`, with one entry per source. `tested_by` lists the ids of the tests whose descriptions list the entry:
 
 ```yaml
@@ -121,18 +121,20 @@ An include test belongs to group B, so it lists entries traced for group G. An `
 ```mermaid
 flowchart TD
     usage["Each item use of a shown entry,<br/>except a variable definition"] --> path["Each element path it reads"]
-    path --> checked{"Checked by the profile?<br/>Must Support, mandatory, id,<br/>or the value of a Must Support extension slice"}
-    checked -- yes --> ms{"G has a<br/>Must Support test?"}
-    ms -- yes --> mstest["Must Support test section:<br/>element: items that read it"]
-    ms -- no --> itemonly["Only in the item lines<br/>of the request's section"]
+    path --> checked{"Checked by any group the entry links to?<br/>Must Support, mandatory, id,<br/>or the value of a Must Support extension slice"}
     checked -- no --> notchecked["Group summary:<br/>Elements not checked"]
+    checked -- yes --> own{"Checked by G's<br/>own profile?"}
+    own -- no --> itemonly["Only in the item lines<br/>of the request's section"]
+    own -- yes --> ms{"G has a<br/>Must Support test?"}
+    ms -- yes --> mstest["Must Support test section:<br/>element: items that read it"]
+    ms -- no --> itemonly
 ```
 
-Item lines in every section also show each path, with "(not checked)" after the unchecked ones.
+Item lines in every section also show each path, with "(not checked)" after the unchecked ones. `Delivery` decides this once for each entry, so every section and summary gives the same answer. A Must Support test lists only what its own group's profile checks, since that is all the test looks for.
 
 ### The group summary
 
-It lists each questionnaire with the labels of the tests its entries went to, adding the Must Support test when its items read a checked element. `tested_by` in `questionnaire_usage.yml` holds the same tests' ids.
+It lists each questionnaire with the labels of the tests its entries went to, adding the Must Support test when its items read an element the group's own profile checks. `tested_by` in `questionnaire_usage.yml` holds the same tests' ids.
 
 ## Generated Markdown
 
@@ -148,14 +150,14 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
   - `query_search.rb`: splits a FHIR query into its resource type and search parameters
   - `router.rb`: finds the test that makes each source's request
-  - `delivery.rb`: decides which tests list each entry
+  - `delivery.rb`: decides which tests list each entry and which elements count as checked
   - `group_trace.rb`: writes one group's Must Support section, trace file and summary
   - `usage_section.rb`: renders the list of sources and their items
-  - `checked_elements.rb`: decides which element paths a group's tests check, and how sections name them
+  - `checked_elements.rb`: the rule for which element paths a group's tests check and how they are named, used by `delivery.rb`
   - `element_reads.rb`: renders the elements items read, for the Must Support test and the group summary
   - `test_sections.rb`: adds the section of each test that makes a request
   - `group_summary.rb`: renders the group's section
-  - `forms.rb`: groups the shown entries by questionnaire and titles them
+  - `forms.rb`: groups the shown placements by questionnaire and titles them
 - `lib/inferno_suite_generator/core/test_index.rb`: finds a group's tests by kind and details
 - `lib/inferno_suite_generator/core/group_descriptions.rb`: collects and escapes the added description text
 - `test/questionnaire_usage/`: unit tests for each class, plus `generate_test.rb`, which runs the tracing the way the generator does

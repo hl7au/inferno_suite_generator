@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
-require_relative "checked_elements"
 require_relative "forms"
 require_relative "usage_section"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # The element paths the form items of one group's entries read, each with
-    # the items that read it, by questionnaire. The Must Support test lists
-    # the ones the group checks, and the group summary the ones it does not:
+    # The element paths the form items of one group's Delivery::Placements read,
+    # each with the items that read it, by questionnaire. The Must Support test
+    # lists the ones the group checks, and the group summary the ones no test
+    # checks:
     #
     #   - **GP Chronic Condition Management Plan**
     #     - **birthDate**: Date of birth, Age
@@ -17,37 +17,47 @@ module InfernoSuiteGenerator
     class ElementReads
       MAX_ITEMS = 10
 
-      def initialize(entries, group)
-        @checked_elements = CheckedElements.new([group])
-        @forms = Forms.new(entries)
+      def initialize(placements)
+        @forms = Forms.new(placements)
       end
 
-      # The nested list of the elements the group's tests check, or with
-      # `checked: false` the ones they do not; "" when there are none.
-      def list(checked:)
-        @forms.flat_map do |title, entries|
-          elements = elements(entries).select { |_label, (path, _items)| @checked_elements.checked?(path) == checked }
-          next [] if elements.empty?
-
-          ["- **#{title}**", *elements.map { |label, (_path, items)| "  - **#{label}**: #{items_text(items)}" }]
-        end.join("\n")
+      # The nested list of the elements the group's Must Support test lists; ""
+      # when there are none.
+      def must_support
+        list(&:must_support_reads)
       end
 
-      # Whether the entry's items read an element the group's tests check.
-      def checks?(entry)
-        elements([entry]).any? { |_label, (path, _items)| @checked_elements.checked?(path) }
+      # The nested list of the elements no test checks; "" when there are none.
+      def not_checked
+        list { |placement| placement.reads.reject { |_path, read| read.checked } }
       end
 
       private
 
-      # `{ element label => [first trace path, item labels] }`.
-      def elements(entries)
-        entries.flat_map(&:item_uses).each_with_object({}) do |usage, by_label|
-          item = ItemLines.label(usage)
-          usage[:reads].to_a.each do |path|
-            items = (by_label[@checked_elements.label(path)] ||= [path, []]).last
-            items << item unless items.include?(item)
-          end
+      # The block gives the `{ path => ElementRead }` to list for a placement.
+      def list(&reads)
+        @forms.flat_map do |title, placements|
+          elements = elements(placements, reads)
+          next [] if elements.empty?
+
+          ["- **#{title}**", *elements.map { |label, items| "  - **#{label}**: #{items_text(items)}" }]
+        end.join("\n")
+      end
+
+      # `{ element label => item labels }`.
+      def elements(placements, reads)
+        placements.each_with_object({}) do |placement, by_label|
+          listed = reads.call(placement)
+          placement.entry.item_uses.each { |usage| add_item(by_label, usage, listed) }
+        end
+      end
+
+      # :reek:UtilityFunction
+      def add_item(by_label, usage, listed)
+        item = ItemLines.label(usage)
+        listed.values_at(*usage[:reads].to_a).compact.each do |read|
+          items = (by_label[read.label] ||= [])
+          items << item unless items.include?(item)
         end
       end
 
@@ -62,9 +72,9 @@ module InfernoSuiteGenerator
     # The "Used in questionnaires" Markdown for a group's Must Support test:
     # the elements it checks that form items read.
     class MustSupportSection
-      def initialize(entries, group)
+      def initialize(placements, group)
         @group = group
-        @list = ElementReads.new(entries, group).list(checked: true)
+        @list = ElementReads.new(placements).must_support
       end
 
       def empty?

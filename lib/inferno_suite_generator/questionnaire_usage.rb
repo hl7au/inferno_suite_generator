@@ -20,7 +20,8 @@ require_relative "questionnaire_usage/delivery"
 module InfernoSuiteGenerator
   # Traces every Questionnaire in the IG over the suite's groups and splits
   # each group's trace over its tests. Delivery decides which tests list each
-  # entry, and the outputs read its decisions:
+  # entry and which elements count as checked, and the outputs read its
+  # decisions:
   #
   # - each entry goes to the test that makes its request (Router), as a
   #   "Used in questionnaires" section in that test's description

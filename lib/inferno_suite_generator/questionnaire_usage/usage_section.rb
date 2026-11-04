@@ -1,11 +1,10 @@
 # frozen_string_literal: true
 
-require_relative "checked_elements"
 require_relative "forms"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # A "Used in questionnaires" list of trace entries for one group: the
+    # A "Used in questionnaires" list of Delivery::Placements for one group: the
     # questionnaires, the sources in each that link to the profile, and the
     # items that use each source. It uses only bold and plain text, since
     # Inferno shows tables without borders and raw HTML as text.
@@ -14,22 +13,18 @@ module InfernoSuiteGenerator
     # makes, and one in the group summary, with the entries no test makes.
     #
     # Only `TraceEntry#shown?` entries are listed, each with its `item_uses`.
-    # Element paths the profile neither marks Must Support nor requires are
-    # marked "(not checked)".
+    # Element paths Delivery found no test checks are marked "(not checked)".
     class UsageSection
       HEADING = "## Used in questionnaires"
       NOT_CHECKED = "(not checked)"
 
       # search_check: whether a query says how the group's search tests
       # compare to it, which only the group summary needs.
-      # checked_by: the groups whose tests can check the elements. A test can
-      # make the request of entries traced for several groups of one type.
-      def initialize(entries, group, intro: nil, search_check: false, checked_by: [group])
+      def initialize(placements, group, intro: nil, search_check: false)
         @group = group
         @intro = intro
         @search_check = search_check
-        @checked_elements = CheckedElements.new(checked_by)
-        @forms = Forms.new(entries)
+        @forms = Forms.new(placements)
       end
 
       def empty?
@@ -43,27 +38,30 @@ module InfernoSuiteGenerator
 
       # The nested list alone, one line per string.
       def list
-        @forms.flat_map do |title, entries|
-          ["- **#{title}**", *entries.flat_map { |entry| entry_lines(entry) }]
+        @forms.flat_map do |title, placements|
+          ["- **#{title}**", *placements.flat_map { |placement| entry_lines(placement) }]
         end.join("\n")
       end
 
       private
 
-      def entry_lines(entry)
-        ["  - #{entry.heading(@group.resource)}", *details(entry).map { |line| "    - #{line}" }]
+      def entry_lines(placement)
+        ["  - #{placement.entry.heading(@group.resource)}", *details(placement).map { |line| "    - #{line}" }]
       end
 
-      def details(entry)
+      def details(placement)
+        entry = placement.entry
         query = entry.query
         params = entry.search_params if @search_check
         search = SearchCheck.new(params, @group).line if params
-        [query && "Request: #{query}", search, *items(entry)].compact
+        [query && "Request: #{query}", search, *items(placement)].compact
       end
 
-      def items(entry)
+      # :reek:UtilityFunction
+      def items(placement)
+        entry = placement.entry
         uses = entry.item_uses
-        uses.empty? ? [entry.unused_line] : ItemLines.new(uses, @checked_elements).lines
+        uses.empty? ? [entry.unused_line] : ItemLines.new(uses, placement.reads).lines
       end
     end
 
@@ -98,9 +96,10 @@ module InfernoSuiteGenerator
       end
 
       # usages: a `TraceEntry#item_uses`.
-      def initialize(usages, checked_elements)
+      # reads: the entry's `Delivery::Placement#reads`.
+      def initialize(usages, reads)
         @items = usages.group_by { |usage| usage[:link_id] }.values
-        @checked_elements = checked_elements
+        @reads = reads
       end
 
       # Up to `MAX` lines, then one that counts the rest.
@@ -133,8 +132,8 @@ module InfernoSuiteGenerator
       end
 
       def read_label(path)
-        label = @checked_elements.label(path)
-        @checked_elements.checked?(path) ? label : "#{label} #{UsageSection::NOT_CHECKED}"
+        read = @reads.fetch(path)
+        read.checked ? read.label : "#{read.label} #{UsageSection::NOT_CHECKED}"
       end
     end
 
