@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "checked_elements"
 require_relative "forms"
 require_relative "usage_section"
 
@@ -17,7 +18,7 @@ module InfernoSuiteGenerator
       MAX_ITEMS = 10
 
       def initialize(entries, group)
-        @must_support = MustSupport.new(group)
+        @checked_elements = CheckedElements.new([group])
         @forms = Forms.new(entries)
       end
 
@@ -25,7 +26,7 @@ module InfernoSuiteGenerator
       # `checked: false` the ones they do not; "" when there are none.
       def list(checked:)
         @forms.flat_map do |title, entries|
-          elements = elements(entries).select { |_label, (path, _items)| @must_support.checked?(path) == checked }
+          elements = elements(entries).select { |_label, (path, _items)| @checked_elements.checked?(path) == checked }
           next [] if elements.empty?
 
           ["- **#{title}**", *elements.map { |label, (_path, items)| "  - **#{label}**: #{items_text(items)}" }]
@@ -34,17 +35,17 @@ module InfernoSuiteGenerator
 
       # Whether the entry's items read an element the group's tests check.
       def checks?(entry)
-        elements([entry]).any? { |_label, (path, _items)| @must_support.checked?(path) }
+        elements([entry]).any? { |_label, (path, _items)| @checked_elements.checked?(path) }
       end
 
       private
 
-      # `{ shown label => [first trace path, item labels] }`.
+      # `{ element label => [first trace path, item labels] }`.
       def elements(entries)
         entries.flat_map(&:item_uses).each_with_object({}) do |usage, by_label|
           item = ItemLines.label(usage)
           usage[:reads].to_a.each do |path|
-            items = (by_label[@must_support.shown(path)] ||= [path, []]).last
+            items = (by_label[@checked_elements.label(path)] ||= [path, []]).last
             items << item unless items.include?(item)
           end
         end

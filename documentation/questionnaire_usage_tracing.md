@@ -151,6 +151,7 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
   - `delivery.rb`: decides which tests list each entry
   - `group_trace.rb`: writes one group's Must Support section, trace file and summary
   - `usage_section.rb`: renders the list of sources and their items
+  - `checked_elements.rb`: decides which element paths a group's tests check, and how sections name them
   - `element_reads.rb`: renders the elements items read, for the Must Support test and the group summary
   - `test_sections.rb`: adds the section of each test that makes a request
   - `group_summary.rb`: renders the group's section

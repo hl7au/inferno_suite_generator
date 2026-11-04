@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "checked_elements"
 require_relative "forms"
 
 module InfernoSuiteGenerator
@@ -27,7 +28,7 @@ module InfernoSuiteGenerator
         @group = group
         @intro = intro
         @search_check = search_check
-        @must_support = AnyMustSupport.new(checked_by)
+        @checked_elements = CheckedElements.new(checked_by)
         @forms = Forms.new(entries)
       end
 
@@ -62,7 +63,7 @@ module InfernoSuiteGenerator
 
       def items(entry)
         uses = entry.item_uses
-        uses.empty? ? [entry.unused_line] : ItemLines.new(uses, @must_support).lines
+        uses.empty? ? [entry.unused_line] : ItemLines.new(uses, @checked_elements).lines
       end
     end
 
@@ -97,9 +98,9 @@ module InfernoSuiteGenerator
       end
 
       # usages: a `TraceEntry#item_uses`.
-      def initialize(usages, must_support)
+      def initialize(usages, checked_elements)
         @items = usages.group_by { |usage| usage[:link_id] }.values
-        @must_support = must_support
+        @checked_elements = checked_elements
       end
 
       # Up to `MAX` lines, then one that counts the rest.
@@ -132,8 +133,8 @@ module InfernoSuiteGenerator
       end
 
       def read_label(path)
-        shown = @must_support.shown(path)
-        @must_support.checked?(path) ? shown : "#{shown} #{UsageSection::NOT_CHECKED}"
+        label = @checked_elements.label(path)
+        @checked_elements.checked?(path) ? label : "#{label} #{UsageSection::NOT_CHECKED}"
       end
     end
 
@@ -164,118 +165,6 @@ module InfernoSuiteGenerator
 
       def label(names)
         names.join(" + ")
-      end
-    end
-
-    # The element paths a group's profile marks Must Support or requires, so
-    # its Must Support or validation tests check them.
-    #
-    # Trace paths name an extension as `extension[url=U]`. `label` writes one
-    # the profile slices as Must Support as `extension:sliceName`, like the
-    # profile does. A path inside such an extension counts as checked, since
-    # the extension's own profile defines what it holds.
-    #
-    # A trace path names a choice element by its type, like `valueQuantity`,
-    # where the profile has `value[x]`, so `covered?` compares it as `value`.
-    class MustSupport
-      ALWAYS_PRESENT = %w[id].freeze
-      EXTENSION_URL = /\A((?:modifierE|e)xtension)\[url=(.+)\]\z/
-      EXTENSION_SLICE = /\A(?:modifierE|e)xtension:/
-
-      def initialize(group)
-        must_supports = group.must_supports || {}
-        paths = element_paths(must_supports, group.mandatory_elements.to_a)
-        @paths = paths.to_set { |path| plain(path) }
-        @choices = choice_paths(paths)
-        @slices = must_supports[:extensions].to_a.to_h { |extension| slice(extension) }
-      end
-
-      def label(path)
-        segments(path).each_with_object([]) do |segment, done|
-          _, member, url = segment.match(EXTENSION_URL).to_a
-          done << (@slices[[done.join("."), member, url]] || segment)
-        end.join(".")
-      end
-
-      def covered?(label)
-        ALWAYS_PRESENT.include?(label) || @paths.include?(without_choice_types(label)) ||
-          segments(label).any? { |segment| segment.match?(EXTENSION_SLICE) }
-      end
-
-      # The label with an extension the profile does not slice shortened to
-      # the last part of its URL, like `extension[individual-pronouns]`.
-      def shown(path)
-        label(path).gsub(%r{\[url=(?:[^\]]*/)?([^\]/]+)\]}, '[\1]')
-      end
-
-      # Whether the group's tests check the trace path.
-      def checked?(path)
-        covered?(label(path))
-      end
-
-      private
-
-      # Must Support element and slice paths are relative, like
-      # `value[x]:valueQuantity.value` or `onset[x]` for an `onsetDateTime`
-      # type slice; mandatory ones start with the type, like `Observation.status`.
-      def element_paths(must_supports, mandatory)
-        elements = must_supports[:elements].to_a + must_supports[:slices].to_a
-        (elements.map { |element| element[:path] } + mandatory.map { |path| path.split(".", 2).last }).compact
-      end
-
-      # `[parent path, name]` for each choice element, like `["", "value"]`
-      # for `value[x]:valueQuantity.value`.
-      def choice_paths(paths)
-        paths.filter_map do |path|
-          parent, _, name = plain(path[/\A.*?\[x\]/]).rpartition(".") if path.include?("[x]")
-          [parent, name] if name
-        end.to_set
-      end
-
-      # The label with each segment that names a choice element by its type,
-      # like `valueQuantity` or `effectiveDateTime`, written as the element.
-      def without_choice_types(label)
-        segments(label).each_with_object([]) do |segment, done|
-          done << (choice_name(done.join("."), segment) || segment)
-        end.join(".")
-      end
-
-      def choice_name(parent, segment)
-        @choices.find { |choice_parent, name| choice_parent == parent && segment.match?(/\A#{name}[A-Z]/) }&.last
-      end
-
-      # `[[parent path, member, url], "extension:sliceName"]` for an extension
-      # with an id like `Patient.address.extension:foo`.
-      def slice(extension)
-        parent, _, segment = extension[:id].to_s.split(".", 2).last.to_s.rpartition(".")
-        [[plain(parent), segment.split(":").first, extension[:url]], segment]
-      end
-
-      # A snapshot path without `[x]` and slice names, as trace paths are.
-      def plain(path)
-        path.gsub("[x]", "").gsub(/:[^.]+/, "")
-      end
-
-      # Dot-separated steps, keeping the dots inside `[url=...]` together.
-      def segments(path)
-        path.scan(/(?:[^.\[]+|\[[^\]]*\])+/)
-      end
-    end
-
-    # The elements any of several groups checks. A path shows as the group that
-    # checks it names it, so a slice one profile defines keeps its name.
-    class AnyMustSupport
-      def initialize(groups)
-        @must_supports = groups.map { |group| MustSupport.new(group) }
-      end
-
-      def shown(path)
-        checking = @must_supports.find { |must_support| must_support.checked?(path) }
-        (checking || @must_supports.first).shown(path)
-      end
-
-      def checked?(path)
-        @must_supports.any? { |must_support| must_support.checked?(path) }
       end
     end
   end

@@ -134,38 +134,10 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Verifies the `UsageSection` item lines: labels, read paths and the Must
-    # Support check.
+    # Verifies the `UsageSection` item lines. `CheckedElementsTest` covers which
+    # read paths count as checked.
     class UsageSectionItemTest < Minitest::Test
       include UsageSectionFixtures
-
-      def test_a_must_support_extension_is_named_by_its_slice
-        markdown = section([launch_entry(reads: ["extension[url=#{INDIGENOUS_STATUS}].value"])])
-
-        assert_includes markdown, "**Date of birth**: pre-fills the answer; reads extension:indigenousStatus.value\n"
-      end
-
-      def test_an_extension_that_is_not_must_support_is_shortened_and_marked
-        markdown = section([launch_entry(reads: ["extension[url=#{PRONOUNS}].extension[url=value].value"])])
-
-        assert_includes markdown, "reads extension[individual-pronouns].extension[value].value (not checked)\n"
-      end
-
-      def test_mandatory_elements_and_id_count_as_checked
-        assert_includes section([launch_entry(reads: %w[gender id contact])]),
-                        "reads gender, id, contact (not checked)\n"
-      end
-
-      # The profile marks `deceasedBoolean` with a type slice on
-      # `deceased[x]`; FHIRPath reads it as `deceased`.
-      def test_a_choice_element_with_a_must_support_type_slice_counts_as_checked
-        assert_includes section([launch_entry(reads: %w[deceased])]), "reads deceased\n"
-      end
-
-      def test_a_choice_element_read_by_its_type_counts_as_checked
-        assert_includes section([launch_entry(reads: %w[deceasedBoolean deceasedDateTime.value])]),
-                        "reads deceasedBoolean, deceasedDateTime.value (not checked)\n"
-      end
 
       def test_a_usage_on_the_root_is_named_as_the_whole_form
         markdown = section([launch_entry(used_in: [{ extension: "itemExtractionContext", reads: ["name"] }])])
