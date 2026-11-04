@@ -32,8 +32,8 @@ module InfernoSuiteGenerator
         (@entries[key(group_metadata)] ||= []) << markdown
       end
 
-      # Appends Markdown to the description of one of the group's tests, such as an id from TestIndex. Ignores nil
-      # and blank text. Raises ArgumentError when the group has no test with that id.
+      # Appends Markdown to the description of one of the group's tests, such as the id of a test from TestIndex.
+      # Ignores nil and blank text. Raises ArgumentError when the group has no test with that id.
       def test(group_metadata, test_id, markdown)
         return if blank?(markdown)
 

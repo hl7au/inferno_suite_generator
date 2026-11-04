@@ -219,6 +219,7 @@ module InfernoSuiteGenerator
         @dir = Dir.mktmpdir
         @group = build_group_metadata(resource: "Patient", profile_url: AU_CORE_PATIENT,
                                       must_supports: { elements: [{ path: "birthDate" }] })
+        add_test(@group, "patient_validation_test", "validation")
       end
 
       def teardown

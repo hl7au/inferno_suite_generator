@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "core/test_index"
 require_relative "questionnaire_usage/log"
 require_relative "questionnaire_usage/ast"
 require_relative "questionnaire_usage/query_search"
@@ -29,8 +30,15 @@ module InfernoSuiteGenerator
   #
   # Each traced group gets its entries in <group dir>/questionnaire_usage.yml,
   # each with the ids of the tests that list it as `tested_by`.
+  #
+  # It reads what the test generators recorded on the groups, and adds to what
+  # GroupGenerator writes, so it runs between them.
   module QuestionnaireUsage
     def self.generate(ig_resources:, groups:, descriptions:, base_output_dir:)
+      if groups.any? && groups.none? { |group| Generator::TestIndex.new(group).any? }
+        raise "Questionnaire usage tracing must run after the test generators: no group has a recorded test."
+      end
+
       delivery = Delivery.new(groups, Tracer.new(ig_resources, groups).trace)
       delivery.each_group do |group, placements|
         GroupTrace.new(group, placements).write(descriptions, base_output_dir)

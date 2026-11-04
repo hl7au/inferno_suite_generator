@@ -127,12 +127,7 @@ module InfernoSuiteGenerator
 
       # What tells this test apart from other tests of its kind in the group, recorded by add_test.
       def test_details
-        case template_type
-        when TEMPLATE_TYPES[:PATCH], TEMPLATE_TYPES[:UPDATE]
-          { option: test_id_option }
-        else
-          {}
-        end
+        {}
       end
 
       private

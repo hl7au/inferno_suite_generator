@@ -114,7 +114,7 @@ flowchart TD
     update -- not found --> none
 ```
 
-An include test belongs to group B, so it lists entries traced for group G. An `_include` links to every group of its target type, so the test lists the entry once, and an element counts as checked when any of those groups checks it. All lookups go through `Generator::TestIndex`, which finds tests by the kind and details the generators recorded.
+An include test belongs to group B, so it lists entries traced for group G. An `_include` links to every group of its target type, so the test lists the entry once, and an element counts as checked when any of those groups checks it. All lookups go through `Generator::TestIndex`, which finds tests by the kind and details the generators recorded. Those exist only in memory, so `Generator#generate` runs the tracing after the test generators and before `GroupGenerator`, which writes what it adds. Tracing raises when no group has a recorded test. `test/questionnaire_usage/generator_wiring_test.rb` runs the real generators in that order.
 
 ### The elements
 

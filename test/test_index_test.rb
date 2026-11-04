@@ -20,16 +20,29 @@ module InfernoSuiteGenerator
       end
 
       def test_finds_a_test_by_kind
-        assert_equal "patient_read_test", @index.find("read")
+        assert_equal "patient_read_test", @index.find("read").id
       end
 
       def test_finds_a_search_test_by_parameter_names_in_any_order
-        assert_equal "patient_birthdate_name_search_test", @index.find("search", search_names: %w[name birthdate])
-        assert_equal "patient_name_search_test", @index.find("search", search_names: ["name"])
+        assert_equal "patient_birthdate_name_search_test", @index.find("search", search_names: %w[name birthdate]).id
+        assert_equal "patient_name_search_test", @index.find("search", search_names: ["name"]).id
       end
 
-      def test_all_lists_matching_tests_in_group_order
-        assert_equal %w[patient_name_search_test patient_birthdate_name_search_test], @index.all("search")
+      def test_finds_the_first_match_in_group_order
+        assert_equal "patient_name_search_test", @index.find("search").id
+      end
+
+      def test_a_found_test_has_its_kind_and_recorded_details
+        test = @index.find("search", search_names: %w[name birthdate])
+
+        assert_equal "search", test.kind
+        assert_equal({ search_names: %w[birthdate name] }, test.details)
+      end
+
+      def test_an_unknown_kind_raises
+        error = assert_raises(ArgumentError) { @index.find("raed") }
+
+        assert_includes error.message, "raed"
       end
 
       def test_returns_nil_when_no_test_matches
@@ -38,8 +51,19 @@ module InfernoSuiteGenerator
       end
 
       def test_a_test_added_without_a_kind_is_never_found
-        assert_empty @group.test_kind("patient_custom_test")
-        assert_equal ["patient_read_test"], @index.all("read")
+        custom = build_group_metadata
+        custom.add_test(id: "patient_custom_test", file_name: "patient_custom_test.rb")
+
+        assert_nil TestIndex.new(custom).find("read")
+      end
+
+      def test_any_says_whether_the_group_recorded_a_test_with_a_kind
+        custom = build_group_metadata
+        custom.add_test(id: "patient_custom_test", file_name: "patient_custom_test.rb")
+
+        assert_predicate @index, :any?
+        refute_predicate TestIndex.new(custom), :any?
+        refute_predicate TestIndex.new(build_group_metadata), :any?
       end
 
       def test_kinds_stay_out_of_metadata_yml

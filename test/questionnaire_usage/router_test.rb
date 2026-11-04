@@ -11,7 +11,7 @@ module InfernoSuiteGenerator
       LOCATION_QUERY = "PractitionerRole?practitioner={{%user.id}}&_include=PractitionerRole:location"
 
       def setup
-        @patient = group("Patient", read: {}, must_support: {}, create: {}, update: { option: "new" },
+        @patient = group("Patient", read: {}, must_support: {}, create: {}, update: { option: "update" },
                                     search: [{ search_names: %w[family gender] }])
         @role = group("PractitionerRole", include: [{ search_names: ["_id"], include_targets: ["Location"] },
                                                     { search_names: ["practitioner"],
@@ -57,6 +57,12 @@ module InfernoSuiteGenerator
         assert_equal "patient_create", test_id(@patient, TraceEntry::Template.new(patch: false))
         assert_equal "patient_update", test_id(@patient, TraceEntry::Template.new(patch: true))
         assert_nil route(@location, TraceEntry::Template.new(patch: false))
+      end
+
+      def test_a_patch_ignores_an_update_test_that_creates_a_new_resource
+        encounter = group("Encounter", update: [{ option: "update_new" }, { option: "update" }])
+
+        assert_equal "encounter_update_2", test_id(encounter, TraceEntry::Template.new(patch: true))
       end
 
       def test_the_must_support_test

@@ -30,8 +30,8 @@ module InfernoSuiteGenerator
 
       # The search test by the same parameters, in any order.
       def search_test(group, names)
-        destination = own(group, "search", search_names: names) unless names.empty?
-        destination&.with(label: "search by #{group.test_kind(destination.test_id)[:search_names].join(" + ")}")
+        test = index(group).find("search", search_names: names) unless names.empty?
+        destination(group, test, "search by #{test.details[:search_names].join(" + ")}") if test
       end
 
       # The include test for the group's type in a group of `searched_type`,
@@ -46,25 +46,36 @@ module InfernoSuiteGenerator
         own(group, "create")
       end
 
-      # A FHIRPath Patch goes to the patch test, then the update test.
+      # A FHIRPath Patch goes to the patch test, then the update test, not the one
+      # that creates a new resource through update.
       def patch_test(group)
-        own(group, "patch") || own(group, "update")
+        own(group, "patch") || own(group, "update", option: "update")
       end
 
       private
 
       def include_in(base, names, target)
-        index = Generator::TestIndex.new(base)
+        index = index(base)
         targets = [target]
-        id = index.find("include", search_names: names, include_targets: targets) ||
-             index.find("include", include_targets: targets)
-        Destination.new(base, id, "include", "search with _include in #{base.title || base.resource}") if id
+        test = index.find("include", search_names: names, include_targets: targets) ||
+               index.find("include", include_targets: targets)
+        destination(base, test, "search with _include in #{base.title || base.resource}") if test
       end
 
       # The group's test of this kind, labeled by the kind unless `label` says otherwise.
       def own(group, kind, label: kind, **details)
-        id = Generator::TestIndex.new(group).find(kind, **details)
-        Destination.new(group, id, kind, label) if id
+        test = index(group).find(kind, **details)
+        destination(group, test, label) if test
+      end
+
+      # :reek:UtilityFunction
+      def index(group)
+        Generator::TestIndex.new(group)
+      end
+
+      # :reek:UtilityFunction
+      def destination(group, test, label)
+        Destination.new(group, test.id, test.kind, label)
       end
     end
   end

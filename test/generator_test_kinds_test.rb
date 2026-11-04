@@ -32,7 +32,7 @@ module InfernoSuiteGenerator
 
         assert_equal({ kind: "search", search_names: %w[name birthdate] }, @group.test_kind(generator.test_id))
         assert_equal generator.test_id,
-                     Generator::TestIndex.new(@group).find("search", search_names: %w[birthdate name])
+                     Generator::TestIndex.new(@group).find("search", search_names: %w[birthdate name]).id
       end
     end
 
