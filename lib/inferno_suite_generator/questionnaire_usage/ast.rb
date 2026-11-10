@@ -4,17 +4,67 @@ require "fhirpath"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Reads `%Name` references and element paths from FHIRPath expressions.
+    # Reads `%Name` references and what chains from a name read in FHIRPath expressions.
     # Callers go through `Cache`, which parses each expression once.
     module Ast
+      Start = Data.define(:shape, :type, :prefix)
+
+      # What `%name` stands for where an expression reads it. `shape` is `:bundle` for a search's Bundle,
+      # `:entries` for Bundle entries a chain picked, else `:resource`. `type` is the resource type when known;
+      # `prefix` the element path the name is at, `""` at the resource itself and `nil` once a chain stopped.
+      class Start
+        def self.bundle = new(shape: :bundle, type: nil, prefix: "")
+        def self.resource = new(shape: :resource, type: nil, prefix: "")
+
+        # A chain's own type counts only from the resource itself.
+        def type_of(chain)
+          type || (chain[:type] if prefix == "")
+        end
+
+        # The paths a chain reads, after the prefix; none when the prefix is unknown.
+        def paths_of(chain)
+          return [] unless prefix
+
+          [chain[:path], *chain[:criteria]].map { |path| at(path) }.reject(&:empty?)
+        end
+
+        # Where a variable the chain defines starts.
+        def after(chain)
+          Start.new(shape: chain[:entries] ? :entries : :resource, type: type_of(chain),
+                    prefix: (at(chain[:path]) if prefix && !chain[:stopped]))
+        end
+
+        private
+
+        def at(path)
+          [prefix, path].reject(&:empty?).join(".")
+        end
+      end
+
+      ChainRead = Data.define(:type, :types, :paths, :alias_start)
+
+      # One chain from a name, read from a Start: the resource type it reads, every type a `where` branch names,
+      # the element paths it reads and the Start of a variable it defines.
+      class ChainRead
+        def self.of(chain, start)
+          new(type: start.type_of(chain), types: chain[:types], paths: start.paths_of(chain),
+              alias_start: start.after(chain))
+        end
+
+        # Whether it reads the resource itself, so a variable it defines stands for the resource.
+        def resource?
+          alias_start.prefix == ""
+        end
+      end
+
       module_function
 
       def references_in(tree)
         nodes(tree).filter_map { |node| constant_name(node) }.uniq
       end
 
-      def paths_in(tree, name, bundle:)
-        chains(tree, name).map { |steps| ChainPath.read(steps, bundle:) }
+      def chains_in(tree, name, shape:)
+        chains(tree, name).map { |steps| ChainPath.read(steps, shape:) }
       end
 
       # The tree, or `{}` for an empty expression or one that doesn't parse.
@@ -120,7 +170,7 @@ module InfernoSuiteGenerator
         def initialize
           @trees = {}
           @references = {}
-          @paths = {}
+          @chains = {}
         end
 
         # The `%Name` names the expression references, without duplicates.
@@ -128,12 +178,18 @@ module InfernoSuiteGenerator
           @references[expression] ||= Ast.references_in(tree(expression))
         end
 
-        # One chain hash per longest chain from `%name`, nested ones included; `ChainPath` describes it.
-        def paths(expression, name, bundle:)
-          @paths[[expression, name, bundle]] ||= Ast.paths_in(tree(expression), name, bundle:).freeze
+        # A ChainRead per longest chain from `%name`, nested ones included, read from `from`, a Start.
+        def reads(expression, name, from:)
+          return [] unless references(expression).include?(name)
+
+          chains(expression, name, from.shape).map { |chain| ChainRead.of(chain, from) }
         end
 
         private
+
+        def chains(expression, name, shape)
+          @chains[[expression, name, shape]] ||= Ast.chains_in(tree(expression), name, shape:).freeze
+        end
 
         def tree(expression)
           @trees[expression] ||= Ast.parse(expression)
@@ -142,7 +198,7 @@ module InfernoSuiteGenerator
 
       # Turns a chain's steps into `{ type:, types:, path:, stopped:, criteria: }`, plus `entries: true` when it
       # ends at Bundle entries. `types` holds every type any `where` branch names; `stopped`, that it left the
-      # resource or stopped at `ofType`/`select`. `bundle:` is `true` from a Bundle, else `:entries` or `false`.
+      # resource or stopped at `ofType`/`select`. `shape:` is the shape of the chain's Start.
       module ChainPath
         STOP_FUNCTIONS = %w[ofType select resolve children descendants].freeze
         CRITERIA_FUNCTIONS = %w[where exists all select].freeze
@@ -153,10 +209,10 @@ module InfernoSuiteGenerator
 
         module_function
 
-        def read(steps, bundle:)
-          case bundle
+        def read(steps, shape:)
+          case shape
           when :entries then read_entries(steps)
-          when true then read_bundle(steps)
+          when :bundle then read_bundle(steps)
           else read_path(steps)
           end
         end

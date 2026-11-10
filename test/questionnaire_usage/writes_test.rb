@@ -81,7 +81,7 @@ module InfernoSuiteGenerator
       end
 
       def test_questionnaires_with_the_same_title_show_their_version
-        assembled = launch_entry(header: form_header.merge(questionnaire_version: "0.1.0-assembled"))
+        assembled = launch_entry(header: form_header.with(version: "0.1.0-assembled"))
         markdown = summary([launch_entry, assembled])
 
         assert_includes markdown, "- **#{FORM_TITLE}, version 0.1.0**\n"
@@ -89,9 +89,9 @@ module InfernoSuiteGenerator
       end
 
       def test_untitled_questionnaires_with_the_same_url_show_their_version
-        untitled = form_header.except(:questionnaire_title)
+        untitled = form_header.with(title: nil)
         markdown = summary([launch_entry(header: untitled),
-                            launch_entry(header: untitled.merge(questionnaire_version: "0.2.0"))])
+                            launch_entry(header: untitled.with(version: "0.2.0"))])
 
         assert_includes markdown, "- **#{FORM_URL}, version 0.1.0**\n"
         assert_includes markdown, "- **#{FORM_URL}, version 0.2.0**\n"
@@ -111,9 +111,9 @@ module InfernoSuiteGenerator
       end
 
       def test_questionnaires_without_a_url_stay_apart
-        first = launch_entry(header: form_header.except(:questionnaire_url).merge(questionnaire_id: "first"))
-        second = launch_entry(header: { questionnaire_version: "0.1.0", questionnaire_id: "second" })
-        markdown = summary([first, second, launch_entry(header: {})])
+        first = launch_entry(header: form_header.with(url: nil, id: "first"))
+        second = launch_entry(header: FormHeader.new(version: "0.1.0", id: "second"))
+        markdown = summary([first, second, launch_entry(header: FormHeader.new)])
 
         assert_includes markdown, "- **#{FORM_TITLE}**\n"
         assert_includes markdown, "- **second**\n"
@@ -383,7 +383,7 @@ module InfernoSuiteGenerator
       end
 
       def test_a_group_no_entry_links_to_is_left_out
-        result = write({}, [@patient])
+        result = write(Trace.new, [@patient])
 
         assert_empty result.tested_by
         assert_empty result.descriptions.for(@patient)
@@ -402,7 +402,7 @@ module InfernoSuiteGenerator
           build_group_metadata(name: "obs_#{name}", resource: "Observation", profile_url: name)
         end
         entry = include_entry("PractitionerRole?practitioner={{%user.id}}&_include=PractitionerRole:location")
-        result = write({ "first" => [entry], "second" => [entry] }, [role, first, second])
+        result = write(trace_of([entry], [first, second]), [role, first, second])
 
         assert_equal 1, result.descriptions.for_test(role, "role_include").join.scan("**Query Roles**").size
         assert_equal ["role_include"], result.tested_by
@@ -472,11 +472,11 @@ module InfernoSuiteGenerator
 
       # The ids of the tests that list the entry traced for the group.
       def route(group, entry)
-        write({ group.profile_url => [entry] }, @groups).tested_by
+        write(trace_of([entry], [group]), @groups).tested_by
       end
 
       def summary_of(group, entry)
-        write({ group.profile_url => [entry] }, @groups).descriptions.for(group).join
+        write(trace_of([entry], [group]), @groups).descriptions.for(group).join
       end
 
       # A group with tests of these kinds, each kind with one details hash or a list of them.
@@ -509,7 +509,7 @@ module InfernoSuiteGenerator
                                                             extensions: [{ id: "Observation.extension:indigenousStatus",
                                                                            url: INDIGENOUS_STATUS }])
         entry = launch_entry(reads: ["status", "note", "extension[url=#{INDIGENOUS_STATUS}].value"])
-        @written = write({ UNCHECKING => [entry], CHECKING => [entry] }, [@unchecking, @checking])
+        @written = write(trace_of([entry], [@unchecking, @checking]), [@unchecking, @checking])
       end
 
       def test_every_group_shows_an_element_as_checked_and_named_as_the_group_that_checks_it

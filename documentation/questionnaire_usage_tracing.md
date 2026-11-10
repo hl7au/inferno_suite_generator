@@ -75,7 +75,7 @@ flowchart TD
 
 ### Trace each questionnaire
 
-`Tracer#trace` returns `{ profile_url => [TraceEntry] }`. A source that matches no group gets no entry.
+`Tracer#trace` returns a `Trace`: each trace entry with the groups its source links to, which share it. A source that matches no group gets no entry.
 
 ```mermaid
 flowchart TD
@@ -88,7 +88,7 @@ flowchart TD
     n6[["Trace queries and includes"]]
     n7[["Trace launch contexts"]]
     n8[["Trace extraction templates"]]
-    n9(["Return traces by profile"])
+    n9(["Return the trace"])
     n10@{ shape: brace, label: "Links a source to groups" }
     n11@{ shape: brace, label: "Finds the items reading it" }
     n0 --> n1
@@ -176,7 +176,7 @@ flowchart TD
 
 ## How it picks a test
 
-Each trace entry of a group takes two paths: its request goes to one test (`Sections::Delivery#request_test`, through the entry's `TraceEntry#request_lookups`), and the elements its items read go to the Must Support test or the group summary (`Sections::Delivery::Placement#reads`). The delivery makes these decisions once, before anything is rendered, and the test sections and the group summaries both read them.
+Each trace entry of a group takes two paths: its request goes to one test (`Sections::Destinations#request`, from the request the entry names with `TraceEntry#request`), and the elements its items read go to the Must Support test or the group summary (`Sections::Delivery::Placement#reads`). The delivery makes these decisions once, before anything is rendered, and the test sections and the group summaries both read them.
 
 ### The request
 
@@ -248,11 +248,13 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
 - `lib/inferno_suite_generator/questionnaire_usage.rb`: `QuestionnaireUsage.generate`, which traces the IG, and `QuestionnaireUsage.write`, which writes the results
 - `lib/inferno_suite_generator/questionnaire_usage/`:
   - `tracer.rb`: walks each questionnaire, and finds the items that use a source, directly or through aliases
-  - `trace_entry.rb`: one source, with a class per kind that traces it in a form and says whether it's shown, which test makes its request and how a section names it, and the item uses it holds: how sections name each and what it does to the item. Add a kind of source here.
-  - `ast.rb`: reads FHIRPath expressions to find the variables and element paths they use
+  - `sources.rb`: a class per kind of source that traces it in a form into trace entries and the groups they link to. Add a kind of source here and in `trace_entry.rb`.
+  - `trace_entry.rb`: one source, with a class per kind that says whether it's shown, which request it makes and how a section names it; the questionnaire it came from; and the item uses it holds: how sections name each and what it does to the item
+  - `trace.rb`: the trace entries with the groups that share each
+  - `ast.rb`: reads FHIRPath expressions: the variables they reference, and what each chain from a variable reads from where that variable starts, which is also where an alias of the chain starts
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
   - `fhir_query.rb`: one x-fhir-query, parsed once: its resource type, whether it's a read, its search parameters, `_include` values and codes
-  - `sections.rb`: decides which tests list each entry and which elements count as checked (its private `Delivery` and `CheckedElements`), then writes every "Used in questionnaires" section: the test sections, the Must Support sections and the group summaries
+  - `sections.rb`: decides which tests list each entry and which elements count as checked (its private `Delivery`, `Destinations`, which alone knows the generator's test kinds, and `CheckedElements`), then writes every "Used in questionnaires" section: the test sections, the Must Support sections and the group summaries
 - `lib/inferno_suite_generator/core/test_index.rb`: finds a group's tests by kind and details
 - `lib/inferno_suite_generator/core/group_descriptions.rb`: collects and escapes the added description text
 - `test/questionnaire_usage/`, which tests through the two halves of `generate` and the whole of it:

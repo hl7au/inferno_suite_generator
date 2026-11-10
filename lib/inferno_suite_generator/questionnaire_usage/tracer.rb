@@ -1,14 +1,15 @@
 # frozen_string_literal: true
 
 require_relative "ast"
-require_relative "fhir_query"
 require_relative "profile_matcher"
+require_relative "sources"
+require_relative "trace"
 require_relative "trace_entry"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Traces every `Questionnaire` into `{ profile_url => [TraceEntry] }`. Each kind of `TraceEntry` traces its
-    # own sources; the Tracer walks the forms and resolves the aliases items read them through.
+    # Traces every `Questionnaire` into a Trace. Each kind of source in `Sources` traces
+    # its own entries; the Tracer walks the forms and resolves the aliases items read them through.
     class Tracer
       ASSEMBLE_CONTEXT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembleContext"
 
@@ -18,28 +19,25 @@ module InfernoSuiteGenerator
       end
 
       def trace
-        traces = {}
-        @ig_resources.get_resources_by_type("Questionnaire").each do |questionnaire|
-          trace_form(traces, questionnaire.to_hash)
+        @ig_resources.get_resources_by_type("Questionnaire").each_with_object(Trace.new) do |questionnaire, trace|
+          trace_form(trace, questionnaire.to_hash)
         end
-        traces
       end
 
       private
 
       # Each kind of source gives `[groups, entry]` pairs, and the groups share the entry.
-      def trace_form(traces, questionnaire)
+      def trace_form(trace, questionnaire)
         form = Form.new(questionnaire)
         log_assemble_contexts(form, questionnaire)
-        entries(form).each do |groups, entry|
-          groups.each { |group| (traces[group.profile_url] ||= []) << entry }
-        end
+        entries(form).each { |groups, entry| trace.add(groups, entry) }
       end
 
       def entries(form)
-        form.query_variables.flat_map { |variable| TraceEntry::Query.trace(form, variable, @matcher, @ig_resources) } +
-          form.launch_contexts.flat_map { |context| TraceEntry::LaunchContext.trace(form, context, @matcher) } +
-          form.template_extracts.flat_map { |extract| TraceEntry::Template.trace(form, extract, @matcher) }
+        sources = form.query_variables.map { |variable| Sources::Query.new(form, variable, @ig_resources) } +
+                  form.launch_contexts.map { |context| Sources::LaunchContext.new(form, context) } +
+                  form.template_extracts.map { |extract| Sources::Template.new(form, extract) }
+        sources.flat_map { |source| source.entries(@matcher) }
       end
 
       # A module form gets its `assembleContext` variables from the form it is
@@ -64,16 +62,15 @@ module InfernoSuiteGenerator
       end
 
       # The items in a source's scope that read it, directly or through aliases: `text/fhirpath` variables reading
-      # the source or another alias. An alias's prefix extends its parent's by its chain's path, `nil` once a chain
-      # stops, and it keeps the chain's type, which `accept` must take.
+      # the source or another alias. Each alias starts where the chain defining it ends, as `Ast::ChainRead` gives.
       class ItemUses
-        Name = Struct.new(:name, :owner, :bundle, :type, :prefix, keyword_init: true)
+        Name = Data.define(:name, :owner, :start)
 
-        # `source` is `{ name:, owner:, bundle: }`, with `bundle:` as `Ast::ChainPath` takes it.
+        # `source` is `{ name:, owner:, start: }`, with `start:` an `Ast::Start`; `accept` takes a chain's type.
         def initialize(form, source, accept)
           @form = form
           @accept = accept
-          @source = Name.new(**source, type: nil, prefix: "")
+          @source = Name.new(**source)
           @names = [@source]
         end
 
@@ -95,33 +92,19 @@ module InfernoSuiteGenerator
         end
 
         def add_alias(variable)
-          reads = reads_of(variable[:expression], variable[:owner])
-          return add_mixed_alias(variable) if reads.empty?
+          read = reads_of(variable[:expression], variable[:owner]).first || mixed_read(variable)
+          return false unless read
 
-          name, chain = reads.first
-          add_name(variable, chain, type: type_of(name, chain), prefix: chain[:stopped] ? nil : read_path(name, chain))
+          @names << Name.new(name: variable[:name], owner: variable[:owner], start: read.alias_start)
+          true
         end
 
         # A variable that picks several types, like `where(intent = 'order' or resourceType = 'Medication')`, reads
         # the source untyped, which `accept` may reject. It still becomes an alias, so typed chains from it count.
-        def add_mixed_alias(variable)
-          return false if @accept.call(nil)
+        def mixed_read(variable)
+          return if @accept.call(nil)
 
-          untyped = reads_of(variable[:expression], variable[:owner], accept: lambda(&:nil?))
-          _name, chain = untyped.find { |name, read| resource?(name, read) }
-          return false unless chain
-
-          add_name(variable, chain, type: nil, prefix: "")
-        end
-
-        def add_name(variable, chain, type:, prefix:)
-          @names << Name.new(name: variable[:name], owner: variable[:owner], bundle: chain[:entries] ? :entries : false,
-                             type:, prefix:)
-          true
-        end
-
-        def resource?(name, chain)
-          name.prefix == "" && chain[:path].empty? && !chain[:stopped]
+          reads_of(variable[:expression], variable[:owner], accept: lambda(&:nil?)).find(&:resource?)
         end
 
         # One ItemUse per expression that reads the source, with the element
@@ -134,35 +117,15 @@ module InfernoSuiteGenerator
             reads = reads_of(expression[:expression], item)
             next if reads.empty?
 
-            ItemUse.of(item, extension, reads: reads.flat_map { |read| read_paths(*read) }.reject(&:empty?).uniq)
+            ItemUse.of(item, extension, reads: reads.flat_map(&:paths).uniq)
           end
         end
 
-        # `[name, chain]` for each accepted chain in the expression from a name
-        # visible at `node`.
+        # The accepted ChainReads of the expression from the names visible at `node`.
         def reads_of(expression, node, accept: @accept)
-          references = @form.fhirpath.references(expression)
-          @names.select { |name| references.include?(name.name) && @form.covers?(name.owner, node) }
-                .flat_map do |name|
-            @form.fhirpath.paths(expression, name.name, bundle: name.bundle)
-                 .filter_map { |chain| [name, chain] if accept.call(type_of(name, chain)) }
-          end
-        end
-
-        def type_of(name, chain)
-          name.type || (chain[:type] if name.prefix == "")
-        end
-
-        def read_path(name, chain)
-          [name.prefix, chain[:path]].reject(&:empty?).join(".") if name.prefix
-        end
-
-        # The chain's path and the paths its criteria read, after the prefix.
-        # None when the prefix is unknown.
-        def read_paths(name, chain)
-          return [] unless name.prefix
-
-          [chain[:path], *chain[:criteria]].map { |path| [name.prefix, path].reject(&:empty?).join(".") }
+          @names.select { |name| @form.covers?(name.owner, node) }
+                .flat_map { |name| @form.fhirpath.reads(expression, name.name, from: name.start) }
+                .select { |read| accept.call(read.type) }
         end
       end
 
@@ -185,8 +148,8 @@ module InfernoSuiteGenerator
         # The `id` stands in for a missing `url`, so forms without one stay apart.
         def header
           url = @questionnaire["url"]
-          { questionnaire_url: url, questionnaire_id: (@questionnaire["id"] unless url),
-            questionnaire_version: @questionnaire["version"], questionnaire_title: @questionnaire["title"] }.compact
+          FormHeader.new(url:, id: (@questionnaire["id"] unless url), version: @questionnaire["version"],
+                         title: @questionnaire["title"])
         end
 
         def label
@@ -213,7 +176,7 @@ module InfernoSuiteGenerator
           end
         end
 
-        # The ItemUses of `source`, `{ name:, owner:, bundle: }`, for the chains whose type the block takes.
+        # The ItemUses of `source`, `{ name:, owner:, start: }`, for the chains whose type the block takes.
         def item_uses(source, &accept)
           ItemUses.new(self, source, accept).call
         end

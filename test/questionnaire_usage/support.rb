@@ -96,7 +96,7 @@ module InfernoSuiteGenerator
       def trace(form, profiles: observation_profiles, resources: [])
         groups, ig_resources = suite_for(profiles)
         [FHIR::Questionnaire.new(form), *resources].each { |resource| ig_resources.add(resource) }
-        Tracer.new(ig_resources, groups).trace
+        Tracer.new(ig_resources, groups).trace.to_h
       end
 
       # What a section shows of an entry traced for a group of this resource type.
@@ -133,9 +133,9 @@ module InfernoSuiteGenerator
           "extension" => extensions, "item" => children }
       end
 
-      # The questionnaire fields of every trace entry the write tests build.
+      # The questionnaire of every trace entry the write tests build.
       def form_header
-        { questionnaire_url: FORM_URL, questionnaire_version: "0.1.0", questionnaire_title: FORM_TITLE }
+        FormHeader.new(url: FORM_URL, version: "0.1.0", title: FORM_TITLE)
       end
 
       def query_variable(name, query)
@@ -180,16 +180,20 @@ module InfernoSuiteGenerator
       # the tests that got a section, in group order.
       Written = Data.define(:descriptions, :tested_by)
 
-      # traces: `{ profile_url => [TraceEntry] }`.
-      def write(traces, groups)
+      def write(trace, groups)
         descriptions = InfernoSuiteGenerator::Generator::GroupDescriptions.new
-        with_config_keeper { QuestionnaireUsage.write(traces, groups:, descriptions:) }
+        with_config_keeper { QuestionnaireUsage.write(trace, groups:, descriptions:) }
         Written.new(descriptions:, tested_by: tests_with_sections(descriptions, groups))
+      end
+
+      # A Trace of the entries, each shared by all the groups.
+      def trace_of(entries, groups)
+        entries.each_with_object(Trace.new) { |entry, trace| trace.add(groups, entry) }
       end
 
       # What is written for entries traced for the group alone.
       def written(entries, group)
-        write({ group.profile_url => entries }, [group])
+        write(trace_of(entries, [group]), [group])
       end
 
       # The group's summary for the entries, "" when it has none. A group with no
@@ -216,7 +220,7 @@ module InfernoSuiteGenerator
       def launch_entry(reads: ["birthDate"], header: form_header,
                        item_uses: [ItemUse.new(link_id: "dob", text: "Date of birth", extension: "initialExpression",
                                                reads:)])
-        TraceEntry::LaunchContext.new(**header, name: "patient", item_uses:)
+        TraceEntry::LaunchContext.new(form: header, name: "patient", item_uses:)
       end
 
       def name_use
@@ -224,16 +228,16 @@ module InfernoSuiteGenerator
       end
 
       def query_entry(query, item_uses: [name_use], **fields)
-        TraceEntry::Query.new(**form_header, name: "Patients", query: FhirQuery.new(query), item_uses:, **fields)
+        TraceEntry::Query.new(form: form_header, name: "Patients", query: FhirQuery.new(query), item_uses:, **fields)
       end
 
-      def include_entry(query, item_uses: [name_use], **fields)
-        TraceEntry::Include.new(**form_header, name: "Roles", query: FhirQuery.new(query), item_uses:, **fields)
+      def include_entry(query, item_uses: [name_use], include: "PractitionerRole:location")
+        TraceEntry::Include.new(form: form_header, name: "Roles", query: FhirQuery.new(query), item_uses:, include:)
       end
 
       def template_entry(patch:, template_codes: [],
                          item_uses: [ItemUse.new(link_id: "height", text: "Height", extension: "templateExtract")])
-        TraceEntry::Template.new(**form_header, name: "height", patch:, template_codes:, item_uses:)
+        TraceEntry::Template.new(form: form_header, name: "height", patch:, template_codes:, item_uses:)
       end
 
       # A Patient group whose profile marks birthDate, deceasedBoolean and the

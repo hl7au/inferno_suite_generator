@@ -5,6 +5,8 @@ require_relative "questionnaire_usage/ast"
 require_relative "questionnaire_usage/fhir_query"
 require_relative "questionnaire_usage/trace_entry"
 require_relative "questionnaire_usage/profile_matcher"
+require_relative "questionnaire_usage/sources"
+require_relative "questionnaire_usage/trace"
 require_relative "questionnaire_usage/tracer"
 require_relative "questionnaire_usage/sections"
 
@@ -39,9 +41,9 @@ module InfernoSuiteGenerator
       nil
     end
 
-    # Writes the sections for traces: `{ profile_url => [TraceEntry] }`, from `Tracer#trace`.
-    def self.write(traces, groups:, descriptions:)
-      Sections.new(groups, traces).write(descriptions)
+    # Writes the sections for a Trace, from `Tracer#trace`.
+    def self.write(trace, groups:, descriptions:)
+      Sections.new(groups, trace).write(descriptions)
     end
   end
 end

@@ -16,22 +16,22 @@ module InfernoSuiteGenerator
                    "these forms get from them."
       NOT_CHECKED = "The profile neither marks these elements Must Support nor requires them, so no test checks " \
                     "that the server returns them."
-      # By kind of test; a patch test reads as an update. An include test lists entries of other groups, which
-      # can be of several profiles, so its intro names none.
+      # By the role of the test. An include test lists entries of other groups, which can be of several
+      # profiles, so its intro names none.
       TEST_INTROS = {
-        "read" => "These questionnaires in the IG read %<resource>s resources as this test does: by id, or as the " \
-                  "resource a form is opened for. #{GROUP_READS}",
-        "search" => "These questionnaires in the IG make this search. #{GROUP_READS}",
-        "include" => "These questionnaires in the IG fetch %<resource>s resources through this search's _include. " \
-                     "#{READS} Elements marked #{NOT_CHECKED_MARK} are neither Must Support nor required by any " \
-                     "%<resource>s profile in this suite, so no test checks them.",
-        "create" => "These questionnaires in the IG create %<resource>s resources from their answers.",
-        "update" => "These questionnaires in the IG update existing %<resource>s resources from their answers."
+        read: "These questionnaires in the IG read %<resource>s resources as this test does: by id, or as the " \
+              "resource a form is opened for. #{GROUP_READS}",
+        search: "These questionnaires in the IG make this search. #{GROUP_READS}",
+        include: "These questionnaires in the IG fetch %<resource>s resources through this search's _include. " \
+                 "#{READS} Elements marked #{NOT_CHECKED_MARK} are neither Must Support nor required by any " \
+                 "%<resource>s profile in this suite, so no test checks them.",
+        create: "These questionnaires in the IG create %<resource>s resources from their answers.",
+        update: "These questionnaires in the IG update existing %<resource>s resources from their answers."
       }.freeze
 
-      # traces: `{ profile_url => [TraceEntry] }`, from `Tracer#trace`.
-      def initialize(groups, traces)
-        @delivery = Delivery.new(groups, traces)
+      # trace: a Trace, from `Tracer#trace`.
+      def initialize(groups, trace)
+        @delivery = Delivery.new(groups, trace)
       end
 
       def write(descriptions)
@@ -57,7 +57,7 @@ module InfernoSuiteGenerator
 
       def test_section(listing)
         group = listing.groups.first
-        intro = TEST_INTROS.fetch(listing.destination.kind) { TEST_INTROS["update"] }
+        intro = TEST_INTROS.fetch(listing.destination.role)
         section(format(intro, resource: group.resource), Lists.sources(listing.placements, group))
       end
 
@@ -110,14 +110,15 @@ module InfernoSuiteGenerator
         # `[title, placements]` per questionnaire, in the order first seen. The title gets the version when
         # another form has the same title, as an assembled modular form does.
         def forms(placements)
-          by_form = placements.select(&:shown?).group_by { |placement| placement.entry.form_key }.values
-          titles = by_form.map { |listed| listed.first.entry.form_title }
-          by_form.map { |listed| [form_title(listed.first.entry, titles), listed] }
+          by_form = placements.select(&:shown?).group_by { |placement| placement.entry.form.key }.values
+          forms = by_form.map { |listed| listed.first.entry.form }
+          titles = forms.map(&:label)
+          forms.zip(by_form).map { |form, listed| [form_title(form, titles), listed] }
         end
 
-        def form_title(entry, titles)
-          title = entry.form_title
-          version = entry.form_version
+        def form_title(form, titles)
+          title = form.label
+          version = form.version
           titles.count(title) > 1 && version ? "#{title}, version #{version}" : title
         end
 
@@ -191,7 +192,7 @@ module InfernoSuiteGenerator
             listed = reads.call(placement)
             placement.entry.item_uses.each do |use|
               listed.values_at(*use.reads).compact.each do |read|
-                by_label[read.label] = by_label.fetch(read.label, []) | [use.label]
+                by_label[read.label] = by_label.fetch(read.label) { [] } | [use.label]
               end
             end
           end
@@ -207,8 +208,9 @@ module InfernoSuiteGenerator
       # Decides which tests list each trace entry and which elements count as checked, once, before rendering,
       # so the test sections and group summaries can't disagree.
       class Delivery
-        # A test that lists an entry. `label` names the test in the group summary.
-        Destination = Data.define(:group, :test_id, :kind, :label)
+        # A test that lists an entry. `role` is what it does, as `Destinations::ROLES` gives it, and `label` names
+        # the test in the group summary.
+        Destination = Data.define(:group, :test_id, :role, :label)
 
         # One path an entry's items read: its label in sections, and whether it counts as checked.
         ElementRead = Data.define(:path, :label, :checked)
@@ -226,12 +228,12 @@ module InfernoSuiteGenerator
         # groups: its entries link to every group of the target type.
         TestListing = Data.define(:destination, :placements, :groups)
 
-        def initialize(groups, traces)
-          @groups = groups
-          reads = shared_reads(groups, traces)
+        def initialize(groups, trace)
+          @destinations = Destinations.new(groups)
+          @trace = trace
           @placements = groups.filter_map do |group|
-            entries = traces[group.profile_url]
-            [group, placements(group, entries, reads)] if entries
+            entries = trace.entries(group)
+            [group, placements(group, entries)] unless entries.empty?
           end
         end
 
@@ -251,30 +253,85 @@ module InfernoSuiteGenerator
 
         private
 
-        def placements(group, entries, reads)
+        def placements(group, entries)
           checked_elements = CheckedElements.new([group])
-          must_support = find(group, "must_support")
+          must_support = @destinations.must_support(group)
           entries.map do |entry|
             own = element_reads(entry, checked_elements).select { |_path, read| read.checked }
-            request = request_test(group, entry) if entry.shown?
-            Placement.new(group:, entry:, request:, must_support: (must_support if own.any?), reads: reads[entry],
-                          must_support_reads: own)
+            request = @destinations.request(entry, group) if entry.shown?
+            Placement.new(group:, entry:, request:, must_support: (must_support if own.any?),
+                          reads: shared_reads(entry), must_support_reads: own)
           end
         end
 
-        # The first test the entry's lookups find, in the group it was traced for
-        # or, for an `_include`, in the groups of the searched type.
-        def request_test(group, entry)
-          type = entry.request_type
-          bases = type ? @groups.select { |base| base.resource == type } : [group]
-          bases.product(entry.request_lookups(group.resource)).lazy
-               .filter_map { |base, (kind, details)| find(base, kind, **details) }.first
+        # `{ path => ElementRead }`, answered for all the groups that share the entry.
+        def shared_reads(entry)
+          (@shared_reads ||= {})[entry] ||= element_reads(entry, CheckedElements.new(@trace.groups(entry)))
+        end
+
+        def element_reads(entry, checked_elements)
+          paths = entry.item_uses.flat_map(&:reads).uniq
+          paths.to_h do |path|
+            [path, ElementRead.new(path:, label: checked_elements.label(path),
+                                   checked: checked_elements.checked?(path))]
+          end
+        end
+      end
+
+      # Finds the Destinations that list entries: an entry's request test and a group's Must Support test. Only it
+      # knows the generator's test kinds, which `Generator::TestIndex` finds tests by.
+      class Destinations
+        # What each kind of test does, as the sections say it; a patch test reads as an update.
+        ROLES = { "read" => :read, "search" => :search, "include" => :include, "create" => :create,
+                  "patch" => :update, "update" => :update, "must_support" => :must_support }.freeze
+        # A FHIRPath Patch goes to the patch test, then the update test, not the one that creates a new resource
+        # through update.
+        LOOKUPS = { read: [["read", {}]], create: [["create", {}]],
+                    patch: [["patch", {}], ["update", { option: "update" }]] }.freeze
+
+        def initialize(groups)
+          @groups = groups
+        end
+
+        # The first test that makes the entry's request, in the group it was traced for or, for an `_include`,
+        # in the groups of the searched type. `nil` when the entry makes no request or no test makes it.
+        def request(entry, group)
+          bases(entry, group).product(lookups(entry, group.resource)).lazy
+                             .filter_map { |base, (kind, details)| find(base, kind, **details) }.first
+        end
+
+        def must_support(group)
+          find(group, "must_support")
+        end
+
+        private
+
+        def bases(entry, group)
+          return [group] unless entry.request == :include
+
+          @groups.select { |base| base.resource == entry.query.resource_type }
+        end
+
+        # `[kind, details]` lookups for `TestIndex#find`, tried in order; `resource` is the type of the entry's group.
+        # An `_include` goes to the include test for that type, preferably the one that searches by the same
+        # parameters. The other requests' lookups are in LOOKUPS.
+        def lookups(entry, resource)
+          case (request = entry.request)
+          when nil then []
+          when :search then [["search", { search_names: entry.search_params }]]
+          when :include
+            [["include", { search_names: entry.query.search_params, include_targets: [resource] }],
+             ["include", { include_targets: [resource] }]]
+          else LOOKUPS.fetch(request)
+          end
         end
 
         # The Destination of the group's first test of this kind, or `nil`.
         def find(group, kind, **details)
           test = Generator::TestIndex.new(group).find(kind, **details)
-          Destination.new(group, test.id, test.kind, label(group, test)) if test
+          return unless test
+
+          Delivery::Destination.new(group:, test_id: test.id, role: ROLES.fetch(test.kind), label: label(group, test))
         end
 
         def label(group, test)
@@ -283,23 +340,6 @@ module InfernoSuiteGenerator
           when "include" then "search with _include in #{group.title || group.resource}"
           when "must_support" then "Must Support"
           else test.kind
-          end
-        end
-
-        # `{ entry => { path => ElementRead } }`, answered for all the groups each
-        # entry was traced for.
-        def shared_reads(groups, traces)
-          groups_by_entry = groups.each_with_object({}) do |group, found|
-            traces[group.profile_url].to_a.each { |entry| (found[entry] ||= []) << group }
-          end
-          groups_by_entry.to_h { |entry, traced| [entry, element_reads(entry, CheckedElements.new(traced))] }
-        end
-
-        def element_reads(entry, checked_elements)
-          paths = entry.item_uses.flat_map(&:reads).uniq
-          paths.to_h do |path|
-            [path, ElementRead.new(path:, label: checked_elements.label(path),
-                                   checked: checked_elements.checked?(path))]
           end
         end
       end
@@ -414,7 +454,7 @@ module InfernoSuiteGenerator
         private_constant :Profile
       end
 
-      private_constant :Lists, :Delivery, :CheckedElements
+      private_constant :Lists, :Delivery, :Destinations, :CheckedElements
     end
   end
 end

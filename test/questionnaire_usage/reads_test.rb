@@ -380,7 +380,7 @@ module InfernoSuiteGenerator
         form = questionnaire(extension: [launch_context("patient", "Patient")]).except("url").merge("id" => "intake")
         entry = trace(form, profiles: patient_profiles)[AU_CORE_PATIENT].first
 
-        assert_equal [nil, "intake", "0.1.0"], entry.form_key
+        assert_equal [nil, "intake", "0.1.0"], entry.form.key
       end
 
       def test_a_launch_context_without_a_group_for_its_type_is_untraced

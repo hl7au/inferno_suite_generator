@@ -26,6 +26,9 @@ _Avoid_: Query, which here names the kind of source
 The record of one source for one resource type, with the items that use it. A query has one for its own type and one for each `_include` target, and the groups a source links to share its entries.
 _Avoid_: Usage, trace item
 
+**Trace**:
+The trace entries of every questionnaire in the IG, each with the groups its source links to. Groups that link to one source share its entries.
+
 **Item use**:
 One form item, or the questionnaire root, reading a source through an expression. An expression that only defines a variable isn't an item use: the items that read the variable are.
 _Avoid_: Usage, reference
