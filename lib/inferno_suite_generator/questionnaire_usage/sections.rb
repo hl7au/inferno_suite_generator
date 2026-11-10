@@ -7,7 +7,7 @@ module InfernoSuiteGenerator
     # Writes the "Used in questionnaires" sections: one per test that makes a request, one for the Must Support
     # test and a group summary. Only bold and plain text: Inferno shows tables without borders and HTML as text.
     class Sections
-      HEADING = "## Used in questionnaires"
+      HEADING = "**Used in questionnaires**"
       NOT_CHECKED_MARK = "(not checked)"
       READS = "A form can pre-fill an item only if the server returns the elements the item reads."
       GROUP_READS = "#{READS} Elements marked #{NOT_CHECKED_MARK} are neither Must Support nor required by the " \
@@ -34,9 +34,9 @@ module InfernoSuiteGenerator
 
       def write(descriptions)
         @delivery.each_group { |group, placements| write_group(descriptions, group, placements) }
-        @delivery.test_listings.each do |listing|
-          destination = listing.destination
-          descriptions.test(destination.group, destination.test_id, test_section(listing))
+        @delivery.request_listings.each do |listing|
+          test = listing.test
+          descriptions.test(test.group, test.test_id, test_section(listing))
         end
       end
 
@@ -55,13 +55,13 @@ module InfernoSuiteGenerator
 
       def test_section(listing)
         group = listing.groups.first
-        intro = TEST_INTROS.fetch(listing.destination.role)
+        intro = TEST_INTROS.fetch(listing.test.role)
         section(format(intro, resource: group.resource), Lists.sources(listing.placements, group))
       end
 
       def must_support_section(group, placements)
-        section("Items in these questionnaires read Must Support elements of #{group.resource}. A form can " \
-                "pre-fill an item only if the server returns the elements it reads.",
+        section("Items in these questionnaires read elements of #{group.resource} that this group's tests check. " \
+                "#{READS}",
                 Lists.elements(placements, &:must_support_reads))
       end
 
@@ -108,8 +108,8 @@ module InfernoSuiteGenerator
         # `[title, placements]` per questionnaire, in the order first seen. The title gets the version when
         # another form has the same title, as an assembled modular form does.
         def forms(placements)
-          by_form = placements.select(&:shown?).group_by { |placement| placement.entry.form.key }.values
-          forms = by_form.map { |listed| listed.first.entry.form }
+          by_form = placements.select(&:shown?).group_by { |placement| placement.entry.header.key }.values
+          forms = by_form.map { |listed| listed.first.entry.header }
           titles = forms.map(&:label)
           forms.zip(by_form).map { |form, listed| [form_title(form, titles), listed] }
         end
@@ -206,14 +206,14 @@ module InfernoSuiteGenerator
       # Decides which tests list each trace entry and which elements count as checked, once, before rendering,
       # so the test sections and group summaries can't disagree.
       class Delivery
-        # A test that lists an entry. `role` is what it does, as `Destinations::ROLES` gives it, and `label` names
-        # the test in the group summary.
-        Destination = Data.define(:group, :test_id, :role, :label)
+        # A listing test. `role` is what it does, as `ListingTests::ROLES` gives it, and `label` names the test in
+        # the group summary.
+        ListingTest = Data.define(:group, :test_id, :role, :label)
 
         # One path an entry's items read: its label in sections, and whether it counts as checked.
         ElementRead = Data.define(:path, :label, :checked)
 
-        # One trace entry of one group. `request` and `must_support` are the Destinations that list it, or `nil`.
+        # One trace entry of one group. `request` and `must_support` are the ListingTests that list it, or `nil`.
         # `reads` has every path its items read, the same for each group traced for it (checked if any checks it);
         # `must_support_reads` only the paths this group checks, named as it names them.
         Placement = Data.define(:group, :entry, :request, :must_support, :reads, :must_support_reads) do
@@ -224,10 +224,10 @@ module InfernoSuiteGenerator
 
         # A request test and its placements, one per entry, with their groups. Only an `_include` test has several
         # groups: its entries link to every group of the target type.
-        TestListing = Data.define(:destination, :placements, :groups)
+        RequestListing = Data.define(:test, :placements, :groups)
 
         def initialize(groups, trace)
-          @destinations = Destinations.new(groups)
+          @listing_tests = ListingTests.new(groups)
           @trace = trace
           @placements = groups.filter_map do |group|
             entries = trace.entries(group)
@@ -240,12 +240,12 @@ module InfernoSuiteGenerator
           @placements.each(&)
         end
 
-        # A TestListing per test that makes a request, listing a shared entry once.
-        def test_listings
+        # A RequestListing per test that makes a request, listing a shared entry once.
+        def request_listings
           requested = @placements.flat_map(&:last).select(&:request)
           requested.group_by { |placement| placement.request.test_id }.values.map do |listed|
-            TestListing.new(destination: listed.first.request, placements: listed.uniq(&:entry),
-                            groups: listed.map(&:group).uniq)
+            RequestListing.new(test: listed.first.request, placements: listed.uniq(&:entry),
+                               groups: listed.map(&:group).uniq)
           end
         end
 
@@ -253,10 +253,10 @@ module InfernoSuiteGenerator
 
         def placements(group, entries)
           checked_elements = CheckedElements.new([group])
-          must_support = @destinations.must_support(group)
+          must_support = @listing_tests.must_support(group)
           entries.map do |entry|
             own = element_reads(entry, checked_elements).select { |_path, read| read.checked }
-            request = @destinations.request(entry, group) if entry.shown?
+            request = @listing_tests.request(entry, group) if entry.shown?
             Placement.new(group:, entry:, request:, must_support: (must_support if own.any?),
                           reads: shared_reads(entry), must_support_reads: own)
           end
@@ -276,16 +276,25 @@ module InfernoSuiteGenerator
         end
       end
 
-      # Finds the Destinations that list entries: an entry's request test and a group's Must Support test. Only it
-      # knows the generator's test kinds, which `Generator::TestIndex` finds tests by.
-      class Destinations
+      # Finds the listing tests: an entry's request test and a group's Must Support test. Only it knows the
+      # generator's test kinds, which `Generator::TestIndex` finds tests by.
+      class ListingTests
         # The role of each test kind, which picks its section intro.
         ROLES = { "read" => :read, "search" => :search, "include" => :include, "create" => :create,
                   "patch" => :update, "update" => :update, "must_support" => :must_support }.freeze
-        # A FHIRPath Patch goes to the patch test, then the update test, not the one that creates a new resource
-        # through update.
-        LOOKUPS = { read: [["read", {}]], create: [["create", {}]],
-                    patch: [["patch", {}], ["update", { option: "update" }]] }.freeze
+        # `[kind, details]` lookups for `TestIndex#find` by request, tried in order, from the entry and its group's
+        # type. An `_include` prefers the include test that searches by the same parameters; a FHIRPath Patch goes
+        # to the patch test, then the update test, not the one that creates a new resource through update.
+        LOOKUPS = {
+          read: ->(_entry, _resource) { [["read", {}]] },
+          search: ->(entry, _resource) { [["search", { search_names: entry.search_params }]] },
+          include: lambda do |entry, resource|
+            [["include", { search_names: entry.query.search_params, include_targets: [resource] }],
+             ["include", { include_targets: [resource] }]]
+          end,
+          create: ->(_entry, _resource) { [["create", {}]] },
+          patch: ->(_entry, _resource) { [["patch", {}], ["update", { option: "update" }]] }
+        }.freeze
 
         def initialize(groups)
           @groups = groups
@@ -294,8 +303,12 @@ module InfernoSuiteGenerator
         # The first test that makes the entry's request, in the group it was traced for or, for an `_include`,
         # in the groups of the searched type. `nil` when the entry makes no request or no test makes it.
         def request(entry, group)
-          bases(entry, group).product(lookups(entry, group.resource)).lazy
-                             .filter_map { |base, (kind, details)| find(base, kind, **details) }.first
+          return unless entry.request
+
+          type = entry.request_type
+          bases = type ? @groups.select { |base| base.resource == type } : [group]
+          bases.product(LOOKUPS.fetch(entry.request).call(entry, group.resource)).lazy
+               .filter_map { |base, (kind, details)| find(base, kind, **details) }.first
         end
 
         def must_support(group)
@@ -304,31 +317,11 @@ module InfernoSuiteGenerator
 
         private
 
-        def bases(entry, group)
-          return [group] unless entry.request == :include
-
-          @groups.select { |base| base.resource == entry.query.resource_type }
-        end
-
-        # `[kind, details]` lookups for `TestIndex#find`, tried in order; `resource` is the type of the entry's group.
-        # An `_include` goes to the include test for that type, preferably the one that searches by the same parameters.
-        def lookups(entry, resource)
-          case (request = entry.request)
-          when nil then []
-          when :search then [["search", { search_names: entry.search_params }]]
-          when :include
-            [["include", { search_names: entry.query.search_params, include_targets: [resource] }],
-             ["include", { include_targets: [resource] }]]
-          else LOOKUPS.fetch(request)
-          end
-        end
-
-        # The Destination of the group's first test of this kind, or `nil`.
         def find(group, kind, **details)
           test = Generator::TestIndex.new(group).find(kind, **details)
           return unless test
 
-          Delivery::Destination.new(group:, test_id: test.id, role: ROLES.fetch(test.kind), label: label(group, test))
+          Delivery::ListingTest.new(group:, test_id: test.id, role: ROLES.fetch(test.kind), label: label(group, test))
         end
 
         def label(group, test)
@@ -451,7 +444,7 @@ module InfernoSuiteGenerator
         private_constant :Profile
       end
 
-      private_constant :Lists, :Delivery, :Destinations, :CheckedElements
+      private_constant :Lists, :Delivery, :ListingTests, :CheckedElements
     end
   end
 end

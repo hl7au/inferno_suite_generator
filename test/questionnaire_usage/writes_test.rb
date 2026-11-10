@@ -194,7 +194,10 @@ module InfernoSuiteGenerator
       end
 
       def test_the_must_support_section_has_a_heading_or_is_left_out
-        assert must_support([launch_entry]).start_with?("## Used in questionnaires\n\nItems in these questionnaires")
+        assert must_support([launch_entry]).start_with?(
+          "**Used in questionnaires**\n\nItems in these questionnaires read elements of Patient that this group's " \
+          "tests check. A form can pre-fill an item only if the server returns the elements the item reads.\n"
+        )
         assert_empty must_support([launch_entry(reads: ["contact"])])
       end
 

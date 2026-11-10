@@ -43,6 +43,9 @@ _Avoid_: Visible entry
 The test that makes the same request as a trace entry's source, or for a template extract the test that writes that resource. It can belong to another group, as an `_include` request does.
 _Avoid_: Source test, matching test
 
+**Listing test**:
+A test whose description lists a trace entry: its request test, or its group's Must Support test.
+
 **Delivery**:
 The decision of which tests list each trace entry and which elements its items read count as checked. The test descriptions and group summaries both state this one decision.
 _Avoid_: Routing, which only picks the request test

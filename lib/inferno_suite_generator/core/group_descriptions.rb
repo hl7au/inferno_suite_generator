@@ -4,17 +4,9 @@ require_relative "../utils/naming"
 
 module InfernoSuiteGenerator
   class Generator
-    # Collects Markdown to add to group descriptions and to the descriptions of a group's tests. GroupGenerator
-    # appends it when it writes each group file: group text after the built-in group description, test text
-    # after the test's own description, in the group's `test from:` block for that test. Entries are keyed by
-    # group directory, so any GroupMetadata for a profile reaches the same group, and keep the order they were
-    # added in.
-    #
-    # Callers pass plain Markdown and this class escapes it, because the group template puts it inside a
-    # %( ... ) literal: an unescaped backslash, parenthesis or #{, #@, #$ would change or break the generated
-    # Ruby file.
-    #
-    # Nothing is written to disk: the text ends up only in the generated group files.
+    # Collects Markdown that GroupGenerator appends to group and test descriptions, keyed by group directory so any
+    # GroupMetadata for a profile reaches the same group. Callers pass plain Markdown: it is escaped here because the
+    # group template puts it inside a %( ... ) literal, where a backslash, parenthesis or #{ would break the file.
     class GroupDescriptions
       def self.escape(text)
         text.gsub(/[\\()]|#[{@$]/) { |match| "\\#{match}" }

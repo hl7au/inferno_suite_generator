@@ -22,7 +22,7 @@ module InfernoSuiteGenerator
         texts = descriptions.for(@group)
 
         assert_equal 1, texts.length
-        assert texts.first.start_with?("## Used in questionnaires\n")
+        assert texts.first.start_with?("**Used in questionnaires**\n")
         assert_includes texts.first, "**#{FORM_TITLE}**"
       end
 
@@ -37,7 +37,7 @@ module InfernoSuiteGenerator
         path = generate_group_file(run_tracing(patient_form(text: "Date of birth (dd/mm")))
 
         assert RubyVM::InstructionSequence.compile_file(path)
-        assert_includes File.read(path), "## Used in questionnaires"
+        assert_includes File.read(path), "**Used in questionnaires**"
       end
     end
 
@@ -100,7 +100,7 @@ module InfernoSuiteGenerator
 
         assert RubyVM::InstructionSequence.compile_file(path)
         assert_includes File.read(path), "test from: :patient_read_test do\n        description [description, %(\n" \
-                                         "## Used in questionnaires"
+                                         "**Used in questionnaires**"
       end
 
       private

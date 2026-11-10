@@ -52,7 +52,7 @@ module InfernoSuiteGenerator
         return if names.empty?
 
         QuestionnaireUsage.log("#{form.label} reads #{names.join(", ")} from the form it is assembled " \
-                               "into: trace the assembled form for their usages")
+                               "into: trace the assembled form for their item uses")
       end
 
       # The `%Name` names the expressions on the root and on items reference.
@@ -66,11 +66,16 @@ module InfernoSuiteGenerator
       class ItemUses
         Name = Data.define(:name, :owner, :start)
 
-        # `source` is `{ name:, owner:, start: }`, with `start:` an `Ast::Start`; `accept` takes a chain's type.
+        # The ItemUses of the source `name` defined on `owner`, read from `start`, an `Ast::Start`, for the chains
+        # whose type the block takes.
+        def self.call(form, name:, owner:, start:, &accept)
+          new(form, Name.new(name:, owner:, start:), accept).call
+        end
+
         def initialize(form, source, accept)
           @form = form
           @accept = accept
-          @source = Name.new(**source)
+          @source = source
           @names = [@source]
         end
 
@@ -85,17 +90,17 @@ module InfernoSuiteGenerator
         # Repeats until no new alias is found. Each variable becomes an alias at
         # most once, so a form whose variables reference each other can't loop.
         def resolve_aliases
-          pending = @form.fhirpath_variables.select { |variable| @form.covers?(@source.owner, variable[:owner]) }
+          pending = @form.fhirpath_variables.select { |variable| @form.covers?(@source.owner, variable.owner) }
           loop do
             break unless pending.reject! { |variable| add_alias(variable) }
           end
         end
 
         def add_alias(variable)
-          read = reads_of(variable[:expression], variable[:owner]).first || mixed_read(variable)
+          read = reads_of(variable.expression, variable.owner).first || mixed_read(variable)
           return false unless read
 
-          @names << Name.new(name: variable[:name], owner: variable[:owner], start: read.alias_start)
+          @names << Name.new(name: variable.name, owner: variable.owner, start: read.alias_start)
           true
         end
 
@@ -104,7 +109,7 @@ module InfernoSuiteGenerator
         def mixed_read(variable)
           return if @accept.call(nil)
 
-          reads_of(variable[:expression], variable[:owner], accept: lambda(&:nil?)).find(&:resource?)
+          reads_of(variable.expression, variable.owner, accept: lambda(&:nil?)).find(&:resource?)
         end
 
         # One ItemUse per expression that reads the source, with the element
@@ -137,6 +142,13 @@ module InfernoSuiteGenerator
         FHIRPATH = "text/fhirpath"
         QUERY = "application/x-fhir-query"
 
+        # A `variable` extension, on the root or an item: its `owner`.
+        Variable = Data.define(:name, :expression, :owner)
+        # A root `launchContext`, which may be any of its types.
+        LaunchContext = Data.define(:name, :types, :owner)
+        # A `templateExtract` extension on `owner`; `defined_at` is `root` or the owner's linkId.
+        TemplateExtract = Data.define(:extension, :owner, :defined_at)
+
         def initialize(questionnaire)
           @questionnaire = questionnaire
         end
@@ -160,24 +172,19 @@ module InfernoSuiteGenerator
           variables_in(QUERY)
         end
 
-        # `{ name:, types:, owner: }` for each root `launchContext`. The name is in `valueCoding.code`, or in
-        # `valueId` in older SDC versions; each `type` sub-extension adds a type.
+        # The root's LaunchContexts. The name is in `valueCoding.code`, or in `valueId` in older SDC versions; each
+        # `type` sub-extension adds a type.
         def launch_contexts
           list(@questionnaire["extension"]).select { |extension| extension["url"] == LAUNCH_CONTEXT_URL }
                                            .filter_map { |extension| launch_context(list(extension["extension"])) }
         end
 
-        # `{ extension:, owner:, defined_at: }` for each `templateExtract` on the root and on items, in document order.
+        # The TemplateExtracts on the root and on items, in document order.
         def template_extracts
           owners.flat_map do |owner|
             list(owner["extension"]).select { |extension| extension["url"] == TEMPLATE_EXTRACT_URL }
-                                    .map { |extension| { extension:, owner:, defined_at: defined_at(owner) } }
+                                    .map { |extension| TemplateExtract.new(extension, owner, defined_at(owner)) }
           end
-        end
-
-        # The ItemUses of `source`, `{ name:, owner:, start: }`, for the chains whose type the block takes.
-        def item_uses(source, &accept)
-          ItemUses.new(self, source, accept).call
         end
 
         # The contained resource with this `id`, or `nil`.
@@ -231,13 +238,13 @@ module InfernoSuiteGenerator
           name_part = parts.find { |part| part["url"] == "name" } || {}
           name = name_part.dig("valueCoding", "code") || name_part["valueId"]
           types = parts.select { |part| part["url"] == "type" }.filter_map { |part| part["valueCode"] }
-          { name:, types:, owner: @questionnaire } if name
+          LaunchContext.new(name, types, @questionnaire) if name
         end
 
         def variables_in(language)
           owners.flat_map do |owner|
             variables(owner).select { |expression| expression["language"] == language }.map do |expression|
-              { name: expression["name"], expression: expression["expression"].to_s, owner: }
+              Variable.new(name: expression["name"], expression: expression["expression"].to_s, owner:)
             end
           end
         end

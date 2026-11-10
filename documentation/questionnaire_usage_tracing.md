@@ -42,7 +42,7 @@ For each group a questionnaire uses, the trace is split over the group's tests. 
 The generator finds these tests through `Generator::TestIndex`. It writes:
 
 - A "Used in questionnaires" section in the description of each of those tests. It's a nested list of questionnaires, the sources in each that the test makes the request of, and the items that use each source. Elements that no group the entry links to marks Must Support or requires are marked "(not checked)".
-- A section in the Must Support test listing the Must Support elements the items read, each with the items that read it.
+- A section in the Must Support test listing the elements the items read that the group's tests check, each with the items that read it.
 - A "Used in questionnaires" section at the end of the group description, with:
   - each questionnaire and the tests that list it
   - **Not tested by this group**: the sources no test makes the request of, in full, with how the group's searches compare to a query's
@@ -176,7 +176,7 @@ flowchart TD
 
 ## How it picks a test
 
-Each trace entry of a group takes two paths: its request goes to one test (`Sections::Destinations#request`, from the request the entry names with `TraceEntry#request`), and the elements its items read go to the Must Support test or the group summary (`Sections::Delivery::Placement#reads`). The delivery makes these decisions once, before anything is rendered, and the test sections and the group summaries both read them.
+Each trace entry of a group takes two paths: its request goes to one test (`Sections::ListingTests#request`, from the request the entry names with `TraceEntry#request`), and the elements its items read go to the Must Support test or the group summary (`Sections::Delivery::Placement#reads`). The delivery makes these decisions once, before anything is rendered, and the test sections and the group summaries both read them.
 
 ### The request
 
@@ -254,7 +254,7 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
   - `ast.rb`: reads FHIRPath expressions: the variables they reference, and what each chain from a variable reads from where that variable starts, which is also where an alias of the chain starts
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
   - `fhir_query.rb`: one x-fhir-query, parsed once: its resource type, whether it's a read, its search parameters, `_include` values and codes
-  - `sections.rb`: decides which tests list each entry and which elements count as checked (its private `Delivery`, `Destinations`, which alone knows the generator's test kinds, and `CheckedElements`), then writes every "Used in questionnaires" section: the test sections, the Must Support sections and the group summaries
+  - `sections.rb`: decides which tests list each entry and which elements count as checked (its private `Delivery`, `ListingTests`, which alone knows the generator's test kinds, and `CheckedElements`), then writes every "Used in questionnaires" section: the test sections, the Must Support sections and the group summaries
 - `lib/inferno_suite_generator/core/test_index.rb`: finds a group's tests by kind and details
 - `lib/inferno_suite_generator/core/group_descriptions.rb`: collects and escapes the added description text
 - `test/questionnaire_usage/`, which tests through the two halves of `generate` and the whole of it:

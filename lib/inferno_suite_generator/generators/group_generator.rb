@@ -10,8 +10,6 @@ module InfernoSuiteGenerator
   class Generator
     class GroupGenerator < BasicTestGenerator
       class << self
-        # descriptions: the GroupDescriptions to append to each group's description
-        # and to the descriptions of its tests.
         def generate(ig_metadata, base_output_dir, descriptions = GroupDescriptions.new)
           ig_metadata.ordered_groups
                      .compact

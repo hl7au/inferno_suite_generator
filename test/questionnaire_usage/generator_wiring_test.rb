@@ -114,10 +114,8 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Runs the real generators in the order `Generator#generate` runs them, and
-    # checks that the tracing finds the tests they wrote. Other tests add tests
-    # to a group by hand, so nothing else proves the generators and `Delivery`
-    # agree on what they recorded.
+    # Runs the real generators in `Generator#generate` order. Other tests add tests to groups by hand, so only this
+    # one proves the tracing finds what the generators record.
     class GeneratorWiringTest < Minitest::Test
       include RunFixtures
       include WiringFixtures
@@ -157,7 +155,7 @@ module InfernoSuiteGenerator
 
         assert RubyVM::InstructionSequence.compile_file(path)
         assert_includes File.read(path), "test from: :#{READ} do\n        description [description, %(\n" \
-                                         "## Used in questionnaires"
+                                         "**Used in questionnaires**"
       end
 
       def test_tracing_before_the_test_generators_raises

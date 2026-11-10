@@ -4,25 +4,9 @@ require_relative "../utils/generator_constants"
 
 module InfernoSuiteGenerator
   class Generator
-    # Finds a group's tests by what they are rather than by id, so code can attach text or data to the right
-    # test without rebuilding test ids:
-    #
-    #   index = TestIndex.new(group)
-    #   index.find("read").id                                    # => "au_core_v200_patient_read_test"
-    #   index.find("search", search_names: %w[patient code])     # parameter names in any order
-    #   index.find("include", include_targets: ["Patient"])
-    #
-    # The kind is the generator's template type (GeneratorConstants::TEMPLATE_TYPES), and any other kind raises
-    # ArgumentError. Details by kind:
-    #
-    #   search, multiple_or_search, multiple_and_search, chain_search, provenance_revinclude_search
-    #     search_names
-    #   include   search_names, include_targets
-    #   update    option, "update" or "update_new"
-    #
-    # The generators record these in memory, on the group, so they exist only in the process that ran the
-    # generators and only after they ran. A test added without a kind, such as one from
-    # configs.generic.register_generators, is never found.
+    # Finds a group's tests by kind (a GeneratorConstants::TEMPLATE_TYPES value) and recorded details, like
+    # `find("search", search_names: %w[patient code])`. The generators record these in memory, so a test is found
+    # only in the process that generated it, after it was generated, and never when it was added without a kind.
     class TestIndex
       Test = Data.define(:id, :kind, :details)
 

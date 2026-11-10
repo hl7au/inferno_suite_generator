@@ -270,10 +270,8 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Verifies `Tracer` traces an `_include` whose resources the form picks
-    # with `where(resourceType = 'T')`, like the 715 Absolute CVD Risk module,
-    # which picks the requests and the included Medications in one variable and
-    # the Medications out of it again.
+    # Verifies `Tracer` traces an `_include` whose resources the form picks with `where(resourceType = 'T')`, from a
+    # variable that holds both the requests and the included Medications.
     class ReadsMixedIncludeTest < Minitest::Test
       include FormFixtures
 
@@ -380,7 +378,7 @@ module InfernoSuiteGenerator
         form = questionnaire(extension: [launch_context("patient", "Patient")]).except("url").merge("id" => "intake")
         entry = trace(form, profiles: patient_profiles)[AU_CORE_PATIENT].first
 
-        assert_equal [nil, "intake", "0.1.0"], entry.form.key
+        assert_equal [nil, "intake", "0.1.0"], entry.header.key
       end
 
       def test_a_launch_context_without_a_group_for_its_type_is_untraced

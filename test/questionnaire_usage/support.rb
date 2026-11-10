@@ -220,7 +220,7 @@ module InfernoSuiteGenerator
       def launch_entry(reads: ["birthDate"], header: form_header,
                        item_uses: [ItemUse.new(link_id: "dob", text: "Date of birth", extension: "initialExpression",
                                                reads:)])
-        TraceEntry::LaunchContext.new(form: header, name: "patient", item_uses:)
+        TraceEntry::LaunchContext.new(header:, name: "patient", item_uses:)
       end
 
       def name_use
@@ -228,16 +228,16 @@ module InfernoSuiteGenerator
       end
 
       def query_entry(query, item_uses: [name_use], **fields)
-        TraceEntry::Query.new(form: form_header, name: "Patients", query: FhirQuery.new(query), item_uses:, **fields)
+        TraceEntry::Query.new(header: form_header, name: "Patients", query: FhirQuery.new(query), item_uses:, **fields)
       end
 
       def include_entry(query, item_uses: [name_use], include: "PractitionerRole:location")
-        TraceEntry::Include.new(form: form_header, name: "Roles", query: FhirQuery.new(query), item_uses:, include:)
+        TraceEntry::Include.new(header: form_header, name: "Roles", query: FhirQuery.new(query), item_uses:, include:)
       end
 
       def template_entry(patch:, template_codes: [],
                          item_uses: [ItemUse.new(link_id: "height", text: "Height", extension: "templateExtract")])
-        TraceEntry::Template.new(form: form_header, name: "height", patch:, template_codes:, item_uses:)
+        TraceEntry::Template.new(header: form_header, name: "height", patch:, template_codes:, item_uses:)
       end
 
       # A Patient group whose profile marks birthDate, deceasedBoolean and the

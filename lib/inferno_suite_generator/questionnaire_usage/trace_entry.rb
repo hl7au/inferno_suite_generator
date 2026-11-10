@@ -24,7 +24,7 @@ module InfernoSuiteGenerator
       }.freeze
       private_constant :VARIABLE, :ROOT_LABEL, :ACTIONS
 
-      # The use of an expression on `item`, the questionnaire root or an item, as a Hash.
+      # The use of an expression on `item`, the questionnaire root's or an item's Hash.
       def self.of(item, extension, reads: [])
         item_text = item["text"]
         new(link_id: item["linkId"], text: (item_text if item_text.is_a?(String)), extension:, reads:)
@@ -75,11 +75,10 @@ module InfernoSuiteGenerator
     # says how it's shown and requested; `Sources` traces them. Entries are equal only when they are the same
     # object, so equal sources in a form stay apart.
     class TraceEntry
-      attr_reader :form, :name, :item_uses
+      attr_reader :header, :name, :item_uses
 
-      # form: a FormHeader.
-      def initialize(form:, name:, item_uses: [])
-        @form = form
+      def initialize(header:, name:, item_uses: [])
+        @header = header
         @name = name
         @item_uses = item_uses
       end
@@ -98,6 +97,9 @@ module InfernoSuiteGenerator
       # The request its source makes, which its request test makes too: `:read`, `:search`, `:include` (a search
       # of the query's type), `:create` or `:patch`; `nil` when it makes none.
       def request; end
+
+      # The type of the groups that make its request, or `nil` for the group it was traced for.
+      def request_type; end
 
       # The line a section shows for an entry with no item uses.
       def unused_line; end
@@ -123,37 +125,27 @@ module InfernoSuiteGenerator
         # A query that fetches other resources through `_include` is shown even
         # when no item reads its own results.
         def shown?
-          super || includes.any?
+          super || query.includes.any?
         end
 
         # A search that selects by no parameter has no test to make it.
         def request
-          return :read if read?
+          return :read if query.read?
 
           :search if query.search_params.any?
         end
 
         def search_params
-          query.search_params unless read?
+          query.search_params unless query.read?
         end
 
         def heading(resource)
-          action = read? ? "reads one #{resource} by id" : "searches #{resource} resources"
+          action = query.read? ? "reads one #{resource} by id" : "searches #{resource} resources"
           "**Query #{name}**: #{action}"
         end
 
         def unused_line
-          "No item reads its results; it fetches #{includes.join(", ")} through _include"
-        end
-
-        private
-
-        def read?
-          query.read?
-        end
-
-        def includes
-          query.includes
+          "No item reads its results; it fetches #{query.includes.join(", ")} through _include"
         end
       end
 
@@ -170,6 +162,10 @@ module InfernoSuiteGenerator
         end
 
         def request = :include
+
+        def request_type
+          query.resource_type
+        end
 
         def heading(resource)
           "**Query #{name}**: fetches #{resource} resources through _include=#{@include}"

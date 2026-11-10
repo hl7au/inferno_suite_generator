@@ -11,21 +11,9 @@ require_relative "questionnaire_usage/tracer"
 require_relative "questionnaire_usage/sections"
 
 module InfernoSuiteGenerator
-  # Traces every Questionnaire in the IG over the suite's groups and splits
-  # each group's trace over its tests. Delivery decides which tests list each
-  # entry and which elements count as checked, and the outputs read its
-  # decisions:
-  #
-  # - each entry goes to the test that makes its request, as a
-  #   "Used in questionnaires" section in that test's description
-  # - the elements items read go to the Must Support test, by element
-  # - the group description gets a summary: the questionnaires, the tests that
-  #   list them, and what no test checks
-  #
-  # Sections writes those three to the descriptions.
-  #
-  # It reads what the test generators recorded on the groups, and adds to what
-  # GroupGenerator writes, so it runs between them.
+  # Traces every Questionnaire in the IG over the suite's groups and writes "Used in questionnaires" sections to the
+  # tests that make each source's request, the Must Support test and the group. It reads the tests the generators
+  # recorded and adds to what GroupGenerator writes, so it runs between them.
   module QuestionnaireUsage
     def self.generate(ig_resources:, groups:, descriptions:)
       if groups.any? && groups.none? { |group| Generator::TestIndex.new(group).any? }
