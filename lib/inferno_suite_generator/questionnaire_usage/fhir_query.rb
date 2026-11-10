@@ -5,8 +5,7 @@ require "uri"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # One x-fhir-query, parsed once when its source is traced. It shows as the
-    # text it was made from.
+    # One x-fhir-query, parsed once.
     class FhirQuery
       # The search parameters that can tell the profiles of one type apart.
       CODE_PARAMS = %i[code category].freeze
@@ -29,17 +28,14 @@ module InfernoSuiteGenerator
         @text
       end
 
-      # The last path segment that names a resource type, so
-      # `Patient/{{%patient.id}}` and the compartment search
-      # `Patient/{{%patient.id}}/Observation?...` give `Patient` and `Observation`.
-      # Without one it is the last segment.
+      # The last path segment that names a resource type, so a compartment search like
+      # `Patient/{{%patient.id}}/Observation?...` gives `Observation`; without one, the last segment.
       def resource_type
         @type_index ? @segments[@type_index] : @segments.last
       end
 
-      # Whether the query reads one resource, instead of giving a Bundle: an id
-      # follows the type. An operation, like `Patient/{{%patient.id}}/$everything`
-      # or `Observation/$lastn`, gives a Bundle, so it is not a read.
+      # Whether an id follows the type, so the query reads one resource instead of giving a Bundle.
+      # An operation, like `Patient/{{%patient.id}}/$everything`, gives a Bundle.
       def read?
         return false unless @type_index
 
@@ -47,17 +43,14 @@ module InfernoSuiteGenerator
         !following.nil? && !following.start_with?("_", "$") && @segments.none? { |segment| segment.start_with?("$") }
       end
 
-      # The parameter names that select resources, without modifiers. A
-      # compartment search, like `Patient/{{%patient.id}}/Observation?code=x`,
-      # also selects by its compartment, so it gives `patient` too.
+      # The names that select resources, without modifiers. A compartment search, like
+      # `Patient/{{%patient.id}}/Observation?code=x`, also selects by `patient`.
       def search_params
         names = @pairs.map { |name, _value| name.split(":").first }
         [*compartment_param, *names].uniq - RESULT_PARAMS
       end
 
-      # The `_include` values of the query's own type, like
-      # `PractitionerRole:location` on a PractitionerRole search. These are the
-      # ones the tracer traces.
+      # The `_include` values of the query's own type, like `PractitionerRole:location` on a PractitionerRole search.
       def includes
         @pairs.filter_map { |name, value| value if own_include?(name, value) }
       end
@@ -68,9 +61,8 @@ module InfernoSuiteGenerator
         @pairs.select { |name, value| name.start_with?("_include") && !own_include?(name, value) }
       end
 
-      # `{ code: [...], category: [...] }`, each value `{ system:, code: }`. Values
-      # are `system|code` or `code`, and a comma means OR. Values with a `{{...}}`
-      # template are skipped.
+      # `{ code: [...], category: [...] }` of `{ system:, code: }`, from `system|code` or `code` values. A comma
+      # means OR, and values with a `{{...}}` template are skipped.
       def codes
         CODE_PARAMS.to_h do |param|
           [param, @pairs.select { |name, _value| name == param.to_s }.flat_map { |_name, value| code_values(value) }]
@@ -94,7 +86,6 @@ module InfernoSuiteGenerator
         compartment.downcase if FHIR::RESOURCES.include?(compartment)
       end
 
-      # :reek:UtilityFunction
       def code_values(value)
         return [] if value.include?("{{")
 
@@ -108,7 +99,6 @@ module InfernoSuiteGenerator
         end
       end
 
-      # :reek:UtilityFunction
       def decode(text)
         URI.decode_uri_component(text)
       rescue ArgumentError

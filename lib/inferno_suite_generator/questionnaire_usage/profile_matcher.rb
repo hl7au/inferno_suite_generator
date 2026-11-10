@@ -14,11 +14,8 @@ module InfernoSuiteGenerator
         @profile_codes = {}
       end
 
-      # The groups the source links to, or `nil` when it is untraced or
-      # unresolved. `context` names the source in the log lines.
-      #
-      # The only group of the type matches by type, unless the source has a
-      # `code` or `category` its profile fixes to other values.
+      # The groups the source links to, or `nil` when untraced or unresolved; `context` names it in logs.
+      # The only group of a type matches unless the source has a `code` or `category` its profile fixes otherwise.
       def match(resource_type, codes: {}, any_of_type: false, context: nil)
         label = context || resource_type
         candidates = @groups.select { |group| group.resource == resource_type }
@@ -50,9 +47,7 @@ module InfernoSuiteGenerator
         matches
       end
 
-      # Whether the codes overlap on every param both the profile and the
-      # source give values for. With `shared: true`, there must be one.
-      # :reek:UtilityFunction
+      # Whether the codes overlap on every param both give values for; with `shared:`, at least one must.
       def agree?(profile, source, shared: false)
         params = PARAMS.select { |param| profile[param].any? && source[param].to_a.any? }
         (!shared || params.any?) && params.all? { |param| Codes.overlap?(profile[param], source[param]) }
@@ -74,8 +69,7 @@ module InfernoSuiteGenerator
           PARAMS.to_h { |param| [param, list(template[param.to_s]).flat_map { |concept| codings(concept) }] }
         end
 
-        # The codes a profile's snapshot fixes under `<Type>.code` and
-        # `<Type>.category`.
+        # The codes a profile's snapshot fixes under `<Type>.code` and `<Type>.category`.
         def from_profile(profile)
           elements = snapshot_elements(profile)
           by_id = elements.to_h { |element| [element["id"], element] }

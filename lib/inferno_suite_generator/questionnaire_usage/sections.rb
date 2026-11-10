@@ -4,19 +4,8 @@ require_relative "../core/test_index"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Writes the "Used in questionnaires" sections to the descriptions, as its
-    # Delivery decides:
-    #
-    # - a test section for each test that makes a request: the questionnaires,
-    #   the sources in each whose request it makes, and the items that use them
-    # - a Must Support section for a group's Must Support test: the elements it
-    #   checks that form items read
-    # - a group summary for each group: the questionnaires with the tests that
-    #   list them, the sources no test makes the request of, and the elements no
-    #   test checks
-    #
-    # Sections use only bold and plain text, since Inferno shows tables without
-    # borders and raw HTML as text.
+    # Writes the "Used in questionnaires" sections: one per test that makes a request, one for the Must Support
+    # test and a group summary. Only bold and plain text: Inferno shows tables without borders and HTML as text.
     class Sections
       HEADING = "## Used in questionnaires"
       NOT_CHECKED_MARK = "(not checked)"
@@ -27,9 +16,8 @@ module InfernoSuiteGenerator
                    "these forms get from them."
       NOT_CHECKED = "The profile neither marks these elements Must Support nor requires them, so no test checks " \
                     "that the server returns them."
-      # The intro of a test section, by the kind of test. An include test
-      # belongs to another group than the entries it lists, and those can be
-      # traced for several profiles. A patch test reads as an update.
+      # By kind of test; a patch test reads as an update. An include test lists entries of other groups, which
+      # can be of several profiles, so its intro names none.
       TEST_INTROS = {
         "read" => "These questionnaires in the IG read %<resource>s resources as this test does: by id, or as the " \
                   "resource a form is opened for. #{GROUP_READS}",
@@ -67,7 +55,6 @@ module InfernoSuiteGenerator
         "#{[HEADING, "", intro, "", list].join("\n")}\n" unless list.empty?
       end
 
-      # The section of one test that makes a request.
       def test_section(listing)
         group = listing.groups.first
         intro = TEST_INTROS.fetch(listing.destination.kind) { TEST_INTROS["update"] }
@@ -80,11 +67,8 @@ module InfernoSuiteGenerator
                 Lists.elements(placements, &:must_support_reads))
       end
 
-      # The section at the end of a group's description, for its shown
-      # placements. The details are in the descriptions of the tests that make
-      # each request, so the group lists what is left: each questionnaire with
-      # the tests that list its items, the sources no test makes the request
-      # of, and the elements items read that no test checks.
+      # The summary at the end of a group's description. The tests that make each request list the details, so
+      # it lists what is left: each form with its tests, the sources no test requests, and unchecked elements.
       def group_summary(group, placements)
         return if placements.empty?
 
@@ -101,8 +85,7 @@ module InfernoSuiteGenerator
           "tests that make the same requests list the form items that depend on them."
       end
 
-      # Each questionnaire with the tests that list it: those that make a
-      # request first, then the Must Support test.
+      # Each questionnaire with its tests: those that make a request first, then the Must Support test.
       def forms_list(placements)
         Lists.forms(placements).map do |title, listed|
           labels = (listed.filter_map(&:request) + listed.filter_map(&:must_support)).map(&:label).uniq
@@ -124,9 +107,8 @@ module InfernoSuiteGenerator
 
         module_function
 
-        # `[title, placements]` per questionnaire, in the order first seen. The
-        # title is the form's, with the version when another form here has the
-        # same title, as an assembled modular form does.
+        # `[title, placements]` per questionnaire, in the order first seen. The title gets the version when
+        # another form has the same title, as an assembled modular form does.
         def forms(placements)
           by_form = placements.select(&:shown?).group_by { |placement| placement.entry.form_key }.values
           titles = by_form.map { |listed| listed.first.entry.form_title }
@@ -139,9 +121,7 @@ module InfernoSuiteGenerator
           titles.count(title) > 1 && version ? "#{title}, version #{version}" : title
         end
 
-        # The sources and the items that use each. search_check: whether a query
-        # says how the group's search tests compare to it, which only the group
-        # summary needs.
+        # The sources and the items that use each; `search_check:` adds how the group's searches compare to a query.
         def sources(placements, group, search_check: false)
           forms(placements).flat_map do |title, listed|
             ["- **#{title}**", *listed.flat_map { |placement| source_lines(placement, group, search_check) }]
@@ -171,9 +151,8 @@ module InfernoSuiteGenerator
           "A search by #{names.join(" + ")}#{others}"
         end
 
-        # One line per item, in document order, like
-        # `**Height**: pre-fills the answer, shows or hides the item; reads value.value`,
-        # up to `MAX_ITEM_LINES`, then one that counts the rest.
+        # One line per item, like `**Height**: pre-fills the answer; reads value.value`, up to `MAX_ITEM_LINES`,
+        # then one that counts the rest.
         def item_lines(uses, reads)
           items = uses.group_by(&:link_id).values
           more = items.size - MAX_ITEM_LINES
@@ -195,12 +174,7 @@ module InfernoSuiteGenerator
           labels.empty? ? "" : "reads #{labels.join(", ")}"
         end
 
-        # The element paths the items read, each with the items that read it, in
-        # the order the form first reads them:
-        #
-        #   - **GP Chronic Condition Management Plan**
-        #     - **birthDate**: Date of birth, Age
-        #
+        # The paths the items read, each with the items that read it, like `- **birthDate**: Date of birth, Age`.
         # The block gives the `{ path => ElementRead }` to list for a placement.
         def elements(placements, &reads)
           forms(placements).flat_map do |title, listed|
@@ -230,39 +204,28 @@ module InfernoSuiteGenerator
         end
       end
 
-      # Decides which tests list each trace entry and which elements its items
-      # read count as checked, once and before anything is rendered, so the test
-      # sections and the group summaries can't disagree.
+      # Decides which tests list each trace entry and which elements count as checked, once, before rendering,
+      # so the test sections and group summaries can't disagree.
       class Delivery
         # A test that lists an entry. `label` names the test in the group summary.
         Destination = Data.define(:group, :test_id, :kind, :label)
 
-        # One element path a trace entry's items read: how sections name it, and
-        # whether it counts as checked.
+        # One path an entry's items read: its label in sections, and whether it counts as checked.
         ElementRead = Data.define(:path, :label, :checked)
 
-        # One trace entry of one group. `request` is the Destination of the test
-        # that makes its request, and `must_support` the group's Must Support
-        # test when its items read an element the group checks. Each is `nil`
-        # when no test lists the entry for that reason.
-        #
-        # `reads` and `must_support_reads` are `{ path => ElementRead }`. `reads`
-        # has every path the entry's items read, and is the same for each group
-        # the entry was traced for: an element is checked when any of them checks
-        # it. `must_support_reads` has the paths this group checks, as it names
-        # them, since its Must Support test can list only those.
+        # One trace entry of one group. `request` and `must_support` are the Destinations that list it, or `nil`.
+        # `reads` has every path its items read, the same for each group traced for it (checked if any checks it);
+        # `must_support_reads` only the paths this group checks, named as it names them.
         Placement = Data.define(:group, :entry, :request, :must_support, :reads, :must_support_reads) do
           def shown?
             entry.shown?
           end
         end
 
-        # A test that makes the request of these placements, one per entry, and
-        # the groups they were traced for. Only an `_include` test has several
+        # A request test and its placements, one per entry, with their groups. Only an `_include` test has several
         # groups: its entries link to every group of the target type.
         TestListing = Data.define(:destination, :placements, :groups)
 
-        # traces: `{ profile_url => [trace entries] }`, from `Tracer#trace`.
         def initialize(groups, traces)
           @groups = groups
           reads = shared_reads(groups, traces)
@@ -309,13 +272,11 @@ module InfernoSuiteGenerator
         end
 
         # The Destination of the group's first test of this kind, or `nil`.
-        # :reek:UtilityFunction
         def find(group, kind, **details)
           test = Generator::TestIndex.new(group).find(kind, **details)
           Destination.new(group, test.id, test.kind, label(group, test)) if test
         end
 
-        # :reek:UtilityFunction
         def label(group, test)
           case test.kind
           when "search" then "search by #{test.details[:search_names].join(" + ")}"
@@ -334,7 +295,6 @@ module InfernoSuiteGenerator
           groups_by_entry.to_h { |entry, traced| [entry, element_reads(entry, CheckedElements.new(traced))] }
         end
 
-        # :reek:UtilityFunction
         def element_reads(entry, checked_elements)
           paths = entry.item_uses.flat_map(&:reads).uniq
           paths.to_h do |path|
@@ -344,14 +304,9 @@ module InfernoSuiteGenerator
         end
       end
 
-      # The element paths the tests of one or more groups check: the ones their
-      # profiles mark Must Support or require, `id`, and the value of a Must
-      # Support extension.
-      #
-      # A path counts as checked when any of the groups checks it, and is labeled
-      # as the group that checks it names it, so a slice one profile defines keeps
-      # its name. A test can make the request of entries traced for several groups
-      # of one type.
+      # The element paths a group's tests check: Must Support or required by the profile, `id`, and a Must
+      # Support extension's value. Across groups, a path is checked when any checks it, and labeled as that group
+      # names it, so a slice one profile defines keeps its name.
       class CheckedElements
         def initialize(groups)
           @profiles = groups.map { |group| Profile.new(group) }
@@ -361,24 +316,15 @@ module InfernoSuiteGenerator
           @profiles.any? { |profile| profile.checked?(path) }
         end
 
-        # The path as sections show it: an extension the profile slices as Must
-        # Support is named by its slice, like `extension:sliceName`, and any other
-        # by the last part of its URL, like `extension[individual-pronouns]`.
+        # The path as sections show it: a Must Support extension by its slice, like `extension:sliceName`, and any
+        # other extension by the end of its URL, like `extension[individual-pronouns]`.
         def label(path)
           (@profiles.find { |profile| profile.checked?(path) } || @profiles.first).label(path)
         end
 
-        # The rule for one group's profile.
-        #
-        # Trace paths name an extension as `extension[url=U]`. The Must Support test
-        # looks only for the URL of an extension the profile slices, so inside one
-        # only what the validation test holds it to counts as checked: its value,
-        # or the `value` part of a complex extension. Other parts, like `period`,
-        # are optional, and what a value holds isn't known here, since the
-        # extension's definition may not be loaded.
-        #
-        # A trace path names a choice element by its type, like `valueQuantity`,
-        # where the profile has `value[x]`, so it is compared as `value`.
+        # The rule for one profile. The Must Support test only looks for a sliced extension's URL, so inside one only
+        # what validation enforces counts: its value, or a complex extension's `value` part. A choice element read by
+        # its type, like `valueQuantity`, is compared as the element, like `value`.
         class Profile
           ALWAYS_PRESENT = %w[id].freeze
           EXTENSION_URL = /\A((?:modifierE|e)xtension)\[url=(.+)\]\z/

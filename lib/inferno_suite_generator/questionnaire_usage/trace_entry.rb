@@ -7,19 +7,13 @@ module InfernoSuiteGenerator
   module QuestionnaireUsage
     ItemUse = Data.define(:link_id, :text, :extension, :reads)
 
-    # One form item, or the questionnaire root, reading a source through an
-    # expression. `extension` is the short name of the expression's extension,
-    # and `reads` the element paths it reads.
-    #
-    # An item use on the root, like a root `itemExtractionContext`, has no
-    # `link_id` or `text`: every item has a `linkId`, and the root's `text` is its
-    # narrative.
+    # One form item, or the questionnaire root, reading a source through an expression of `extension`.
+    # A use on the root has no `link_id` or `text`: the root's `text` is its narrative.
     class ItemUse
       VARIABLE = "variable"
       ROOT_LABEL = "The whole form"
 
-      # What an item does with the source, by the short name of the extension
-      # whose expression reads it.
+      # What an item does with the source, by the extension whose expression reads it.
       ACTIONS = {
         "initialExpression" => "pre-fills the answer",
         "calculatedExpression" => "calculates the answer",
@@ -33,16 +27,13 @@ module InfernoSuiteGenerator
       }.freeze
       private_constant :VARIABLE, :ROOT_LABEL, :ACTIONS
 
-      # The use of an expression on `item`: the questionnaire root or an item, as
-      # a Hash.
+      # The use of an expression on `item`, the questionnaire root or an item, as a Hash.
       def self.of(item, extension, reads: [])
         item_text = item["text"]
         new(link_id: item["linkId"], text: (item_text if item_text.is_a?(String)), extension:, reads:)
       end
 
-      # Whether an expression of this extension only defines a variable, so the
-      # items that read the variable are what use the source, and `Tracer`
-      # leaves it out.
+      # Whether the expression only defines a variable: the items that read the variable are what use the source.
       def self.variable?(extension)
         extension == VARIABLE
       end
@@ -51,8 +42,7 @@ module InfernoSuiteGenerator
         super
       end
 
-      # The item's text with its Markdown escaped, or its linkId when it has none.
-      # A use with neither is on the questionnaire root.
+      # The item's text with its Markdown escaped, else its linkId; a use with neither is on the questionnaire root.
       def label
         words = text.to_s.split.join(" ")
         return words.gsub(/[*_`\[\]]/) { |match| "\\#{match}" } unless words.empty?
@@ -60,21 +50,15 @@ module InfernoSuiteGenerator
         link_id&.to_s || ROOT_LABEL
       end
 
-      # What the use does to the item, or the extension's name when that isn't
-      # known. `nil` when it has no extension.
+      # What the use does to the item, else the extension's name; `nil` without an extension.
       def action
         ACTIONS.fetch(extension) { extension }
       end
     end
 
-    # One questionnaire source traced for the groups whose profile it links to.
-    # Each kind of source is a subclass, which traces its sources in a form
-    # (`.trace`), and says whether the entry is shown, how to find the test that
-    # makes its request and how a section names it, so a new kind is one new
-    # class and the `Tracer::Form` method that finds its sources.
-    #
-    # Groups that share a source share its entry, and two entries are the same
-    # only if they are the same object, so equal sources in a form stay apart.
+    # One questionnaire source, shared by the groups whose profile it links to. Each kind is a subclass that
+    # traces its sources (`.trace`) and says how it's shown and requested. Entries are equal only when they are
+    # the same object, so equal sources in a form stay apart.
     class TraceEntry
       def initialize(**fields)
         @fields = fields
@@ -94,7 +78,6 @@ module InfernoSuiteGenerator
         item_uses.any?
       end
 
-      # The ItemUses sections list.
       def item_uses
         @fields[:item_uses].to_a
       end
@@ -102,9 +85,8 @@ module InfernoSuiteGenerator
       # The parameters of the search it makes, or `nil` when it makes no search.
       def search_params; end
 
-      # How Delivery finds its request test: `[kind, details]` lookups for
-      # `Generator::TestIndex#find`, tried in order. `resource` is the type of
-      # the group the entry was traced for.
+      # `[kind, details]` lookups for `Generator::TestIndex#find`, which Delivery tries in order for the request
+      # test; `resource` is the type of the entry's group.
       def request_lookups(_resource) = []
 
       # The type of the groups that hold its request test, or `nil` for the
@@ -130,10 +112,8 @@ module InfernoSuiteGenerator
 
       # A `launchContext` resource, like `%patient`.
       class LaunchContext < TraceEntry
-        # `[groups, entry]` for each type of the `launchContext` that has
-        # groups. `%name` is the resource itself, not a Bundle. A chain that
-        # picks one type, like `%user.where(resourceType = 'PractitionerRole')`,
-        # counts for that type only.
+        # `[groups, entry]` per type that has groups. `%name` is the resource itself, not a Bundle, and a chain that
+        # picks one type, like `%user.where(resourceType = 'PractitionerRole')`, counts for that type only.
         def self.trace(form, launch_context, matcher)
           name = launch_context[:name]
           source = { name:, owner: launch_context[:owner], bundle: false }
@@ -155,21 +135,14 @@ module InfernoSuiteGenerator
 
       # An x-fhir-query variable: a search, or a read of one resource by id.
       class Query < TraceEntry
-        # `[groups, entry]` for the query entry and each include entry of the
-        # x-fhir-query `variable` of the form.
+        # `[groups, entry]` for the query entry and each include entry of the form's x-fhir-query `variable`.
         def self.trace(form, variable, matcher, ig_resources)
           Variable.new(form, variable, ig_resources).entries(matcher)
         end
 
-        # One x-fhir-query variable of a form: a `query` entry for its own type
-        # and an `include` entry for each `_include` target type. Chains are
-        # routed by type: one that picks an included type, with
-        # `entry.resource.ofType(T)` or `entry.where(resource is T)`, goes to
-        # that include entry, anything else to the query entry.
-        #
-        # An included resource of the query's own type can't be told apart from
-        # the query's own resources by type, so chains of that type stay with the
-        # query entry, and its include entry has no item uses.
+        # A variable's query entry, and an include entry per `_include` target type, which gets the chains that
+        # pick that type, like `entry.resource.ofType(T)`. Included resources of the query's own type look like its
+        # own, so their chains stay with the query entry.
         class Variable
           def initialize(form, variable, ig_resources)
             @form = form
@@ -211,29 +184,22 @@ module InfernoSuiteGenerator
             [groups, entry(TraceEntry::Include, include: include[:value], item_uses: uses)]
           end
 
-          # The item uses of the chains whose type the block takes. A read gives
-          # one resource, so its `%Name` is that resource, not a Bundle.
+          # The uses of the chains whose type the block takes; a read's `%Name` is one resource, not a Bundle.
           def item_uses(&)
             source = { name: @variable[:name], owner: @variable[:owner], bundle: !@query.read? }
             @form.item_uses(source, &)
           end
 
-          # A trace entry of this kind: the fields shared by query and include
-          # entries, then `fields`.
           def entry(kind, **fields)
             kind.new(**@form.header, name: @variable[:name], query: @query, **fields)
           end
 
-          # `{ value:, target: }` for each target type of each
-          # `_include` of the query's own type. The target is the explicit
-          # `Source:param:Target`, else the SearchParameter's `target` list, else
-          # the types the form picks out with `entry.resource.ofType(T)` or
-          # `entry.resource.where(resourceType = 'T')`.
+          # `{ value:, target: }` per target type of each own-type `_include`: the explicit `Source:param:Target`,
+          # else the SearchParameter's targets, else the types the form picks with `ofType(T)` or `resourceType = 'T'`.
           def include_targets
             @include_targets ||= include_values.flat_map { |value| targets_of(value) }
           end
 
-          # The `_include` target types other than the query's own.
           def other_include_types
             include_targets.map { |include| include[:target] } - [resource_type]
           end
@@ -339,18 +305,14 @@ module InfernoSuiteGenerator
       # A contained resource a `templateExtract` fills from the answers. It is
       # shown even when it is extracted from the whole form, which no item uses.
       class Template < TraceEntry
-        # `[groups, entry]` for the `templateExtract` `extract` of the form, or
-        # none when its template matches no group.
+        # `[groups, entry]` for the form's `templateExtract` `extract`, when its template matches groups.
         def self.trace(form, extract, matcher)
           Extract.new(form, extract).entries(matcher)
         end
 
-        # One `templateExtract` extension and the contained template it points to.
-        #
-        # A PATCH template (with the smartforms `TemplateExtractExtensionPatchRequestUrl`
-        # sub-extension) is a FHIRPath Patch `Parameters` resource. Its target type
-        # comes from the operations' `path`, or else from the request URL, like
-        # `'Condition/' + ...`. It fixes no codes.
+        # One `templateExtract` and its contained template. A PATCH template, with the smartforms
+        # `TemplateExtractExtensionPatchRequestUrl` sub-extension, is a FHIRPath Patch `Parameters` resource: it
+        # targets the type in its operations' `path`, else in its request URL, and fixes no codes.
         class Extract
           PATCH_URL_SUFFIX = "/TemplateExtractExtensionPatchRequestUrl"
 

@@ -7,12 +7,8 @@ require_relative "trace_entry"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Finds the questionnaire sources that link to each profile in the suite and
-    # the items that use them. Each kind of `TraceEntry` traces its own sources;
-    # the Tracer walks the forms and resolves the aliases items read them through.
-    #
-    # `trace` returns `{ profile_url => [TraceEntry] }`. Every `Questionnaire` in
-    # `ig_resources` is traced.
+    # Traces every `Questionnaire` into `{ profile_url => [TraceEntry] }`. Each kind of `TraceEntry` traces its
+    # own sources; the Tracer walks the forms and resolves the aliases items read them through.
     class Tracer
       ASSEMBLE_CONTEXT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembleContext"
 
@@ -67,21 +63,13 @@ module InfernoSuiteGenerator
         expressions.flat_map { |expression| form.fhirpath.references(expression[:expression]) }
       end
 
-      # The item uses of one source in one form: the items in its scope that read
-      # it, directly or through aliases, and the element paths they read.
-      #
-      # An alias is a `text/fhirpath` variable whose expression reads the source
-      # or another alias. Its prefix is the parent's prefix plus the path of its
-      # own chain, or `nil` when that chain stopped (see `Ast::ChainPath`). It
-      # keeps the chain's type, and only chains whose type `accept` takes count.
-      # A chain's own type counts only on a name that is a resource, or Bundle
-      # entries, with the prefix `""`. An alias of a chain that ends at Bundle
-      # entries, like `%q.entry.where(resource is Condition)`, is entries too.
+      # The items in a source's scope that read it, directly or through aliases: `text/fhirpath` variables reading
+      # the source or another alias. An alias's prefix extends its parent's by its chain's path, `nil` once a chain
+      # stops, and it keeps the chain's type, which `accept` must take.
       class ItemUses
         Name = Struct.new(:name, :owner, :bundle, :type, :prefix, keyword_init: true)
 
-        # `source` is `{ name:, owner:, bundle: }`. `bundle: true` for a query,
-        # whose `%Name` is a Bundle. `Ast::ChainPath` lists the values.
+        # `source` is `{ name:, owner:, bundle: }`, with `bundle:` as `Ast::ChainPath` takes it.
         def initialize(form, source, accept)
           @form = form
           @accept = accept
@@ -114,11 +102,8 @@ module InfernoSuiteGenerator
           add_name(variable, chain, type: type_of(name, chain), prefix: chain[:stopped] ? nil : read_path(name, chain))
         end
 
-        # A variable that picks resources of several types, like
-        # `%q.entry.resource.where(intent = 'order' or resourceType = 'Medication')`,
-        # reads the source through an untyped chain that `accept` may reject.
-        # It still becomes an alias, with no paths of its own, so a typed chain
-        # from it, like `%name.where(resourceType = 'Medication')`, counts.
+        # A variable that picks several types, like `where(intent = 'order' or resourceType = 'Medication')`, reads
+        # the source untyped, which `accept` may reject. It still becomes an alias, so typed chains from it count.
         def add_mixed_alias(variable)
           return false if @accept.call(nil)
 
@@ -208,22 +193,19 @@ module InfernoSuiteGenerator
           @questionnaire["title"] || @questionnaire["url"] || @questionnaire["id"]
         end
 
-        # The x-fhir-query `variable` extensions on the root and on items, in
-        # document order.
+        # The x-fhir-query `variable` extensions on the root and on items, in document order.
         def query_variables
           variables_in(QUERY)
         end
 
-        # `{ name:, types:, owner: }` for each `launchContext`
-        # extension on the root. The name is in `valueCoding.code`, or in
-        # `valueId` in older SDC versions. Each `type` sub-extension adds a type.
+        # `{ name:, types:, owner: }` for each root `launchContext`. The name is in `valueCoding.code`, or in
+        # `valueId` in older SDC versions; each `type` sub-extension adds a type.
         def launch_contexts
           list(@questionnaire["extension"]).select { |extension| extension["url"] == LAUNCH_CONTEXT_URL }
                                            .filter_map { |extension| launch_context(list(extension["extension"])) }
         end
 
-        # `{ extension:, owner:, defined_at: }` for each `templateExtract`
-        # extension on the root and on items, in document order.
+        # `{ extension:, owner:, defined_at: }` for each `templateExtract` on the root and on items, in document order.
         def template_extracts
           owners.flat_map do |owner|
             list(owner["extension"]).select { |extension| extension["url"] == TEMPLATE_EXTRACT_URL }
@@ -231,8 +213,7 @@ module InfernoSuiteGenerator
           end
         end
 
-        # The ItemUses of `source`, `{ name:, owner:, bundle: }`, for the chains
-        # whose type the block takes.
+        # The ItemUses of `source`, `{ name:, owner:, bundle: }`, for the chains whose type the block takes.
         def item_uses(source, &accept)
           ItemUses.new(self, source, accept).call
         end
@@ -257,8 +238,7 @@ module InfernoSuiteGenerator
           [owner, *descendants(owner)]
         end
 
-        # Whether a variable defined on `owner` (the root or an item) is visible
-        # at `node`.
+        # Whether a variable defined on `owner`, the root or an item, is visible at `node`.
         def covers?(owner, node)
           return true if owner.equal?(@questionnaire)
 
@@ -266,9 +246,8 @@ module InfernoSuiteGenerator
           !node.nil?
         end
 
-        # `{ extension:, expression: }` for each `text/fhirpath` expression in
-        # the item's own extensions and their sub-extensions. Nested items are
-        # not read. `extension` is the short name, like `initialExpression`.
+        # `{ extension:, expression: }` for each `text/fhirpath` expression in the item's own extensions and
+        # their sub-extensions, not in nested items. `extension` is the short name, like `initialExpression`.
         def expressions(item)
           list(item["extension"]).flat_map { |extension| extension_expressions(extension, short_name(extension)) }
         end
