@@ -9,7 +9,6 @@ require_relative "questionnaire_usage/trace_entry"
 require_relative "questionnaire_usage/profile_matcher"
 require_relative "questionnaire_usage/tracer"
 require_relative "questionnaire_usage/checked_elements"
-require_relative "questionnaire_usage/router"
 require_relative "questionnaire_usage/delivery"
 require_relative "questionnaire_usage/sections"
 require_relative "questionnaire_usage/trace_files"
@@ -20,7 +19,7 @@ module InfernoSuiteGenerator
   # entry and which elements count as checked, and the outputs read its
   # decisions:
   #
-  # - each entry goes to the test that makes its request (Router), as a
+  # - each entry goes to the test that makes its request, as a
   #   "Used in questionnaires" section in that test's description
   # - the elements items read go to the Must Support test, by element
   # - the group description gets a summary: the questionnaires, the tests that

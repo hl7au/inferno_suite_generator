@@ -6,28 +6,13 @@ require_relative "log"
 module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Reads `%Name` references and element paths from FHIRPath expressions.
-    #
-    # Each reader takes an expression, and has an `_in` variant that takes the
-    # tree `parse` returns, so a caller that keeps trees parses each expression
-    # once.
+    # `Ast::Cache` is the interface: it parses each expression once. The
+    # functions here read the trees `parse` returns.
     module Ast
       module_function
 
-      # The `%Name` names the expression references, without duplicates.
-      def references(expression)
-        references_in(parse(expression))
-      end
-
       def references_in(tree)
         nodes(tree).filter_map { |node| constant_name(node) }.uniq
-      end
-
-      # One `{ type:, types:, path:, stopped:, criteria: }` per longest chain
-      # that starts with `%name`, including chains nested in function
-      # arguments. `ChainPath` says what each key holds, and what `bundle:`
-      # takes.
-      def paths(expression, name, bundle:)
-        paths_in(parse(expression), name, bundle:)
       end
 
       def paths_in(tree, name, bundle:)
@@ -136,8 +121,7 @@ module InfernoSuiteGenerator
         node["children"] || []
       end
 
-      # `references` and `paths` that read each expression once, however many
-      # sources and aliases read it.
+      # Reads each expression once, however many sources and aliases read it.
       class Cache
         def initialize
           @trees = {}
@@ -145,10 +129,15 @@ module InfernoSuiteGenerator
           @paths = {}
         end
 
+        # The `%Name` names the expression references, without duplicates.
         def references(expression)
           @references[expression] ||= Ast.references_in(tree(expression))
         end
 
+        # One `{ type:, types:, path:, stopped:, criteria: }` per longest chain
+        # that starts with `%name`, including chains nested in function
+        # arguments. `ChainPath` says what each key holds, and what `bundle:`
+        # takes.
         def paths(expression, name, bundle:)
           @paths[[expression, name, bundle]] ||= Ast.paths_in(tree(expression), name, bundle:).freeze
         end

@@ -32,11 +32,11 @@ module InfernoSuiteGenerator
 
       def test_the_only_profile_of_the_type_does_not_match_a_template_with_another_code
         matcher = matcher_for(BODY_HEIGHT => body_height)
-        input = ProfileMatcher.from_template(
+        codes = ProfileMatcher::Codes.from_template(
           "resourceType" => "Observation", "code" => { "coding" => [{ "system" => LOINC, "code" => "29463-7" }] }
         )
 
-        assert_output(/unresolved/) { assert_nil matcher.match(input[:resource_type], codes: input[:codes]) }
+        assert_output(/unresolved/) { assert_nil matcher.match("Observation", codes:) }
       end
 
       def test_the_profile_with_the_queried_code_wins
@@ -103,9 +103,7 @@ module InfernoSuiteGenerator
           "code" => { "coding" => [{ "system" => LOINC, "code" => "8302-2" },
                                    { "system" => SNOMED, "code" => "50373000" }] }
         }
-        input = ProfileMatcher.from_template(template)
-
-        result = matcher.match(input[:resource_type], codes: input[:codes])
+        result = matcher.match("Observation", codes: ProfileMatcher::Codes.from_template(template))
 
         assert_equal [BODY_HEIGHT], result[:groups].map(&:profile_url)
       end

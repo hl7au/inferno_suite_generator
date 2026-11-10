@@ -157,5 +157,91 @@ module InfernoSuiteGenerator
         group.add_test(id:, file_name: "#{id}.rb", kind:, **details)
       end
     end
+
+    # Verifies which test makes the request of each kind of source.
+    class DeliveryRequestTest < Minitest::Test
+      include TraceEntryFixtures
+
+      LOCATION_QUERY = "PractitionerRole?practitioner={{%user.id}}&_include=PractitionerRole:location"
+
+      def setup
+        @patient = group("Patient", read: {}, create: {}, update: { option: "update" },
+                                    search: [{ search_names: %w[family gender] }])
+        @role = group("PractitionerRole", include: [{ search_names: ["_id"], include_targets: ["Location"] },
+                                                    { search_names: ["practitioner"],
+                                                      include_targets: ["Location"] }])
+        @location = group("Location")
+        @groups = [@patient, @role, @location]
+      end
+
+      def test_a_launch_context_and_a_read_go_to_the_read_test
+        assert_equal "patient_read", test_id(@patient, launch_entry)
+        assert_equal "patient_read", test_id(@patient, query_entry("Patient/{{%patient.id}}"))
+      end
+
+      def test_a_search_goes_to_the_search_test_by_the_same_parameters_in_any_order
+        destination = route(@patient, query_entry("Patient?gender=male&family={{%name}}&_count=1"))
+
+        assert_equal "patient_search_1", destination.test_id
+        assert_equal "search by family + gender", destination.label
+      end
+
+      def test_a_search_no_test_makes_goes_nowhere
+        assert_nil route(@patient, query_entry("Patient?name=x"))
+        assert_nil route(@patient, query_entry("Patient?_sort=-birthdate"))
+      end
+
+      def test_an_include_goes_to_the_include_test_of_the_searching_group
+        destination = route(@location, include_entry(LOCATION_QUERY))
+
+        assert_equal @role, destination.group
+        assert_equal "practitionerrole_include_2", destination.test_id
+        assert_equal "include", destination.kind
+        assert_equal "search with _include in PractitionerRole", destination.label
+      end
+
+      def test_an_include_falls_back_to_any_include_test_for_its_type
+        query = "PractitionerRole?organization=x&_include=PractitionerRole:location"
+
+        assert_equal "practitionerrole_include_1", test_id(@location, include_entry(query))
+      end
+
+      def test_templates_go_to_the_create_test_or_for_a_patch_to_the_patch_then_update_test
+        assert_equal "patient_create", test_id(@patient, template_entry(patch: false))
+        assert_equal "patient_update", test_id(@patient, template_entry(patch: true))
+        assert_nil route(@location, template_entry(patch: false))
+      end
+
+      def test_a_patch_ignores_an_update_test_that_creates_a_new_resource
+        encounter = group("Encounter", update: [{ option: "update_new" }, { option: "update" }])
+        @groups << encounter
+
+        assert_equal "encounter_update_2", test_id(encounter, template_entry(patch: true))
+      end
+
+      private
+
+      def route(group, entry)
+        delivery = Delivery.new(@groups, { group.profile_url => [entry] })
+        delivery.to_enum(:each_group).to_h.fetch(group).sole.request
+      end
+
+      def test_id(group, entry)
+        route(group, entry)&.test_id
+      end
+
+      # A group with tests of these kinds, each kind with one details hash or a list of them.
+      def group(resource, **tests)
+        InfernoSuiteGenerator::Generator::GroupMetadata.new(resource:, profile_url: resource, title: resource,
+                                                            searches: []).tap do |group|
+          tests.each do |kind, details|
+            Array.wrap(details).each.with_index(1) do |test_details, index|
+              id = [resource.downcase, kind, (index if details.is_a?(Array))].compact.join("_")
+              group.add_test(id:, file_name: "#{id}.rb", kind: kind.to_s, **test_details)
+            end
+          end
+        end
+      end
+    end
   end
 end

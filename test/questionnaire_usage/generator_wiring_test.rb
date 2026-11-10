@@ -116,7 +116,7 @@ module InfernoSuiteGenerator
 
     # Runs the real generators in the order `Generator#generate` runs them, and
     # checks that the tracing finds the tests they wrote. Other tests add tests
-    # to a group by hand, so nothing else proves the generators and `Router`
+    # to a group by hand, so nothing else proves the generators and `Delivery`
     # agree on what they recorded.
     class GeneratorWiringTest < Minitest::Test
       include RunFixtures

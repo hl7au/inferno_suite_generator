@@ -4,7 +4,7 @@ require_relative "support"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Builds and checks the chains `Ast.paths` returns.
+    # Builds and checks the chains `Ast::Cache#paths` returns.
     module AstPathAssertions
       private
 
@@ -13,7 +13,7 @@ module InfernoSuiteGenerator
       end
 
       def assert_paths(expected, expression, name, bundle: false)
-        assert_equal expected, Ast.paths(expression, name, bundle:)
+        assert_equal expected, Ast::Cache.new.paths(expression, name, bundle:)
       end
     end
 
@@ -24,31 +24,31 @@ module InfernoSuiteGenerator
       include AstPathAssertions
 
       def test_references_returns_the_external_constant_names
-        assert_equal ["ObsBodyHeight"], Ast.references("%ObsBodyHeight.entry")
+        assert_equal ["ObsBodyHeight"], Ast::Cache.new.references("%ObsBodyHeight.entry")
       end
 
       def test_references_lists_each_name_once
-        assert_equal %w[A B], Ast.references("%A.x | %B.where(y = %A.z)")
+        assert_equal %w[A B], Ast::Cache.new.references("%A.x | %B.where(y = %A.z)")
       end
 
       def test_references_strips_backticks
-        assert_equal ["vs-x"], Ast.references("%`vs-x`.code")
+        assert_equal ["vs-x"], Ast::Cache.new.references("%`vs-x`.code")
       end
 
       def test_references_ignores_a_name_inside_a_string_literal
-        assert_empty Ast.references("'%Foo'")
+        assert_empty Ast::Cache.new.references("'%Foo'")
       end
 
       def test_references_returns_empty_and_logs_on_bad_syntax
-        assert_output(/skipping FHIRPath/) { assert_empty Ast.references("%%bad((") }
+        assert_output(/skipping FHIRPath/) { assert_empty Ast::Cache.new.references("%%bad((") }
       end
 
       def test_paths_returns_empty_and_logs_on_bad_syntax
-        assert_output(/skipping FHIRPath/) { assert_empty Ast.paths("%%bad((", "bad", bundle: false) }
+        assert_output(/skipping FHIRPath/) { assert_empty Ast::Cache.new.paths("%%bad((", "bad", bundle: false) }
       end
 
       def test_paths_ignores_chains_from_other_names
-        assert_empty Ast.paths("%patient.birthDate", "user", bundle: false)
+        assert_empty Ast::Cache.new.paths("%patient.birthDate", "user", bundle: false)
       end
 
       def test_paths_drops_function_calls
@@ -116,7 +116,7 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Verifies `Ast.paths` reads the type and path of a chain through a query's
+    # Verifies `Ast::Cache#paths` reads the type and path of a chain through a query's
     # Bundle, and tells a read of the Bundle itself apart.
     class AstBundlePathTest < Minitest::Test
       include AstPathAssertions
@@ -179,7 +179,7 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Verifies `Ast.paths` reads the elements in the criteria of `where`,
+    # Verifies `Ast::Cache#paths` reads the elements in the criteria of `where`,
     # `exists`, `all` and `select`, and the resource types a
     # `where(resourceType = 'T')` names, using expressions from the 715
     # Absolute CVD Risk module.

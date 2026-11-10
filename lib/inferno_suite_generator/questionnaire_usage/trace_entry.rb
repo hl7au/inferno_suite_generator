@@ -4,8 +4,8 @@ module InfernoSuiteGenerator
   module QuestionnaireUsage
     # One questionnaire source traced for the groups whose profile it links to.
     # Each kind of source is a subclass, which says whether the entry is shown,
-    # which test makes its request and how a section names it, so a new kind
-    # is one new class.
+    # how to find the test that makes its request and how a section names it,
+    # so a new kind is one new class.
     #
     # The `Tracer` builds entries from the fields of the trace file. Groups that
     # share a source share its entry, and two entries are the same only if they
@@ -46,6 +46,15 @@ module InfernoSuiteGenerator
       # The parameters of the search it makes, or `nil` when it makes no search.
       def search_params; end
 
+      # How Delivery finds its request test: `[kind, details]` lookups for
+      # `Generator::TestIndex#find`, tried in order. `resource` is the type of
+      # the group the entry was traced for.
+      def request_lookups(_resource) = []
+
+      # The type of the groups that hold its request test, or `nil` for the
+      # group the entry was traced for.
+      def request_type; end
+
       # The line a section shows for an entry with no item uses.
       def unused_line; end
 
@@ -67,9 +76,7 @@ module InfernoSuiteGenerator
       class LaunchContext < TraceEntry
         SOURCE = "launch_context"
 
-        def request_test(router, group)
-          router.read_test(group)
-        end
+        def request_lookups(_resource) = [["read", {}]]
 
         def heading(resource)
           "**Launch context #{name}**: the #{resource} the form is opened for"
@@ -86,8 +93,12 @@ module InfernoSuiteGenerator
           super || includes.any?
         end
 
-        def request_test(router, group)
-          read? ? router.read_test(group) : router.search_test(group, query.search_params)
+        # A search goes to the search test by the same parameters, in any order.
+        def request_lookups(_resource)
+          return [["read", {}]] if read?
+
+          names = query.search_params
+          names.empty? ? [] : [["search", { search_names: names }]]
         end
 
         def search_params
@@ -115,12 +126,20 @@ module InfernoSuiteGenerator
       end
 
       # What a query fetches through one `_include` target. Its request is the
-      # query's, so its test can be in the group of the query's own type.
+      # query's, so its test is in a group of the query's own type.
       class Include < TraceEntry
         SOURCE = "include"
 
-        def request_test(router, group)
-          router.include_test(group, query.resource_type, query.search_params)
+        # The include test for the entry's type, preferably the one that
+        # searches by the same parameters.
+        def request_lookups(resource)
+          targets = [resource]
+          [["include", { search_names: query.search_params, include_targets: targets }],
+           ["include", { include_targets: targets }]]
+        end
+
+        def request_type
+          query.resource_type
         end
 
         def heading(resource)
@@ -137,8 +156,10 @@ module InfernoSuiteGenerator
           true
         end
 
-        def request_test(router, group)
-          patch? ? router.patch_test(group) : router.create_test(group)
+        # A FHIRPath Patch goes to the patch test, then the update test, not the
+        # one that creates a new resource through update.
+        def request_lookups(_resource)
+          patch? ? [["patch", {}], ["update", { option: "update" }]] : [["create", {}]]
         end
 
         def heading(resource)

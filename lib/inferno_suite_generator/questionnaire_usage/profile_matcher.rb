@@ -9,11 +9,6 @@ module InfernoSuiteGenerator
     class ProfileMatcher
       PARAMS = FhirQuery::CODE_PARAMS
 
-      # The input for a contained template.
-      def self.from_template(template)
-        { resource_type: template["resourceType"], codes: Codes.from_template(template) }
-      end
-
       def initialize(groups, ig_resources)
         @groups = groups
         @ig_resources = ig_resources
@@ -32,12 +27,11 @@ module InfernoSuiteGenerator
         return { groups: candidates, matched_by: "resource_type" } if any_of_type
         return match_by_code(candidates, codes, label) unless candidates.one?
 
-        if codes_conflict?(profile_codes(candidates.first), codes)
-          return log("unresolved #{label}: the #{resource_type} profile fixes " \
-                     "#{Codes.format(profile_codes(candidates.first))}, not #{Codes.format(codes)}")
-        end
+        fixed = profile_codes(candidates.first)
+        return { groups: candidates, matched_by: "resource_type" } if agree?(fixed, codes)
 
-        { groups: candidates, matched_by: "resource_type" }
+        log("unresolved #{label}: the #{resource_type} profile fixes #{Codes.format(fixed)}, " \
+            "not #{Codes.format(codes)}")
       end
 
       # The `code` and `category` values the group's profile fixes.
@@ -48,7 +42,7 @@ module InfernoSuiteGenerator
       private
 
       def match_by_code(candidates, codes, label)
-        matches = candidates.select { |group| codes_match?(profile_codes(group), codes) }
+        matches = candidates.select { |group| agree?(profile_codes(group), codes, shared: true) }
         if matches.empty?
           return log("unresolved #{label}: no #{candidates.first.resource} profile matches #{Codes.format(codes)}")
         end
@@ -57,18 +51,12 @@ module InfernoSuiteGenerator
         { groups: matches, matched_by: "code" }
       end
 
-      def codes_match?(profile, source)
-        shared = shared_params(profile, source)
-        shared.any? && shared.all? { |param| Codes.overlap?(profile[param], source[param]) }
-      end
-
-      def codes_conflict?(profile, source)
-        shared_params(profile, source).any? { |param| !Codes.overlap?(profile[param], source[param]) }
-      end
-
-      # The params both the profile and the source give values for.
-      def shared_params(profile, source)
-        PARAMS.select { |param| profile[param].any? && source[param].to_a.any? }
+      # Whether the codes overlap on every param both the profile and the
+      # source give values for. With `shared: true`, there must be one.
+      # :reek:UtilityFunction
+      def agree?(profile, source, shared: false)
+        params = PARAMS.select { |param| profile[param].any? && source[param].to_a.any? }
+        (!shared || params.any?) && params.all? { |param| Codes.overlap?(profile[param], source[param]) }
       end
 
       def log(message)

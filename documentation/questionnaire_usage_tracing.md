@@ -201,7 +201,7 @@ flowchart TD
 
 ## How it picks a test
 
-Each trace entry of a group takes two paths: its request goes to one test (`Router#source_test`), and the elements its items read go to the Must Support test or the group summary (`Delivery::Placement#reads`). `Delivery` makes these decisions once, before anything is rendered, and the test sections, the group summaries and the trace files all read them.
+Each trace entry of a group takes two paths: its request goes to one test (`Delivery#request_test`, through the entry's `TraceEntry#request_lookups`), and the elements its items read go to the Must Support test or the group summary (`Delivery::Placement#reads`). `Delivery` makes these decisions once, before anything is rendered, and the test sections, the group summaries and the trace files all read them.
 
 ### The request
 
