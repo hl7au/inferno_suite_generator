@@ -7,11 +7,12 @@ require "inferno_suite_generator"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Profiles and helpers shared by the `ProfileMatcher` tests. Body Height
-    # fixes its code with a `patternCodeableConcept`, Body Weight with
-    # `fixedCode` and `fixedUri` on a coding slice, like the real AU Core profiles.
-    module ProfileMatcherFixtures
+    # Profiles for the suites the tests trace. Body Height fixes its code with a
+    # `patternCodeableConcept`, Body Weight with `fixedCode` and `fixedUri` on a
+    # coding slice, like the real AU Core profiles.
+    module SuiteFixtures
       LOINC = "http://loinc.org"
+      SNOMED = "http://snomed.info/sct"
       OBSERVATION_CATEGORY = "http://terminology.hl7.org/CodeSystem/observation-category"
       BODY_HEIGHT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-bodyheight"
       BODY_WEIGHT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-bodyweight"
@@ -19,7 +20,6 @@ module InfernoSuiteGenerator
       DIAGNOSTIC_RESULT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-diagnosticresult"
       AU_CORE_PATIENT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-patient"
       AU_BASE_PATIENT = "http://hl7.org.au/fhir/StructureDefinition/au-patient"
-      SNOMED = "http://snomed.info/sct"
       RECORDED_SEX_URL = "http://hl7.org/fhir/StructureDefinition/individual-recordedSexOrGender"
 
       def observation_profiles
@@ -62,10 +62,6 @@ module InfernoSuiteGenerator
         { "type" => type, "elements" => [{ "id" => type, "path" => type }, *elements] }
       end
 
-      def matcher_for(profiles)
-        ProfileMatcher.new(*suite_for(profiles))
-      end
-
       # The groups and `IGResources` of a suite with these profiles.
       def suite_for(profiles)
         ig_resources = InfernoSuiteGenerator::Generator::IGResources.new
@@ -83,18 +79,12 @@ module InfernoSuiteGenerator
           "snapshot" => { "element" => definition["elements"] }
         )
       end
-
-      def match_urls(matcher, query)
-        parsed = FhirQuery.new(query)
-        result = matcher.match(parsed.resource_type, codes: parsed.codes)
-        result && { groups: result[:groups].map(&:profile_url), matched_by: result[:matched_by] }
-      end
     end
 
-    # Questionnaire builders shared by the `Tracer` tests. The suite has the
-    # `ProfileMatcherFixtures` Observation profiles.
-    module TracerFixtures
-      include ProfileMatcherFixtures
+    # Questionnaire builders, and `trace`, which traces a form over a suite the
+    # way `Tracer#trace` does for the generator.
+    module FormFixtures
+      include SuiteFixtures
 
       FORM_URL = "http://www.health.gov.au/assessments/GPChronicConditionManagementPlan"
       FORM_TITLE = "GP Chronic Condition Management Plan"
@@ -161,32 +151,56 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Entries and a Patient group shared by the `Sections` and `Delivery` tests.
-    module TraceEntryFixtures
-      include TracerFixtures
+    # Trace entries and groups, and `write`, which writes them the way
+    # `QuestionnaireUsage.write` does for the generator.
+    module WriteFixtures
+      include FormFixtures
+      include InfernoSuiteGenerator::GeneratorFixtures
 
       INDIGENOUS_STATUS = "http://hl7.org.au/fhir/StructureDefinition/indigenous-status"
       PRONOUNS = "http://hl7.org/fhir/StructureDefinition/individual-pronouns"
       LOCATION_QUERY = "PractitionerRole?_id={{%role.id}}&_include=PractitionerRole:location"
 
-      # The GroupDescriptions `Sections` writes for entries traced for the group
-      # alone.
+      # What `QuestionnaireUsage.write` wrote: the descriptions, and for each
+      # group the `tested_by` of each entry in its trace file, `nil` when it has
+      # no trace file.
+      Written = Data.define(:descriptions, :tested_by)
+
+      # traces: `{ profile_url => [TraceEntry] }`.
+      def write(traces, groups)
+        Dir.mktmpdir do |dir|
+          with_config_keeper do
+            descriptions = InfernoSuiteGenerator::Generator::GroupDescriptions.new
+            QuestionnaireUsage.write(traces, groups:, descriptions:, base_output_dir: dir)
+            Written.new(descriptions:, tested_by: groups.to_h { |group| [group, tested_by_in(dir, group)] })
+          end
+        end
+      end
+
+      # What is written for entries traced for the group alone.
       def written(entries, group)
-        delivery = Delivery.new([group], { group.profile_url => entries })
-        InfernoSuiteGenerator::Generator::GroupDescriptions.new.tap { |added| Sections.new(delivery).write(added) }
+        write({ group.profile_url => entries }, [group])
       end
 
       # The group's summary for the entries, "" when it has none. A group with no
       # tests lists every source in full under "Not tested by this group".
       def summary(entries, group: patient_group)
-        written(entries, group).for(group).join
+        written(entries, group).descriptions.for(group).join
       end
 
-      # The section `Sections` writes to a test of this kind, "" when it has none.
+      # The section written to a test of this kind, "" when it has none.
       def section_of_test(entries, kind, group: patient_group, **details)
-        id = "patient_#{kind}"
+        add_test(group, "patient_#{kind}", kind, **details)
+        written(entries, group).descriptions.for_test(group, "patient_#{kind}").join
+      end
+
+      # The ids of the tests the group's trace file says list the entry.
+      def tested_by(entry, group: patient_group)
+        written([entry], group).tested_by.fetch(group).sole
+      end
+
+      def add_test(group, id, kind, **details)
         group.add_test(id:, file_name: "#{id}.rb", kind:, **details)
-        written(entries, group).for_test(group, id).join
       end
 
       def launch_entry(reads: ["birthDate"], header: form_header,
@@ -216,6 +230,8 @@ module InfernoSuiteGenerator
         TraceEntry::Template.new(**form_header, name: "height", patch:, template_codes:, used_in:)
       end
 
+      # A Patient group whose profile marks birthDate, deceasedBoolean and the
+      # Indigenous Status extension Must Support and requires gender.
       def patient_group(searches: [{ names: ["_id"] }, { names: %w[family gender] }])
         InfernoSuiteGenerator::Generator::GroupMetadata.new(
           resource: "Patient", profile_url: AU_CORE_PATIENT, searches:, mandatory_elements: ["Patient.gender"],
@@ -224,13 +240,21 @@ module InfernoSuiteGenerator
                            extensions: [{ id: "Patient.extension:indigenousStatus", url: INDIGENOUS_STATUS }] }
         )
       end
+
+      private
+
+      def tested_by_in(dir, group)
+        path = File.join(dir, InfernoSuiteGenerator::Generator::Naming.snake_case_for_profile(group),
+                         TraceFiles::FILE_NAME)
+        YAML.safe_load_file(path)["entries"].map { |entry| entry["tested_by"] } if File.exist?(path)
+      end
     end
 
     # A temporary suite directory and a Patient group whose profile marks
     # birthDate Must Support, for tests that run the tracing the way the
     # generator does.
     module RunFixtures
-      include TracerFixtures
+      include FormFixtures
       include InfernoSuiteGenerator::GeneratorFixtures
 
       def setup

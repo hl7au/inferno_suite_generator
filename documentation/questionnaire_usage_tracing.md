@@ -270,7 +270,7 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
 
 ## Layout
 
-- `lib/inferno_suite_generator/questionnaire_usage.rb`: `QuestionnaireUsage.generate`, which traces the IG and writes the results
+- `lib/inferno_suite_generator/questionnaire_usage.rb`: `QuestionnaireUsage.generate`, which traces the IG, and `QuestionnaireUsage.write`, which writes the results
 - `lib/inferno_suite_generator/questionnaire_usage/`:
   - `tracer.rb`: finds the sources in each questionnaire and the items that use them
   - `trace_entry.rb`: one source, with a class per kind that says whether it's shown, which test makes its request and how a section names it. Add a kind of source here.
@@ -278,14 +278,16 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
   - `ast.rb`: reads FHIRPath expressions to find the variables and element paths they use
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
   - `fhir_query.rb`: one x-fhir-query, parsed once: its resource type, whether it's a read, its search parameters, `_include` values and codes
-  - `router.rb`: finds the test that makes each source's request
-  - `delivery.rb`: decides which tests list each entry and which elements count as checked
+  - `delivery.rb`: decides which tests list each entry and which elements count as checked, and finds the test that makes each source's request
   - `sections.rb`: writes every "Used in questionnaires" section a delivery decided on: the test sections, the Must Support sections and the group summaries
   - `trace_files.rb`: writes each group's `questionnaire_usage.yml`
   - `checked_elements.rb`: the rule for which element paths a group's tests check and how they are named, used by `delivery.rb`
 - `lib/inferno_suite_generator/core/test_index.rb`: finds a group's tests by kind and details
 - `lib/inferno_suite_generator/core/group_descriptions.rb`: collects and escapes the added description text
-- `test/questionnaire_usage/`: unit tests for each class, plus `generate_test.rb`, which runs the tracing the way the generator does
+- `test/questionnaire_usage/`, which tests through the two halves of `generate` and the whole of it:
+  - `reads_test.rb`: what tracing reads, through `Tracer#trace`: forms in, trace entries out
+  - `writes_test.rb`: what tracing writes, through `QuestionnaireUsage.write`: trace entries in, sections and `tested_by` out
+  - `generate_test.rb` and `generator_wiring_test.rb`: `QuestionnaireUsage.generate` end to end, the second with the real test generators
 
 ## Test
 

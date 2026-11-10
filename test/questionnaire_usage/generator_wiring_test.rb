@@ -7,7 +7,7 @@ module InfernoSuiteGenerator
     # A suite of Patient, PractitionerRole, Location and Encounter groups with
     # the metadata the real generators need, and a form that reads each of them.
     module WiringFixtures
-      include TracerFixtures
+      include FormFixtures
 
       ROLE = "http://example.org/StructureDefinition/role"
       LOCATION = "http://example.org/StructureDefinition/location"

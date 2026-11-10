@@ -37,7 +37,12 @@ module InfernoSuiteGenerator
         raise "Questionnaire usage tracing must run after the test generators: no group has a recorded test."
       end
 
-      delivery = Delivery.new(groups, Tracer.new(ig_resources, groups).trace)
+      write(Tracer.new(ig_resources, groups).trace, groups:, descriptions:, base_output_dir:)
+    end
+
+    # Writes the sections and trace files for traces: `{ profile_url => [TraceEntry] }`, from `Tracer#trace`.
+    def self.write(traces, groups:, descriptions:, base_output_dir:)
+      delivery = Delivery.new(groups, traces)
       Sections.new(delivery).write(descriptions)
       TraceFiles.new(delivery).write(base_output_dir)
     end
