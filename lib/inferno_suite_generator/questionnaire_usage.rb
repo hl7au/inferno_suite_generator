@@ -1,15 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "core/test_index"
-require_relative "questionnaire_usage/log"
 require_relative "questionnaire_usage/ast"
 require_relative "questionnaire_usage/fhir_query"
-require_relative "questionnaire_usage/item_use"
 require_relative "questionnaire_usage/trace_entry"
 require_relative "questionnaire_usage/profile_matcher"
 require_relative "questionnaire_usage/tracer"
-require_relative "questionnaire_usage/checked_elements"
-require_relative "questionnaire_usage/delivery"
 require_relative "questionnaire_usage/sections"
 
 module InfernoSuiteGenerator
@@ -37,9 +33,15 @@ module InfernoSuiteGenerator
       write(Tracer.new(ig_resources, groups).trace, groups:, descriptions:)
     end
 
+    # Prints a tracing message. Returns `nil`, so a caller can `return log(...)`.
+    def self.log(message)
+      puts "Questionnaire usage tracing: #{message}"
+      nil
+    end
+
     # Writes the sections for traces: `{ profile_url => [TraceEntry] }`, from `Tracer#trace`.
     def self.write(traces, groups:, descriptions:)
-      Sections.new(Delivery.new(groups, traces)).write(descriptions)
+      Sections.new(groups, traces).write(descriptions)
     end
   end
 end

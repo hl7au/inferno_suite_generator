@@ -1,11 +1,77 @@
 # frozen_string_literal: true
 
+require_relative "fhir_query"
+require_relative "profile_matcher"
+
 module InfernoSuiteGenerator
   module QuestionnaireUsage
+    ItemUse = Data.define(:link_id, :text, :extension, :reads)
+
+    # One form item, or the questionnaire root, reading a source through an
+    # expression. `extension` is the short name of the expression's extension,
+    # and `reads` the element paths it reads.
+    #
+    # An item use on the root, like a root `itemExtractionContext`, has no
+    # `link_id` or `text`: every item has a `linkId`, and the root's `text` is its
+    # narrative.
+    class ItemUse
+      VARIABLE = "variable"
+      ROOT_LABEL = "The whole form"
+
+      # What an item does with the source, by the short name of the extension
+      # whose expression reads it.
+      ACTIONS = {
+        "initialExpression" => "pre-fills the answer",
+        "calculatedExpression" => "calculates the answer",
+        "itemPopulationContext" => "sets the population context",
+        "enableWhenExpression" => "shows or hides the item",
+        "answerExpression" => "lists the answer options",
+        "candidateExpression" => "suggests answers",
+        "contextExpression" => "gives context for answering",
+        "itemExtractionContext" => "sets the extraction context",
+        "templateExtract" => "its answers fill the template"
+      }.freeze
+      private_constant :VARIABLE, :ROOT_LABEL, :ACTIONS
+
+      # The use of an expression on `item`: the questionnaire root or an item, as
+      # a Hash.
+      def self.of(item, extension, reads: [])
+        item_text = item["text"]
+        new(link_id: item["linkId"], text: (item_text if item_text.is_a?(String)), extension:, reads:)
+      end
+
+      # Whether an expression of this extension only defines a variable, so the
+      # items that read the variable are what use the source, and `Tracer`
+      # leaves it out.
+      def self.variable?(extension)
+        extension == VARIABLE
+      end
+
+      def initialize(link_id: nil, text: nil, extension: nil, reads: [])
+        super
+      end
+
+      # The item's text with its Markdown escaped, or its linkId when it has none.
+      # A use with neither is on the questionnaire root.
+      def label
+        words = text.to_s.split.join(" ")
+        return words.gsub(/[*_`\[\]]/) { |match| "\\#{match}" } unless words.empty?
+
+        link_id&.to_s || ROOT_LABEL
+      end
+
+      # What the use does to the item, or the extension's name when that isn't
+      # known. `nil` when it has no extension.
+      def action
+        ACTIONS.fetch(extension) { extension }
+      end
+    end
+
     # One questionnaire source traced for the groups whose profile it links to.
-    # Each kind of source is a subclass, which says whether the entry is shown,
-    # how to find the test that makes its request and how a section names it,
-    # so a new kind is one new class.
+    # Each kind of source is a subclass, which traces its sources in a form
+    # (`.trace`), and says whether the entry is shown, how to find the test that
+    # makes its request and how a section names it, so a new kind is one new
+    # class and the `Tracer::Form` method that finds its sources.
     #
     # Groups that share a source share its entry, and two entries are the same
     # only if they are the same object, so equal sources in a form stay apart.
@@ -64,6 +130,22 @@ module InfernoSuiteGenerator
 
       # A `launchContext` resource, like `%patient`.
       class LaunchContext < TraceEntry
+        # `[groups, entry]` for each type of the `launchContext` that has
+        # groups. `%name` is the resource itself, not a Bundle. A chain that
+        # picks one type, like `%user.where(resourceType = 'PractitionerRole')`,
+        # counts for that type only.
+        def self.trace(form, launch_context, matcher)
+          name = launch_context[:name]
+          source = { name:, owner: launch_context[:owner], bundle: false }
+          launch_context[:types].filter_map do |type|
+            groups = matcher.match(type, any_of_type: true, context: "#{form.label} launch context #{name}")
+            next unless groups
+
+            item_uses = form.item_uses(source) { |chain_type| [nil, type].include?(chain_type) }
+            [groups, new(**form.header, name:, item_uses:)]
+          end
+        end
+
         def request_lookups(_resource) = [["read", {}]]
 
         def heading(resource)
@@ -73,6 +155,129 @@ module InfernoSuiteGenerator
 
       # An x-fhir-query variable: a search, or a read of one resource by id.
       class Query < TraceEntry
+        # `[groups, entry]` for the query entry and each include entry of the
+        # x-fhir-query `variable` of the form.
+        def self.trace(form, variable, matcher, ig_resources)
+          Variable.new(form, variable, ig_resources).entries(matcher)
+        end
+
+        # One x-fhir-query variable of a form: a `query` entry for its own type
+        # and an `include` entry for each `_include` target type. Chains are
+        # routed by type: one that picks an included type, with
+        # `entry.resource.ofType(T)` or `entry.where(resource is T)`, goes to
+        # that include entry, anything else to the query entry.
+        #
+        # An included resource of the query's own type can't be told apart from
+        # the query's own resources by type, so chains of that type stay with the
+        # query entry, and its include entry has no item uses.
+        class Variable
+          def initialize(form, variable, ig_resources)
+            @form = form
+            @variable = variable
+            @ig_resources = ig_resources
+            @query = FhirQuery.new(variable[:expression])
+          end
+
+          def entries(matcher)
+            [query_entry(matcher), *include_targets.map { |include| include_entry(matcher, include) }].compact
+          end
+
+          private
+
+          def label
+            "#{@form.label} query #{@variable[:name]}"
+          end
+
+          def resource_type
+            @query.resource_type
+          end
+
+          # A read, like `Patient/{{%patient.id}}`, has no codes to tell profiles
+          # apart, so it links to every group of its type, like a launch context.
+          def query_entry(matcher)
+            groups = matcher.match(resource_type, codes: @query.codes, any_of_type: @query.read?, context: label)
+            return unless groups
+
+            others = other_include_types
+            [groups, entry(TraceEntry::Query, item_uses: item_uses { |type| !others.include?(type) })]
+          end
+
+          def include_entry(matcher, include)
+            target = include[:target]
+            groups = matcher.match(target, any_of_type: true, context: "#{label} include #{include[:value]}")
+            return unless groups
+
+            uses = target == resource_type ? [] : item_uses { |type| type == target }
+            [groups, entry(TraceEntry::Include, include: include[:value], item_uses: uses)]
+          end
+
+          # The item uses of the chains whose type the block takes. A read gives
+          # one resource, so its `%Name` is that resource, not a Bundle.
+          def item_uses(&)
+            source = { name: @variable[:name], owner: @variable[:owner], bundle: !@query.read? }
+            @form.item_uses(source, &)
+          end
+
+          # A trace entry of this kind: the fields shared by query and include
+          # entries, then `fields`.
+          def entry(kind, **fields)
+            kind.new(**@form.header, name: @variable[:name], query: @query, **fields)
+          end
+
+          # `{ value:, target: }` for each target type of each
+          # `_include` of the query's own type. The target is the explicit
+          # `Source:param:Target`, else the SearchParameter's `target` list, else
+          # the types the form picks out with `entry.resource.ofType(T)` or
+          # `entry.resource.where(resourceType = 'T')`.
+          def include_targets
+            @include_targets ||= include_values.flat_map { |value| targets_of(value) }
+          end
+
+          # The `_include` target types other than the query's own.
+          def other_include_types
+            include_targets.map { |include| include[:target] } - [resource_type]
+          end
+
+          def include_values
+            @query.other_includes.each do |name, value|
+              QuestionnaireUsage.log("skipping #{name}=#{value} in #{label}: " \
+                                     "only _include of #{resource_type} is traced")
+            end
+            @query.includes
+          end
+
+          def targets_of(value)
+            source, param, explicit = value.split(":", 3)
+            targets = explicit ? [explicit] : implied_targets(source, param)
+            QuestionnaireUsage.log("unresolved #{label} include #{value}: no target type") if targets.empty?
+            targets.map { |target| { value:, target: } }
+          end
+
+          def implied_targets(source, param)
+            from_param = Array(@ig_resources.search_param_by_resource_and_code(source, param)&.target)
+            from_param.any? ? from_param : of_types
+          end
+
+          # The types other than the query's own that the form names on
+          # `%Name.entry` or `%Name.entry.resource`, in the query's scope.
+          def of_types
+            name = @variable[:name]
+            fhirpath = @form.fhirpath
+            expressions.select { |expression| fhirpath.references(expression).include?(name) }
+                       .flat_map { |expression| fhirpath.paths(expression, name, bundle: true) }
+                       .flat_map { |chain| chain[:types] }.uniq - [resource_type]
+          end
+
+          # Variables are `variable` extensions, so the owners' expressions
+          # include them.
+          def expressions
+            @form.scope(@variable[:owner]).flat_map do |owner|
+              @form.expressions(owner).map { |expression| expression[:expression] }
+            end
+          end
+        end
+        private_constant :Variable
+
         # A query that fetches other resources through `_include` is shown even
         # when no item reads its own results.
         def shown?
@@ -134,6 +339,73 @@ module InfernoSuiteGenerator
       # A contained resource a `templateExtract` fills from the answers. It is
       # shown even when it is extracted from the whole form, which no item uses.
       class Template < TraceEntry
+        # `[groups, entry]` for the `templateExtract` `extract` of the form, or
+        # none when its template matches no group.
+        def self.trace(form, extract, matcher)
+          Extract.new(form, extract).entries(matcher)
+        end
+
+        # One `templateExtract` extension and the contained template it points to.
+        #
+        # A PATCH template (with the smartforms `TemplateExtractExtensionPatchRequestUrl`
+        # sub-extension) is a FHIRPath Patch `Parameters` resource. Its target type
+        # comes from the operations' `path`, or else from the request URL, like
+        # `'Condition/' + ...`. It fixes no codes.
+        class Extract
+          PATCH_URL_SUFFIX = "/TemplateExtractExtensionPatchRequestUrl"
+
+          def initialize(form, extract)
+            @form = form
+            @extract = extract
+            parts = extract[:extension]["extension"].to_a
+            @reference = parts.find { |part| part["url"] == "template" }&.dig("valueReference", "reference").to_s
+            @patch_url = parts.find { |part| part["url"].to_s.end_with?(PATCH_URL_SUFFIX) }&.dig("valueString")
+            @template = form.contained(@reference.delete_prefix("#"))
+          end
+
+          def entries(matcher)
+            label = "#{@form.label} templateExtract #{@reference} on #{@extract[:defined_at]}"
+            unless @template
+              QuestionnaireUsage.log("skipping #{label}: no contained resource #{@reference}")
+              return []
+            end
+
+            groups = matcher.match(resource_type, codes:, context: label)
+            groups ? [[groups, entry]] : []
+          end
+
+          private
+
+          def patch?
+            !@patch_url.nil?
+          end
+
+          def resource_type
+            patch? ? patch_target : @template["resourceType"]
+          end
+
+          def codes
+            patch? ? {} : ProfileMatcher::Codes.from_template(@template)
+          end
+
+          def entry
+            owner = @extract[:owner]
+            item_uses = @form.root?(owner) ? [] : [ItemUse.of(owner, "templateExtract")]
+            template_codes = codes.fetch(:code) { [] }.map do |coding|
+              [coding[:system], coding[:code]].compact.join("|")
+            end
+            TraceEntry::Template.new(**@form.header, name: @template["id"] || @reference.delete_prefix("#"),
+                                                     template_codes:, patch: patch?, item_uses:)
+          end
+
+          def patch_target
+            paths = @template["parameter"].to_a.flat_map { |parameter| parameter["part"].to_a }
+                                          .filter_map { |part| part["valueString"] if part["name"] == "path" }
+            paths.first&.split(".")&.first || @patch_url[%r{\A\s*'([A-Za-z]+)/}, 1]
+          end
+        end
+        private_constant :Extract
+
         def shown?
           true
         end

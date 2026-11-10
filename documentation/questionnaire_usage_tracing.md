@@ -176,7 +176,7 @@ flowchart TD
 
 ## How it picks a test
 
-Each trace entry of a group takes two paths: its request goes to one test (`Delivery#request_test`, through the entry's `TraceEntry#request_lookups`), and the elements its items read go to the Must Support test or the group summary (`Delivery::Placement#reads`). `Delivery` makes these decisions once, before anything is rendered, and the test sections and the group summaries both read them.
+Each trace entry of a group takes two paths: its request goes to one test (`Sections::Delivery#request_test`, through the entry's `TraceEntry#request_lookups`), and the elements its items read go to the Must Support test or the group summary (`Sections::Delivery::Placement#reads`). The delivery makes these decisions once, before anything is rendered, and the test sections and the group summaries both read them.
 
 ### The request
 
@@ -247,15 +247,12 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
 
 - `lib/inferno_suite_generator/questionnaire_usage.rb`: `QuestionnaireUsage.generate`, which traces the IG, and `QuestionnaireUsage.write`, which writes the results
 - `lib/inferno_suite_generator/questionnaire_usage/`:
-  - `tracer.rb`: finds the sources in each questionnaire and the items that use them
-  - `trace_entry.rb`: one source, with a class per kind that says whether it's shown, which test makes its request and how a section names it. Add a kind of source here.
-  - `item_use.rb`: one item reading a source: how sections name it and what it does to the item
+  - `tracer.rb`: walks each questionnaire, and finds the items that use a source, directly or through aliases
+  - `trace_entry.rb`: one source, with a class per kind that traces it in a form and says whether it's shown, which test makes its request and how a section names it, and the item uses it holds: how sections name each and what it does to the item. Add a kind of source here.
   - `ast.rb`: reads FHIRPath expressions to find the variables and element paths they use
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
   - `fhir_query.rb`: one x-fhir-query, parsed once: its resource type, whether it's a read, its search parameters, `_include` values and codes
-  - `delivery.rb`: decides which tests list each entry and which elements count as checked, and finds the test that makes each source's request
-  - `sections.rb`: writes every "Used in questionnaires" section a delivery decided on: the test sections, the Must Support sections and the group summaries
-  - `checked_elements.rb`: the rule for which element paths a group's tests check and how they are named, used by `delivery.rb`
+  - `sections.rb`: decides which tests list each entry and which elements count as checked (its private `Delivery` and `CheckedElements`), then writes every "Used in questionnaires" section: the test sections, the Must Support sections and the group summaries
 - `lib/inferno_suite_generator/core/test_index.rb`: finds a group's tests by kind and details
 - `lib/inferno_suite_generator/core/group_descriptions.rb`: collects and escapes the added description text
 - `test/questionnaire_usage/`, which tests through the two halves of `generate` and the whole of it:
