@@ -16,8 +16,7 @@ module InfernoSuiteGenerator
                    "these forms get from them."
       NOT_CHECKED = "The profile neither marks these elements Must Support nor requires them, so no test checks " \
                     "that the server returns them."
-      # By the role of the test. An include test lists entries of other groups, which can be of several
-      # profiles, so its intro names none.
+      # An include test lists entries of other groups, which can be of several profiles, so its intro names none.
       TEST_INTROS = {
         read: "These questionnaires in the IG read %<resource>s resources as this test does: by id, or as the " \
               "resource a form is opened for. #{GROUP_READS}",
@@ -29,7 +28,6 @@ module InfernoSuiteGenerator
         update: "These questionnaires in the IG update existing %<resource>s resources from their answers."
       }.freeze
 
-      # trace: a Trace, from `Tracer#trace`.
       def initialize(groups, trace)
         @delivery = Delivery.new(groups, trace)
       end
@@ -281,7 +279,7 @@ module InfernoSuiteGenerator
       # Finds the Destinations that list entries: an entry's request test and a group's Must Support test. Only it
       # knows the generator's test kinds, which `Generator::TestIndex` finds tests by.
       class Destinations
-        # What each kind of test does, as the sections say it; a patch test reads as an update.
+        # The role of each test kind, which picks its section intro.
         ROLES = { "read" => :read, "search" => :search, "include" => :include, "create" => :create,
                   "patch" => :update, "update" => :update, "must_support" => :must_support }.freeze
         # A FHIRPath Patch goes to the patch test, then the update test, not the one that creates a new resource
@@ -313,8 +311,7 @@ module InfernoSuiteGenerator
         end
 
         # `[kind, details]` lookups for `TestIndex#find`, tried in order; `resource` is the type of the entry's group.
-        # An `_include` goes to the include test for that type, preferably the one that searches by the same
-        # parameters. The other requests' lookups are in LOOKUPS.
+        # An `_include` goes to the include test for that type, preferably the one that searches by the same parameters.
         def lookups(entry, resource)
           case (request = entry.request)
           when nil then []

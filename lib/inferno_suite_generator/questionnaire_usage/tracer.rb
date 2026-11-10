@@ -121,7 +121,6 @@ module InfernoSuiteGenerator
           end
         end
 
-        # The accepted ChainReads of the expression from the names visible at `node`.
         def reads_of(expression, node, accept: @accept)
           @names.select { |name| @form.covers?(name.owner, node) }
                 .flat_map { |name| @form.fhirpath.reads(expression, name.name, from: name.start) }

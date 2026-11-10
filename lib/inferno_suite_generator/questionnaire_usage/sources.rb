@@ -18,7 +18,6 @@ module InfernoSuiteGenerator
           @launch_context = launch_context
         end
 
-        # A pair per type that has groups.
         def entries(matcher)
           name = @launch_context[:name]
           source = { name:, owner: @launch_context[:owner], start: Ast::Start.resource }
@@ -76,7 +75,7 @@ module InfernoSuiteGenerator
           [groups, entry(TraceEntry::Include, include: include[:value], item_uses: uses)]
         end
 
-        # The uses of the chains whose type the block takes; a read's `%Name` is one resource, not a Bundle.
+        # A read's `%Name` is one resource, not a Bundle.
         def item_uses(&)
           start = @query.read? ? Ast::Start.resource : Ast::Start.bundle
           @form.item_uses({ name: @variable[:name], owner: @variable[:owner], start: }, &)
@@ -147,7 +146,6 @@ module InfernoSuiteGenerator
           @template = form.contained(@reference.delete_prefix("#"))
         end
 
-        # One pair when the template matches groups.
         def entries(matcher)
           label = "#{@form.label} templateExtract #{@reference} on #{@extract[:defined_at]}"
           unless @template

@@ -179,7 +179,7 @@ module InfernoSuiteGenerator
       # A contained resource a `templateExtract` fills from the answers. It is
       # shown even when it is extracted from the whole form, which no item uses.
       class Template < TraceEntry
-        # template_codes: the template's codes as `system|code`; patch: whether it is a FHIRPath Patch.
+        # template_codes: the template's codes as `system|code`.
         def initialize(patch:, template_codes: [], **entry)
           super(**entry)
           @patch = patch

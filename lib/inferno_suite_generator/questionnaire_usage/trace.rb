@@ -9,7 +9,7 @@ module InfernoSuiteGenerator
         @groups = {}.compare_by_identity
       end
 
-      # Links the entry to the groups; adding it again links more groups. Returns the Trace.
+      # Links the entry to the groups; adding it again links more groups.
       def add(groups, entry)
         linked = (@groups[entry] ||= [])
         (groups - linked).each do |group|
@@ -19,7 +19,6 @@ module InfernoSuiteGenerator
         self
       end
 
-      # The entries of the group's profile, in trace order.
       def entries(group)
         @entries.fetch(group.profile_url) { [] }
       end

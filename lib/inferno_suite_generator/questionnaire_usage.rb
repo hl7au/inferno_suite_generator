@@ -41,7 +41,6 @@ module InfernoSuiteGenerator
       nil
     end
 
-    # Writes the sections for a Trace, from `Tracer#trace`.
     def self.write(trace, groups:, descriptions:)
       Sections.new(groups, trace).write(descriptions)
     end

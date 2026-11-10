@@ -21,7 +21,6 @@ module InfernoSuiteGenerator
           type || (chain[:type] if prefix == "")
         end
 
-        # The paths a chain reads, after the prefix; none when the prefix is unknown.
         def paths_of(chain)
           return [] unless prefix
 
@@ -43,8 +42,8 @@ module InfernoSuiteGenerator
 
       ChainRead = Data.define(:type, :types, :paths, :alias_start)
 
-      # One chain from a name, read from a Start: the resource type it reads, every type a `where` branch names,
-      # the element paths it reads and the Start of a variable it defines.
+      # One chain from a name, read from a Start. `types` holds every type a `where` branch names, and
+      # `alias_start` is where a variable the chain defines starts.
       class ChainRead
         def self.of(chain, start)
           new(type: start.type_of(chain), types: chain[:types], paths: start.paths_of(chain),
