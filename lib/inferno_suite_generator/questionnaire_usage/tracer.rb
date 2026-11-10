@@ -102,39 +102,36 @@ module InfernoSuiteGenerator
         # A read, like `Patient/{{%patient.id}}`, has no codes to tell profiles
         # apart, so it links to every group of its type, like a launch context.
         def query_entry(matcher)
-          result = matcher.match(resource_type, codes: @query.codes, any_of_type: @query.read?, context: label)
-          return unless result
+          groups = matcher.match(resource_type, codes: @query.codes, any_of_type: @query.read?, context: label)
+          return unless groups
 
           others = other_include_types
-          used_in, elements_read = item_uses { |type| !others.include?(type) }
-          [result[:groups], entry(TraceEntry::Query, matched_by: result[:matched_by], elements_read:, used_in:)]
+          [groups, entry(TraceEntry::Query, item_uses: item_uses { |type| !others.include?(type) })]
         end
 
         def include_entry(matcher, include)
           target = include[:target]
-          result = matcher.match(target, any_of_type: true, context: "#{label} include #{include[:value]}")
-          return unless result
+          groups = matcher.match(target, any_of_type: true, context: "#{label} include #{include[:value]}")
+          return unless groups
 
-          used_in, elements_read = target == resource_type ? [[], []] : item_uses { |type| type == target }
-          [result[:groups], entry(TraceEntry::Include, include: include[:value], target_by: include[:target_by],
-                                                       matched_by: result[:matched_by], elements_read:, used_in:)]
+          uses = target == resource_type ? [] : item_uses { |type| type == target }
+          [groups, entry(TraceEntry::Include, include: include[:value], item_uses: uses)]
         end
 
-        # `[used_in, elements_read]` for the chains whose type the block takes.
-        # A read gives one resource, so its `%Name` is that resource, not a Bundle.
+        # The item uses of the chains whose type the block takes. A read gives
+        # one resource, so its `%Name` is that resource, not a Bundle.
         def item_uses(&accept)
           source = { name: @variable[:name], owner: @variable[:owner], bundle: !@query.read? }
           ItemUses.new(@form, source, accept).call
         end
 
         # A trace entry of this kind: the fields shared by query and include
-        # entries, then `fields`. `read: true` marks a read.
+        # entries, then `fields`.
         def entry(kind, **fields)
-          kind.new(**@form.header, name: @variable[:name], defined_at: @variable[:defined_at],
-                                   query: @query, **(@query.read? ? { read: true } : {}), **fields)
+          kind.new(**@form.header, name: @variable[:name], query: @query, **fields)
         end
 
-        # `{ value:, target:, target_by: }` for each target type of each
+        # `{ value:, target: }` for each target type of each
         # `_include` of the query's own type. The target is the explicit
         # `Source:param:Target`, else the SearchParameter's `target` list, else
         # the types the form picks out with `entry.resource.ofType(T)` or
@@ -157,14 +154,14 @@ module InfernoSuiteGenerator
 
         def targets_of(value)
           source, param, explicit = value.split(":", 3)
-          targets, target_by = explicit ? [[explicit], "explicit"] : implied_targets(source, param)
+          targets = explicit ? [explicit] : implied_targets(source, param)
           QuestionnaireUsage.log("unresolved #{label} include #{value}: no target type") if targets.empty?
-          targets.map { |target| { value:, target:, target_by: } }
+          targets.map { |target| { value:, target: } }
         end
 
         def implied_targets(source, param)
           from_param = Array(@ig_resources.search_param_by_resource_and_code(source, param)&.target)
-          from_param.any? ? [from_param, "search_parameter"] : [of_types, "of_type"]
+          from_param.any? ? from_param : of_types
         end
 
         # The types other than the query's own that the form names on
@@ -199,19 +196,18 @@ module InfernoSuiteGenerator
         def entries(matcher)
           name = @launch_context[:name]
           @launch_context[:types].filter_map do |type|
-            result = matcher.match(type, any_of_type: true, context: "#{@form.label} launch context #{name}")
-            [result[:groups], entry(type, result[:matched_by])] if result
+            groups = matcher.match(type, any_of_type: true, context: "#{@form.label} launch context #{name}")
+            [groups, entry(type)] if groups
           end
         end
 
         private
 
-        def entry(type, matched_by)
+        def entry(type)
           name = @launch_context[:name]
           source = { name:, owner: @launch_context[:owner], bundle: false }
-          used_in, elements_read = ItemUses.new(@form, source, ->(chain_type) { [nil, type].include?(chain_type) }).call
-          TraceEntry::LaunchContext.new(**@form.header, name:, defined_at: @launch_context[:defined_at], matched_by:,
-                                                        elements_read:, used_in:)
+          item_uses = ItemUses.new(@form, source, ->(chain_type) { [nil, type].include?(chain_type) }).call
+          TraceEntry::LaunchContext.new(**@form.header, name:, item_uses:)
         end
       end
 
@@ -240,8 +236,8 @@ module InfernoSuiteGenerator
             return []
           end
 
-          result = matcher.match(resource_type, codes:, context: label)
-          result ? [[result[:groups], entry(result[:matched_by])]] : []
+          groups = matcher.match(resource_type, codes:, context: label)
+          groups ? [[groups, entry]] : []
         end
 
         private
@@ -258,13 +254,12 @@ module InfernoSuiteGenerator
           patch? ? {} : ProfileMatcher::Codes.from_template(@template)
         end
 
-        def entry(matched_by)
+        def entry
           owner = @extract[:owner]
-          used_in = @form.root?(owner) ? [] : [ItemUse.of(owner, "templateExtract")]
+          item_uses = @form.root?(owner) ? [] : [ItemUse.of(owner, "templateExtract")]
           template_codes = codes.fetch(:code) { [] }.map { |coding| [coding[:system], coding[:code]].compact.join("|") }
           TraceEntry::Template.new(**@form.header, name: @template["id"] || @reference.delete_prefix("#"),
-                                                   defined_at: @extract[:defined_at], template_codes:, patch: patch?,
-                                                   matched_by:, used_in:)
+                                                   template_codes:, patch: patch?, item_uses:)
         end
 
         def patch_target
@@ -285,23 +280,21 @@ module InfernoSuiteGenerator
       # entries, with the prefix `""`. An alias of a chain that ends at Bundle
       # entries, like `%q.entry.where(resource is Condition)`, is entries too.
       class ItemUses
-        Name = Struct.new(:name, :owner, :bundle, :type, :prefix, :alias, keyword_init: true)
+        Name = Struct.new(:name, :owner, :bundle, :type, :prefix, keyword_init: true)
 
         # `source` is `{ name:, owner:, bundle: }`. `bundle: true` for a query,
         # whose `%Name` is a Bundle. `Ast::ChainPath` lists the values.
         def initialize(form, source, accept)
           @form = form
           @accept = accept
-          @source = Name.new(**source, type: nil, prefix: "", alias: false)
+          @source = Name.new(**source, type: nil, prefix: "")
           @names = [@source]
-          @paths = []
         end
 
-        # `[used_in, elements_read]`
+        # The ItemUses, in document order.
         def call
           resolve_aliases
-          used_in = @form.scope(@source.owner).flat_map { |owner| uses_on(owner) }
-          [used_in.uniq, @paths.reject(&:empty?).uniq]
+          @form.scope(@source.owner).flat_map { |owner| uses_on(owner) }.uniq
         end
 
         private
@@ -320,7 +313,6 @@ module InfernoSuiteGenerator
           return add_mixed_alias(variable) if reads.empty?
 
           name, chain = reads.first
-          @paths.concat(reads.flat_map { |read| read_paths(*read) })
           add_name(variable, chain, type: type_of(name, chain), prefix: chain[:stopped] ? nil : read_path(name, chain))
         end
 
@@ -341,7 +333,7 @@ module InfernoSuiteGenerator
 
         def add_name(variable, chain, type:, prefix:)
           @names << Name.new(name: variable[:name], owner: variable[:owner], bundle: chain[:entries] ? :entries : false,
-                             alias: true, type:, prefix:)
+                             type:, prefix:)
           true
         end
 
@@ -349,31 +341,18 @@ module InfernoSuiteGenerator
           name.prefix == "" && chain[:path].empty? && !chain[:stopped]
         end
 
-        # One ItemUse per expression that reads the source. `via` names the alias
-        # it went through, and is left out when the expression reads the source
-        # directly. `reads` lists the element paths the expression reads, and is
-        # left out when it reads none.
+        # One ItemUse per expression that reads the source, with the element
+        # paths it reads. A variable is not an item use: the items that read it are.
         def uses_on(item)
-          use_expressions(item).filter_map do |expression|
+          @form.expressions(item).filter_map do |expression|
+            extension = expression[:extension]
+            next if ItemUse.variable?(extension)
+
             reads = reads_of(expression[:expression], item)
             next if reads.empty?
 
-            paths = reads.flat_map { |read| read_paths(*read) }
-            @paths.concat(paths)
-            ItemUse.of(item, expression[:extension], via: via(reads.map(&:first)), reads: paths.reject(&:empty?).uniq)
+            ItemUse.of(item, extension, reads: reads.flat_map { |read| read_paths(*read) }.reject(&:empty?).uniq)
           end
-        end
-
-        # A root variable is not an item use: the items that read it are.
-        def use_expressions(item)
-          expressions = @form.expressions(item)
-          return expressions unless @form.root?(item)
-
-          expressions.reject { |expression| ItemUse.variable?(expression[:extension]) }
-        end
-
-        def via(names)
-          names.first.name if names.all?(&:alias)
         end
 
         # `[name, chain]` for each accepted chain in the expression from a name
@@ -437,7 +416,7 @@ module InfernoSuiteGenerator
           variables_in(QUERY)
         end
 
-        # `{ name:, types:, owner:, defined_at: }` for each `launchContext`
+        # `{ name:, types:, owner: }` for each `launchContext`
         # extension on the root. The name is in `valueCoding.code`, or in
         # `valueId` in older SDC versions. Each `type` sub-extension adds a type.
         def launch_contexts
@@ -507,14 +486,13 @@ module InfernoSuiteGenerator
           name_part = parts.find { |part| part["url"] == "name" } || {}
           name = name_part.dig("valueCoding", "code") || name_part["valueId"]
           types = parts.select { |part| part["url"] == "type" }.filter_map { |part| part["valueCode"] }
-          { name:, types:, owner: @questionnaire, defined_at: "root" } if name
+          { name:, types:, owner: @questionnaire } if name
         end
 
         def variables_in(language)
           owners.flat_map do |owner|
             variables(owner).select { |expression| expression["language"] == language }.map do |expression|
-              { name: expression["name"], expression: expression["expression"].to_s, owner:,
-                defined_at: defined_at(owner) }
+              { name: expression["name"], expression: expression["expression"].to_s, owner: }
             end
           end
         end

@@ -180,7 +180,7 @@ module InfernoSuiteGenerator
       return unless config.questionnaire_usage_tracing?
 
       groups = ig_metadata.groups.reject { |group| config.exclude_resource?(group.profile_url, group.resource) }
-      QuestionnaireUsage.generate(ig_resources:, groups:, descriptions: group_descriptions, base_output_dir:)
+      QuestionnaireUsage.generate(ig_resources:, groups:, descriptions: group_descriptions)
     end
 
     def generate_groups

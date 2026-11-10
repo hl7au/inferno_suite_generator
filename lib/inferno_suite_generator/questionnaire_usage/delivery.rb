@@ -7,7 +7,7 @@ module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Decides which tests list each trace entry and which elements its items
     # read count as checked, once and before anything is rendered, so the test
-    # sections, the group summaries and the trace files can't disagree.
+    # sections and the group summaries can't disagree.
     class Delivery
       # A test that lists an entry. `label` names the test in the group summary.
       Destination = Data.define(:group, :test_id, :kind, :label)
@@ -29,11 +29,6 @@ module InfernoSuiteGenerator
       Placement = Data.define(:group, :entry, :request, :must_support, :reads, :must_support_reads) do
         def shown?
           entry.shown?
-        end
-
-        # The tests whose descriptions list the entry.
-        def tests
-          [request, must_support].compact
         end
       end
 

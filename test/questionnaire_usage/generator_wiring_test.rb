@@ -125,30 +125,30 @@ module InfernoSuiteGenerator
       READ = "example_v100_patient_read_test"
 
       def test_a_launch_context_goes_to_the_generated_read_and_must_support_tests
-        assert_equal [READ, "example_v100_patient_must_support_test"], tested_by("patient", "launch_context", "patient")
+        assert_equal [READ], tested_by("**Launch context patient**")
+        assert_includes sections.fetch("example_v100_patient_must_support_test"), "**birthDate**: dob"
       end
 
       def test_a_search_goes_to_the_generated_search_test
-        assert_equal ["example_v100_patient_family_search_test"], tested_by("patient", "query", "Searched")
+        assert_equal ["example_v100_patient_family_search_test"], tested_by("**Query Searched**")
       end
 
       def test_an_include_goes_to_the_generated_include_test_of_the_searching_group
         assert_equal ["example_v100_practitioner_role_practitioner_include_practitioner_search_test"],
-                     tested_by("location", "include", "Roles")
+                     tested_by("**Query Roles**: fetches Location resources")
       end
 
       def test_a_template_goes_to_the_generated_create_test
-        assert_equal ["example_v100_patient_create_test"], tested_by("patient", "template_extract", "new-patient")
+        assert_equal ["example_v100_patient_create_test"], tested_by("**Extraction template new-patient**")
       end
 
       def test_a_fhirpath_patch_template_goes_to_the_generated_patch_test
         assert_equal ["example_v100_patient_fhirpath_json_patch_test"],
-                     tested_by("patient", "template_extract", "patch-patient")
+                     tested_by("**Extraction template patch-patient**")
       end
 
       def test_a_fhirpath_patch_template_without_a_patch_test_goes_to_the_plain_update_test
-        assert_equal ["example_v100_encounter_update_update_test"],
-                     tested_by("encounter", "template_extract", "patch-encounter")
+        assert_equal ["example_v100_encounter_update_update_test"], tested_by("**Extraction template patch-encounter**")
       end
 
       def test_the_group_file_lists_the_section_in_the_generated_read_test
@@ -170,12 +170,24 @@ module InfernoSuiteGenerator
 
       private
 
-      def tested_by(directory, source, name)
-        with_config_keeper(wiring_config) { generator.generate }
-        entry = trace_entries(File.join(@dir, directory)).find do |candidate|
-          candidate.values_at("source", "name") == [source, name]
+      # The ids of the generated tests whose section lists the source with this heading.
+      def tested_by(heading)
+        sections.select { |_id, section| section.include?(heading) }.keys
+      end
+
+      # `{ test id => section }` for each generated test that got a section.
+      def sections
+        @sections ||= with_config_keeper(wiring_config) { sections_of(generator.tap(&:generate)) }
+      end
+
+      def sections_of(generated)
+        descriptions = generated.group_descriptions
+        generated.ig_metadata.groups.each_with_object({}) do |group, found|
+          group.tests.to_a.each do |test|
+            section = descriptions.for_test(group, test[:id]).join
+            found[test[:id].to_s] = section unless section.empty?
+          end
         end
-        entry.fetch("tested_by")
       end
 
       # A generator over the suite that skips loading the IG and writing the suite.

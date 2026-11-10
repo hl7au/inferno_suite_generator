@@ -4,31 +4,16 @@ require_relative "support"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Runs the tracing the way the generator does and checks what it writes to
-    # each group's trace file and adds to its description.
+    # Runs the tracing the way the generator does and checks what it adds to
+    # the descriptions.
     class GenerateTest < Minitest::Test
       include RunFixtures
 
-      def test_a_traced_group_gets_its_entries_in_a_trace_file
-        run_tracing
-
-        entries = trace_entries(File.join(@dir, "patient"))
-
-        assert_equal(["launch_context"], entries.map { |entry| entry["source"] })
-        assert_equal ["birthDate"], entries.first["elements_read"]
-        assert_equal [{ "link_id" => "dob", "text" => "Date of birth", "extension" => "initialExpression",
-                        "reads" => ["birthDate"] }],
-                     entries.first["used_in"]
-      end
-
-      def test_entries_name_the_tests_that_list_them
+      def test_the_tests_that_make_the_request_and_check_the_elements_get_a_section
         add_test(@group, "patient_read_test", "read")
         add_test(@group, "patient_must_support_test", "must_support")
-        run_tracing
 
-        entries = trace_entries(File.join(@dir, "patient"))
-
-        assert_equal %w[patient_read_test patient_must_support_test], entries.first["tested_by"]
+        assert_equal %w[patient_read_test patient_must_support_test], tests_with_sections(run_tracing, [@group])
       end
 
       def test_a_traced_group_gets_a_used_in_questionnaires_section
@@ -45,7 +30,7 @@ module InfernoSuiteGenerator
         descriptions = run_tracing(questionnaire)
 
         assert_empty descriptions.for(@group)
-        refute_path_exists File.join(@dir, "patient", QuestionnaireUsage::TraceFiles::FILE_NAME)
+        assert_empty tests_with_sections(descriptions, [@group])
       end
 
       def test_the_generated_group_file_is_valid_ruby_with_the_section
@@ -152,14 +137,16 @@ module InfernoSuiteGenerator
         assert_includes section.first, "**Note**: pre-fills the answer; reads note (not checked)"
       end
 
-      def test_the_must_support_test_and_the_trace_files_agree_with_a_shared_include
+      def test_the_must_support_test_of_the_group_that_checks_an_element_lists_a_shared_include
         section = trace_shared_include do |descriptions, _base, checking|
           descriptions.for_test(checking, "checking_must_support")
         end
+        tests = trace_shared_include do |descriptions, base, checking, unchecking|
+          tests_with_sections(descriptions, [base, unchecking, checking])
+        end
 
         assert_includes section.first, "**status**: Status"
-        assert_equal [["base_include"]], tested_by("obs_unchecking")
-        assert_equal [%w[base_include checking_must_support]], tested_by("obs_checking")
+        assert_equal %w[base_include checking_must_support], tests
       end
 
       def test_the_group_summary_agrees_with_the_include_test_on_a_shared_include
@@ -174,10 +161,6 @@ module InfernoSuiteGenerator
       end
 
       private
-
-      def tested_by(directory)
-        trace_entries(File.join(@dir, directory)).map { |entry| entry["tested_by"] }
-      end
 
       # Traces an `_include` that links to two Observation groups and returns
       # what the block reads from the descriptions.

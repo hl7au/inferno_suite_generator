@@ -85,17 +85,41 @@ module InfernoSuiteGenerator
     # way `Tracer#trace` does for the generator.
     module FormFixtures
       include SuiteFixtures
+      include InfernoSuiteGenerator::GeneratorFixtures
 
       FORM_URL = "http://www.health.gov.au/assessments/GPChronicConditionManagementPlan"
       FORM_TITLE = "GP Chronic Condition Management Plan"
       HEIGHT_QUERY = "Observation?code=8302-2&_sort=-date&patient={{%patient.id}}"
       WEIGHT_QUERY = "Observation?code=29463-7&_sort=-date&patient={{%patient.id}}"
 
-      # `{ profile_url => [trace file fields] }`.
+      # `{ profile_url => [TraceEntry] }`.
       def trace(form, profiles: observation_profiles, resources: [])
         groups, ig_resources = suite_for(profiles)
         [FHIR::Questionnaire.new(form), *resources].each { |resource| ig_resources.add(resource) }
-        Tracer.new(ig_resources, groups).trace.transform_values { |entries| entries.map(&:to_h) }
+        Tracer.new(ig_resources, groups).trace
+      end
+
+      # What a section shows of an entry traced for a group of this resource type.
+      def described(entry, resource)
+        { heading: entry.heading(resource), request: entry.query&.to_s, item_uses: entry.item_uses }
+      end
+
+      def link_ids(entry)
+        entry.item_uses.map(&:link_id)
+      end
+
+      # The element paths the entry's items read.
+      def reads(entry)
+        entry.item_uses.flat_map(&:reads).uniq
+      end
+
+      # The ids of the groups' tests whose descriptions got a section, in group order.
+      def tests_with_sections(descriptions, groups)
+        with_config_keeper do
+          groups.flat_map do |group|
+            group.tests.to_a.map { |test| test[:id].to_s }.select { |id| descriptions.for_test(group, id).any? }
+          end
+        end
       end
 
       def questionnaire(extension: [], item: [], contained: [])
@@ -109,17 +133,9 @@ module InfernoSuiteGenerator
           "extension" => extensions, "item" => children }
       end
 
-      # The questionnaire fields every trace entry starts with.
+      # The questionnaire fields of every trace entry the write tests build.
       def form_header
         { questionnaire_url: FORM_URL, questionnaire_version: "0.1.0", questionnaire_title: FORM_TITLE }
-      end
-
-      def link_ids(entry)
-        entry[:used_in].map { |use| use[:link_id] }
-      end
-
-      def vias(entry)
-        entry[:used_in].map { |use| use[:via] }
       end
 
       def query_variable(name, query)
@@ -155,26 +171,20 @@ module InfernoSuiteGenerator
     # `QuestionnaireUsage.write` does for the generator.
     module WriteFixtures
       include FormFixtures
-      include InfernoSuiteGenerator::GeneratorFixtures
 
       INDIGENOUS_STATUS = "http://hl7.org.au/fhir/StructureDefinition/indigenous-status"
       PRONOUNS = "http://hl7.org/fhir/StructureDefinition/individual-pronouns"
       LOCATION_QUERY = "PractitionerRole?_id={{%role.id}}&_include=PractitionerRole:location"
 
-      # What `QuestionnaireUsage.write` wrote: the descriptions, and for each
-      # group the `tested_by` of each entry in its trace file, `nil` when it has
-      # no trace file.
+      # What `QuestionnaireUsage.write` wrote: the descriptions, and the ids of
+      # the tests that got a section, in group order.
       Written = Data.define(:descriptions, :tested_by)
 
       # traces: `{ profile_url => [TraceEntry] }`.
       def write(traces, groups)
-        Dir.mktmpdir do |dir|
-          with_config_keeper do
-            descriptions = InfernoSuiteGenerator::Generator::GroupDescriptions.new
-            QuestionnaireUsage.write(traces, groups:, descriptions:, base_output_dir: dir)
-            Written.new(descriptions:, tested_by: groups.to_h { |group| [group, tested_by_in(dir, group)] })
-          end
-        end
+        descriptions = InfernoSuiteGenerator::Generator::GroupDescriptions.new
+        with_config_keeper { QuestionnaireUsage.write(traces, groups:, descriptions:) }
+        Written.new(descriptions:, tested_by: tests_with_sections(descriptions, groups))
       end
 
       # What is written for entries traced for the group alone.
@@ -194,9 +204,9 @@ module InfernoSuiteGenerator
         written(entries, group).descriptions.for_test(group, "patient_#{kind}").join
       end
 
-      # The ids of the tests the group's trace file says list the entry.
+      # The ids of the tests that list the entry.
       def tested_by(entry, group: patient_group)
-        written([entry], group).tested_by.fetch(group).sole
+        written([entry], group).tested_by
       end
 
       def add_test(group, id, kind, **details)
@@ -204,30 +214,26 @@ module InfernoSuiteGenerator
       end
 
       def launch_entry(reads: ["birthDate"], header: form_header,
-                       used_in: [ItemUse.new(link_id: "dob", text: "Date of birth", extension: "initialExpression",
-                                             reads:)])
-        TraceEntry::LaunchContext.new(**header, name: "patient", used_in:)
-      end
-
-      def variable_use
-        ItemUse.new(link_id: "group", text: "Group", extension: "variable", reads: ["name"])
+                       item_uses: [ItemUse.new(link_id: "dob", text: "Date of birth", extension: "initialExpression",
+                                               reads:)])
+        TraceEntry::LaunchContext.new(**header, name: "patient", item_uses:)
       end
 
       def name_use
         ItemUse.new(link_id: "name", text: "Name", extension: "initialExpression")
       end
 
-      def query_entry(query, used_in: [name_use], **fields)
-        TraceEntry::Query.new(**form_header, name: "Patients", query: FhirQuery.new(query), used_in:, **fields)
+      def query_entry(query, item_uses: [name_use], **fields)
+        TraceEntry::Query.new(**form_header, name: "Patients", query: FhirQuery.new(query), item_uses:, **fields)
       end
 
-      def include_entry(query, used_in: [name_use], **fields)
-        TraceEntry::Include.new(**form_header, name: "Roles", query: FhirQuery.new(query), used_in:, **fields)
+      def include_entry(query, item_uses: [name_use], **fields)
+        TraceEntry::Include.new(**form_header, name: "Roles", query: FhirQuery.new(query), item_uses:, **fields)
       end
 
       def template_entry(patch:, template_codes: [],
-                         used_in: [ItemUse.new(link_id: "height", text: "Height", extension: "templateExtract")])
-        TraceEntry::Template.new(**form_header, name: "height", patch:, template_codes:, used_in:)
+                         item_uses: [ItemUse.new(link_id: "height", text: "Height", extension: "templateExtract")])
+        TraceEntry::Template.new(**form_header, name: "height", patch:, template_codes:, item_uses:)
       end
 
       # A Patient group whose profile marks birthDate, deceasedBoolean and the
@@ -240,22 +246,13 @@ module InfernoSuiteGenerator
                            extensions: [{ id: "Patient.extension:indigenousStatus", url: INDIGENOUS_STATUS }] }
         )
       end
-
-      private
-
-      def tested_by_in(dir, group)
-        path = File.join(dir, InfernoSuiteGenerator::Generator::Naming.snake_case_for_profile(group),
-                         TraceFiles::FILE_NAME)
-        YAML.safe_load_file(path)["entries"].map { |entry| entry["tested_by"] } if File.exist?(path)
-      end
     end
 
-    # A temporary suite directory and a Patient group whose profile marks
-    # birthDate Must Support, for tests that run the tracing the way the
-    # generator does.
+    # A temporary suite directory for the group files and a Patient group whose
+    # profile marks birthDate Must Support, for tests that run the tracing the
+    # way the generator does.
     module RunFixtures
       include FormFixtures
-      include InfernoSuiteGenerator::GeneratorFixtures
 
       def setup
         @dir = Dir.mktmpdir
@@ -274,18 +271,13 @@ module InfernoSuiteGenerator
         ig_resources.add(FHIR::Questionnaire.new(form))
         InfernoSuiteGenerator::Generator::GroupDescriptions.new.tap do |descriptions|
           with_config_keeper do
-            QuestionnaireUsage.generate(ig_resources:, groups:, descriptions:, base_output_dir: @dir)
+            QuestionnaireUsage.generate(ig_resources:, groups:, descriptions:)
           end
         end
       end
 
       def add_test(group, id, kind, **details)
         group.add_test(id:, file_name: "#{id}.rb", kind:, **details)
-      end
-
-      # The entries in the group directory's trace file.
-      def trace_entries(directory)
-        YAML.safe_load_file(File.join(directory, QuestionnaireUsage::TraceFiles::FILE_NAME))["entries"]
       end
 
       # Writes the Patient group file with the descriptions and returns its path.

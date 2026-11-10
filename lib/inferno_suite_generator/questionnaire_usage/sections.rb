@@ -175,7 +175,7 @@ module InfernoSuiteGenerator
           items = uses.group_by(&:link_id).values
           more = items.size - MAX_ITEM_LINES
           [*items.first(MAX_ITEM_LINES).map { |item| item_line(item, reads) },
-           ("and #{more} more items, listed in questionnaire_usage.yml" if more.positive?)].compact
+           ("and #{more} more items" if more.positive?)].compact
         end
 
         # reads: the entry's `Delivery::Placement#reads`.

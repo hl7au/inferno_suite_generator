@@ -4,8 +4,7 @@ require_relative "support"
 require "minitest/mock"
 
 # What tracing reads from the questionnaires, through `Tracer#trace`: a form
-# goes in, and the trace entries of each profile come out with the fields of
-# the trace file.
+# goes in, and the trace entries of each profile come out.
 module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Verifies `Tracer` finds the x-fhir-query variables that link a
@@ -20,15 +19,17 @@ module InfernoSuiteGenerator
                       expression("initialExpression", "%ObsBodyHeight.entry.resource.first().value.value"))]
         )
 
-        assert_equal({ BODY_HEIGHT => [height_entry] }, trace(form))
+        traces = trace(form)
+
+        assert_equal [BODY_HEIGHT], traces.keys
+        assert_equal height_entry, described(traces[BODY_HEIGHT].sole, "Observation")
       end
 
       def test_an_item_variable_is_used_only_within_that_item
         entry = trace(weight_in_a_group_form)[BODY_WEIGHT].first
 
-        assert_equal "vitals", entry[:defined_at]
         assert_equal ["weight"], link_ids(entry)
-        assert_equal ["value"], entry[:elements_read]
+        assert_equal ["value"], reads(entry)
       end
 
       def test_a_variable_that_no_item_uses_still_gets_an_entry
@@ -36,8 +37,7 @@ module InfernoSuiteGenerator
                              item: [item("height", "Height")])
         entry = trace(form)[BODY_HEIGHT].first
 
-        assert_empty entry[:used_in]
-        assert_empty entry[:elements_read]
+        assert_empty entry.item_uses
       end
 
       def test_a_read_links_to_every_group_of_its_type_and_reads_the_resource_itself
@@ -46,8 +46,8 @@ module InfernoSuiteGenerator
         entry = traces[AU_CORE_PATIENT].first
 
         assert_equal [AU_CORE_PATIENT, AU_BASE_PATIENT], traces.keys
-        assert_equal({ read: true, matched_by: "resource_type", elements_read: ["birthDate"] },
-                     entry.slice(:read, :matched_by, :elements_read))
+        assert_equal "**Query PatientRead**: reads one Patient by id", entry.heading("Patient")
+        assert_equal ["birthDate"], reads(entry)
         assert_equal ["dob"], link_ids(entry)
       end
 
@@ -71,12 +71,9 @@ module InfernoSuiteGenerator
       private
 
       def height_entry
-        {
-          source: "query", **form_header,
-          name: "ObsBodyHeight", defined_at: "root", query: HEIGHT_QUERY, matched_by: "code",
-          elements_read: ["value.value"],
-          used_in: [{ link_id: "height", text: "Height", extension: "initialExpression", reads: ["value.value"] }]
-        }
+        { heading: "**Query ObsBodyHeight**: searches Observation resources", request: HEIGHT_QUERY,
+          item_uses: [ItemUse.new(link_id: "height", text: "Height", extension: "initialExpression",
+                                  reads: ["value.value"])] }
       end
 
       # A read of the patient, so `%PatientRead` is the Patient, not a Bundle.
@@ -114,31 +111,30 @@ module InfernoSuiteGenerator
       def test_an_include_entry_on_the_target_group_from_the_search_parameter
         traces = trace(medications_form, profiles: suite_profiles, resources: [medication_param])
 
-        assert_equal [medication_entry], traces[MEDICATION]
+        assert_equal medication_entry, described(traces[MEDICATION].sole, "Medication")
       end
 
       def test_a_chain_without_of_type_in_the_same_item_goes_to_the_query_entry
         traces = trace(medications_form, profiles: suite_profiles, resources: [medication_param])
         entry = traces[MEDICATION_STATEMENT].first
 
-        assert_equal "query", entry[:source]
+        assert_kind_of TraceEntry::Query, entry
         assert_equal ["medications"], link_ids(entry)
-        assert_equal ["medication", "medication.reference"], entry[:elements_read]
+        assert_equal ["medication", "medication.reference"], reads(entry)
       end
 
       def test_an_explicit_target_type
         entry = trace(location_form("PractitionerRole:location:Location"), profiles: suite_profiles)[LOCATION].first
 
-        assert_equal "explicit", entry[:target_by]
-        assert_equal ["name"], entry[:elements_read]
+        assert_equal ["name"], reads(entry)
         assert_equal ["location"], link_ids(entry)
       end
 
       def test_a_target_type_from_of_type_in_the_form
         entry = trace(location_form("PractitionerRole:location"), profiles: suite_profiles)[LOCATION].first
 
-        assert_equal "of_type", entry[:target_by]
-        assert_equal "PractitionerRole:location", entry[:include]
+        assert_equal "**Query PractitionerRoleLocation**: fetches Location resources through " \
+                     "_include=PractitionerRole:location", entry.heading("Location")
       end
 
       def test_an_include_without_a_search_parameter_or_of_type_is_unresolved
@@ -152,11 +148,11 @@ module InfernoSuiteGenerator
 
       def test_an_include_of_the_query_own_type_leaves_its_chains_with_the_query_entry
         query_entry, include_entry = trace(own_type_include_form)[BODY_HEIGHT].partition do |entry|
-          entry[:source] == "query"
+          entry.is_a?(TraceEntry::Query)
         end.map(&:first)
 
-        assert_equal [["height"], ["value"]], [link_ids(query_entry), query_entry[:elements_read]]
-        assert_empty include_entry[:used_in]
+        assert_equal [["height"], ["value"]], [link_ids(query_entry), reads(query_entry)]
+        assert_empty include_entry.item_uses
       end
 
       def test_an_include_iterate_and_an_include_of_another_type_are_skipped
@@ -188,12 +184,11 @@ module InfernoSuiteGenerator
       end
 
       def medication_entry
-        {
-          source: "include", **form_header, name: "MedicationStatement", defined_at: "root", query: MEDS_QUERY,
-          include: "MedicationStatement:medication", target_by: "search_parameter", matched_by: "resource_type",
-          elements_read: ["id"],
-          used_in: [{ link_id: "medications", text: "Medications", extension: "initialExpression", reads: ["id"] }]
-        }
+        { heading: "**Query MedicationStatement**: fetches Medication resources through " \
+                   "_include=MedicationStatement:medication",
+          request: MEDS_QUERY,
+          item_uses: [ItemUse.new(link_id: "medications", text: "Medications", extension: "initialExpression",
+                                  reads: ["id"])] }
       end
 
       # A Body Height query that also includes the Observations its results
@@ -231,29 +226,29 @@ module InfernoSuiteGenerator
       def test_an_is_filter_on_entry_routes_a_chain_to_its_include_entry
         traces = location_traces("%PractitionerRoleLocation.entry.where(resource is Location).resource.name")
 
-        assert_equal ["name"], traces[LOCATION].first[:elements_read]
-        assert_empty traces[PRACTITIONER_ROLE].first[:used_in]
+        assert_equal ["name"], reads(traces[LOCATION].first)
+        assert_empty traces[PRACTITIONER_ROLE].first.item_uses
       end
 
       def test_an_alias_of_filtered_entries_routes_its_chains_to_the_include_entry
         locations = fhirpath_variable("Locations", "%PractitionerRoleLocation.entry.where(resource is Location)")
         traces = location_traces("%Locations.resource.name", variables: [locations])
 
-        assert_equal [["name"], ["Locations"]], [traces[LOCATION].first[:elements_read], vias(traces[LOCATION].first)]
-        assert_empty traces[PRACTITIONER_ROLE].first[:used_in]
+        assert_equal ["name"], reads(traces[LOCATION].first)
+        assert_empty traces[PRACTITIONER_ROLE].first.item_uses
       end
 
       def test_an_is_call_on_entry_routes_like_an_is_filter
         traces = location_traces("%PractitionerRoleLocation.entry.where(resource.is(FHIR.Location)).resource.name")
 
-        assert_equal ["name"], traces[LOCATION].first[:elements_read]
+        assert_equal ["name"], reads(traces[LOCATION].first)
       end
 
       def test_an_as_filter_on_entry_picks_no_type
         traces = location_traces("%PractitionerRoleLocation.entry.where(resource as Location).resource.name")
 
-        assert_equal ["name"], traces[PRACTITIONER_ROLE].first[:elements_read]
-        assert_empty traces[LOCATION].first[:used_in]
+        assert_equal ["name"], reads(traces[PRACTITIONER_ROLE].first)
+        assert_empty traces[LOCATION].first.item_uses
       end
 
       def test_aliases_of_one_picked_entry_and_of_all_entries
@@ -262,7 +257,7 @@ module InfernoSuiteGenerator
         traces = location_traces("%First.resource.name | %Entries.where(resource is Location).resource.address",
                                  variables: [first, entries])
 
-        assert_equal %w[name address], traces[LOCATION].first[:elements_read]
+        assert_equal %w[name address], reads(traces[LOCATION].first)
       end
 
       private
@@ -290,16 +285,15 @@ module InfernoSuiteGenerator
       def test_a_target_type_from_where_resource_type_in_the_form
         entry = traces[MEDICATION].first
 
-        assert_equal "of_type", entry[:target_by]
-        assert_equal ["code"], entry[:elements_read]
-        assert_equal [["insulin"], ["meds"]], [link_ids(entry), vias(entry)]
+        assert_equal ["code"], reads(entry)
+        assert_equal ["insulin"], link_ids(entry)
       end
 
       def test_untyped_chains_of_a_variable_of_several_types_stay_with_the_query_entry
         entry = traces[MEDICATION_REQUEST].first
 
         assert_equal ["recent"], link_ids(entry)
-        assert_equal %w[intent authoredOn], entry[:elements_read]
+        assert_equal %w[authoredOn], reads(entry)
       end
 
       private
@@ -332,12 +326,10 @@ module InfernoSuiteGenerator
                              item: [item("dob", "Date of birth",
                                          expression("initialExpression", "%patient.birthDate.toString()"))])
 
-        assert_equal [{
-          source: "launch_context", **form_header,
-          name: "patient", defined_at: "root", matched_by: "resource_type", elements_read: ["birthDate"],
-          used_in: [{ link_id: "dob", text: "Date of birth", extension: "initialExpression",
-                      reads: ["birthDate"] }]
-        }], trace(form, profiles: patient_profiles)[AU_CORE_PATIENT]
+        assert_equal({ heading: "**Launch context patient**: the Patient the form is opened for", request: nil,
+                       item_uses: [ItemUse.new(link_id: "dob", text: "Date of birth", extension: "initialExpression",
+                                               reads: ["birthDate"])] },
+                     described(trace(form, profiles: patient_profiles)[AU_CORE_PATIENT].sole, "Patient"))
       end
 
       def test_every_patient_group_gets_the_entry
@@ -353,9 +345,7 @@ module InfernoSuiteGenerator
                              item: [item("sex", "Sex", expression("initialExpression", "%RecordedSex.value.code"))])
         entry = trace(form, profiles: patient_profiles)[AU_CORE_PATIENT].first
 
-        assert_equal ["extension[url=#{RECORDED_SEX_URL}]", "extension[url=#{RECORDED_SEX_URL}].value.code"],
-                     entry[:elements_read]
-        assert_equal ["RecordedSex"], vias(entry)
+        assert_equal [["sex"], ["extension[url=#{RECORDED_SEX_URL}].value.code"]], [link_ids(entry), reads(entry)]
       end
 
       def test_one_entry_per_type_of_the_launch_context
@@ -364,7 +354,7 @@ module InfernoSuiteGenerator
         traces = trace(form, profiles: patient_profiles.merge(AU_CORE_PRACTITIONER => profile("Practitioner")))
 
         assert_equal [AU_CORE_PRACTITIONER, AU_CORE_PATIENT, AU_BASE_PATIENT], traces.keys
-        assert_equal ["name.text"], traces[AU_CORE_PRACTITIONER].first[:elements_read]
+        assert_equal ["name.text"], reads(traces[AU_CORE_PRACTITIONER].first)
       end
 
       def test_a_chain_that_picks_one_type_counts_for_that_type_only
@@ -373,8 +363,8 @@ module InfernoSuiteGenerator
                              item: [item("qualification", "Qualification", expression("initialExpression", fhirpath))])
         traces = trace(form, profiles: patient_profiles.merge(AU_CORE_PRACTITIONER => profile("Practitioner")))
 
-        assert_equal ["qualification.code"], traces[AU_CORE_PRACTITIONER].first[:elements_read]
-        assert_empty traces[AU_CORE_PATIENT].first[:used_in]
+        assert_equal ["qualification.code"], reads(traces[AU_CORE_PRACTITIONER].first)
+        assert_empty traces[AU_CORE_PATIENT].first.item_uses
       end
 
       def test_an_expression_on_the_root_is_a_usage_without_the_narrative_as_text
@@ -383,15 +373,14 @@ module InfernoSuiteGenerator
                .merge("text" => { "status" => "generated", "div" => "<div>Intake</div>" })
         entry = trace(form, profiles: patient_profiles)[AU_CORE_PATIENT].first
 
-        assert_equal [{ extension: "itemExtractionContext", reads: ["name"] }], entry[:used_in]
+        assert_equal [ItemUse.new(extension: "itemExtractionContext", reads: ["name"])], entry.item_uses
       end
 
       def test_a_form_without_a_url_is_named_by_its_id
         form = questionnaire(extension: [launch_context("patient", "Patient")]).except("url").merge("id" => "intake")
         entry = trace(form, profiles: patient_profiles)[AU_CORE_PATIENT].first
 
-        assert_equal "intake", entry[:questionnaire_id]
-        refute entry.key?(:questionnaire_url)
+        assert_equal [nil, "intake", "0.1.0"], entry.form_key
       end
 
       def test_a_launch_context_without_a_group_for_its_type_is_untraced
@@ -421,12 +410,11 @@ module InfernoSuiteGenerator
         form = questionnaire(contained: [body_height_template],
                              item: [item("height", "Height", template_extract("#BodyHeightTemplate"))])
 
-        assert_equal [{
-          source: "template_extract", **form_header,
-          name: "BodyHeightTemplate", defined_at: "height",
-          template_codes: ["#{LOINC}|8302-2", "#{SNOMED}|50373000"], patch: false, matched_by: "code",
-          used_in: [{ link_id: "height", text: "Height", extension: "templateExtract" }]
-        }], trace(form, profiles: suite_profiles)[BODY_HEIGHT]
+        assert_equal({ heading: "**Extraction template BodyHeightTemplate**: creates a new Observation with code " \
+                                "#{LOINC}|8302-2, #{SNOMED}|50373000 from the answers",
+                       request: nil,
+                       item_uses: [ItemUse.new(link_id: "height", text: "Height", extension: "templateExtract")] },
+                     described(trace(form, profiles: suite_profiles)[BODY_HEIGHT].sole, "Observation"))
       end
 
       def test_a_template_with_a_code_the_only_profile_fixes_otherwise_is_unresolved
@@ -444,24 +432,22 @@ module InfernoSuiteGenerator
                              item: [item("condition", "Condition", condition_patch_extract)])
         entry = trace(form, profiles: suite_profiles)[AU_CORE_CONDITION].first
 
-        assert entry[:patch]
-        assert_empty entry[:template_codes]
-        assert_equal "resource_type", entry[:matched_by]
+        assert_equal "**Extraction template ConditionPatchTemplate**: updates an existing Condition with a " \
+                     "FHIRPath Patch", entry.heading("Condition")
       end
 
       def test_a_patch_template_without_paths_targets_the_type_in_its_request_url
         form = questionnaire(contained: [condition_patch_template],
                              item: [item("condition", "Condition", condition_patch_extract)])
 
-        assert_equal "ConditionPatchTemplate", trace(form, profiles: suite_profiles)[AU_CORE_CONDITION].first[:name]
+        assert_equal "ConditionPatchTemplate", trace(form, profiles: suite_profiles)[AU_CORE_CONDITION].first.name
       end
 
       def test_a_template_on_the_root_has_no_items
         form = questionnaire(contained: [body_height_template], extension: [template_extract("#BodyHeightTemplate")])
         entry = trace(form, profiles: suite_profiles)[BODY_HEIGHT].first
 
-        assert_equal "root", entry[:defined_at]
-        assert_empty entry[:used_in]
+        assert_empty entry.item_uses
       end
 
       def test_a_reference_to_a_missing_contained_resource_is_skipped
@@ -517,10 +503,9 @@ module InfernoSuiteGenerator
       def test_an_item_reads_a_query_through_a_chain_of_aliases
         entry = trace(height_chain_form)[BODY_HEIGHT].first
 
-        assert_equal [{ link_id: "height", text: "Height", extension: "initialExpression", via: "ObsBodyHeightValue",
-                        reads: ["value.value"] }],
-                     entry[:used_in]
-        assert_equal ["status", "value.value", "value.unit"], entry[:elements_read]
+        assert_equal [ItemUse.new(link_id: "height", text: "Height", extension: "initialExpression",
+                                  reads: ["value.value"])],
+                     entry.item_uses
       end
 
       def test_users_of_an_alias_that_stops_at_select_add_no_path
@@ -531,18 +516,14 @@ module InfernoSuiteGenerator
         )
         entry = trace(form)[BODY_HEIGHT].first
 
-        assert_equal ["HeightCodes"], vias(entry)
-        assert_equal ["code", "code.coding.code"], entry[:elements_read]
+        assert_equal [["codes"], []], [link_ids(entry), reads(entry)]
       end
 
       def test_an_alias_on_an_item_is_not_visible_to_a_sibling
         entry = trace(alias_in_a_group_form)[BODY_HEIGHT].first
 
-        assert_equal [{ link_id: "vitals", text: "Vitals", extension: "variable" },
-                      { link_id: "height", text: "Height", extension: "initialExpression", via: "HeightLatest",
-                        reads: ["value"] }],
-                     entry[:used_in]
-        assert_equal ["value"], entry[:elements_read]
+        assert_equal [ItemUse.new(link_id: "height", text: "Height", extension: "initialExpression", reads: ["value"])],
+                     entry.item_uses
       end
 
       def test_each_expression_is_parsed_once
@@ -564,7 +545,7 @@ module InfernoSuiteGenerator
                                          fhirpath_variable("B", "%A")],
                              item: [item("height", "Height", expression("initialExpression", "%B.value"))])
 
-        assert_equal ["B"], vias(trace(form)[BODY_HEIGHT].first)
+        assert_equal ["height"], link_ids(trace(form)[BODY_HEIGHT].first)
       end
 
       private
@@ -639,7 +620,7 @@ module InfernoSuiteGenerator
         RESOURCE_READS.each do |fhirpath, reads|
           entry = patient_entry(fhirpath)
 
-          assert_equal [["item"], reads], [link_ids(entry), entry[:elements_read]], fhirpath
+          assert_equal [["item"], reads], [link_ids(entry), reads(entry)], fhirpath
         end
       end
 
@@ -647,16 +628,16 @@ module InfernoSuiteGenerator
         BUNDLE_READS.each do |fhirpath, reads|
           entry = bundle_entry(fhirpath)
 
-          assert_equal [["item"], reads], [link_ids(entry), entry[:elements_read]], fhirpath
+          assert_equal [["item"], reads], [link_ids(entry), reads(entry)], fhirpath
         end
       end
 
       def test_a_name_inside_a_string_is_not_a_use
-        assert_empty patient_entry("'%patient'")[:used_in]
+        assert_empty patient_entry("'%patient'").item_uses
       end
 
       def test_an_expression_that_does_not_parse_is_skipped
-        assert_output(/skipping FHIRPath "%%bad\(\("/) { assert_empty patient_entry("%%bad((")[:used_in] }
+        assert_output(/skipping FHIRPath "%%bad\(\("/) { assert_empty patient_entry("%%bad((").item_uses }
       end
 
       private
@@ -682,15 +663,15 @@ module InfernoSuiteGenerator
     class ReadsQueryMatchTest < Minitest::Test
       include FormFixtures
 
-      # Over the Observation profiles: query => [profiles, matched_by].
+      # Over the Observation profiles: query => the profiles it links to.
       MATCHES = {
-        "Observation?code=8302-2" => [[BODY_HEIGHT], "code"],
-        "Observation?code=#{LOINC}|29463-7" => [[BODY_WEIGHT], "code"],
-        "Observation?code=http%3A%2F%2Floinc.org%7C8302-2" => [[BODY_HEIGHT], "code"],
-        "Observation?code=8302-2,8306-3&_sort=-date" => [[BODY_HEIGHT], "code"],
-        "Observation?patient={{'Patient/' & %patient.id}}&code=8302-2" => [[BODY_HEIGHT], "code"],
-        "Patient/{{%patient.id}}/Observation?code=8302-2" => [[BODY_HEIGHT], "code"],
-        "Observation/$lastn?code=8302-2" => [[BODY_HEIGHT], "code"]
+        "Observation?code=8302-2" => [BODY_HEIGHT],
+        "Observation?code=#{LOINC}|29463-7" => [BODY_WEIGHT],
+        "Observation?code=http%3A%2F%2Floinc.org%7C8302-2" => [BODY_HEIGHT],
+        "Observation?code=8302-2,8306-3&_sort=-date" => [BODY_HEIGHT],
+        "Observation?patient={{'Patient/' & %patient.id}}&code=8302-2" => [BODY_HEIGHT],
+        "Patient/{{%patient.id}}/Observation?code=8302-2" => [BODY_HEIGHT],
+        "Observation/$lastn?code=8302-2" => [BODY_HEIGHT]
       }.freeze
 
       # Over the Observation profiles: query => what the log says.
@@ -714,15 +695,15 @@ module InfernoSuiteGenerator
 
       def test_a_category_query_links_to_every_profile_with_that_category
         assert_output(/matches several profiles/) do
-          assert_equal [[BODY_HEIGHT, BODY_WEIGHT], "code"], matched("Observation?category=vital-signs")
+          assert_equal [BODY_HEIGHT, BODY_WEIGHT], matched("Observation?category=vital-signs")
         end
       end
 
       def test_the_only_profile_of_the_type_matches_unless_it_fixes_another_code
         only = { BODY_HEIGHT => body_height }
 
-        assert_equal [[BODY_HEIGHT], "resource_type"], matched("Observation?code=8302-2", only)
-        assert_equal [[BODY_HEIGHT], "resource_type"], matched("Observation?patient={{%patient.id}}", only)
+        assert_equal [BODY_HEIGHT], matched("Observation?code=8302-2", only)
+        assert_equal [BODY_HEIGHT], matched("Observation?patient={{%patient.id}}", only)
         assert_output(/the Observation profile fixes code=\S+\|8302-2, .*, not code=29463-7/) do
           assert_nil matched("Observation?code=29463-7", only)
         end
@@ -731,23 +712,23 @@ module InfernoSuiteGenerator
       def test_only_an_id_after_the_type_makes_a_read
         patient = { AU_CORE_PATIENT => profile("Patient") }
 
-        assert_equal [true], reads("Patient/{{%patient.id}}", patient)
-        assert_equal [nil], reads("Patient/_search?family=x", patient)
-        assert_equal [nil], reads("Patient/{{%patient.id}}/$everything", patient)
-        assert_equal [nil], reads("Observation/$lastn?code=8302-2")
+        assert_equal [true], read_flags("Patient/{{%patient.id}}", patient)
+        assert_equal [false], read_flags("Patient/_search?family=x", patient)
+        assert_equal [false], read_flags("Patient/{{%patient.id}}/$everything", patient)
+        assert_equal [false], read_flags("Observation/$lastn?code=8302-2")
       end
 
       private
 
-      # `[profiles, matched_by]` of the query's entries, `nil` when it has none.
+      # The profiles the query links to, `nil` when it links to none.
       def matched(query, profiles = observation_profiles)
         traces = trace(questionnaire(extension: [query_variable("Q", query)]), profiles:)
-        [traces.keys, traces.values.flatten.map { |entry| entry[:matched_by] }.uniq.sole] unless traces.empty?
+        traces.keys unless traces.empty?
       end
 
-      def reads(query, profiles = observation_profiles)
+      def read_flags(query, profiles = observation_profiles)
         trace(questionnaire(extension: [query_variable("Q", query)]), profiles:).values.flatten.map do |entry|
-          entry[:read]
+          entry.query.read?
         end.uniq
       end
     end

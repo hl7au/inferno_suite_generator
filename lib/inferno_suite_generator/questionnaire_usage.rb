@@ -11,7 +11,6 @@ require_relative "questionnaire_usage/tracer"
 require_relative "questionnaire_usage/checked_elements"
 require_relative "questionnaire_usage/delivery"
 require_relative "questionnaire_usage/sections"
-require_relative "questionnaire_usage/trace_files"
 
 module InfernoSuiteGenerator
   # Traces every Questionnaire in the IG over the suite's groups and splits
@@ -25,26 +24,22 @@ module InfernoSuiteGenerator
   # - the group description gets a summary: the questionnaires, the tests that
   #   list them, and what no test checks
   #
-  # Sections writes those three to the descriptions. Each traced group gets its
-  # entries in <group dir>/questionnaire_usage.yml, each with the ids of the
-  # tests that list it as `tested_by`, from TraceFiles.
+  # Sections writes those three to the descriptions.
   #
   # It reads what the test generators recorded on the groups, and adds to what
   # GroupGenerator writes, so it runs between them.
   module QuestionnaireUsage
-    def self.generate(ig_resources:, groups:, descriptions:, base_output_dir:)
+    def self.generate(ig_resources:, groups:, descriptions:)
       if groups.any? && groups.none? { |group| Generator::TestIndex.new(group).any? }
         raise "Questionnaire usage tracing must run after the test generators: no group has a recorded test."
       end
 
-      write(Tracer.new(ig_resources, groups).trace, groups:, descriptions:, base_output_dir:)
+      write(Tracer.new(ig_resources, groups).trace, groups:, descriptions:)
     end
 
-    # Writes the sections and trace files for traces: `{ profile_url => [TraceEntry] }`, from `Tracer#trace`.
-    def self.write(traces, groups:, descriptions:, base_output_dir:)
-      delivery = Delivery.new(groups, traces)
-      Sections.new(delivery).write(descriptions)
-      TraceFiles.new(delivery).write(base_output_dir)
+    # Writes the sections for traces: `{ profile_url => [TraceEntry] }`, from `Tracer#trace`.
+    def self.write(traces, groups:, descriptions:)
+      Sections.new(Delivery.new(groups, traces)).write(descriptions)
     end
   end
 end

@@ -15,7 +15,7 @@ module InfernoSuiteGenerator
         @profile_codes = {}
       end
 
-      # `{ groups:, matched_by: }`, or `nil` when the source is untraced or
+      # The groups the source links to, or `nil` when it is untraced or
       # unresolved. `context` names the source in the log lines.
       #
       # The only group of the type matches by type, unless the source has a
@@ -24,22 +24,22 @@ module InfernoSuiteGenerator
         label = context || resource_type
         candidates = @groups.select { |group| group.resource == resource_type }
         return log("untraced #{label}: no group for #{resource_type}") if candidates.empty?
-        return { groups: candidates, matched_by: "resource_type" } if any_of_type
+        return candidates if any_of_type
         return match_by_code(candidates, codes, label) unless candidates.one?
 
         fixed = profile_codes(candidates.first)
-        return { groups: candidates, matched_by: "resource_type" } if agree?(fixed, codes)
+        return candidates if agree?(fixed, codes)
 
         log("unresolved #{label}: the #{resource_type} profile fixes #{Codes.format(fixed)}, " \
             "not #{Codes.format(codes)}")
       end
 
+      private
+
       # The `code` and `category` values the group's profile fixes.
       def profile_codes(group)
         @profile_codes[group.profile_url] ||= Codes.from_profile(@ig_resources.profile_by_url(group.profile_url))
       end
-
-      private
 
       def match_by_code(candidates, codes, label)
         matches = candidates.select { |group| agree?(profile_codes(group), codes, shared: true) }
@@ -48,7 +48,7 @@ module InfernoSuiteGenerator
         end
 
         log("#{label} matches several profiles: #{matches.map(&:profile_url).join(", ")}") if matches.size > 1
-        { groups: matches, matched_by: "code" }
+        matches
       end
 
       # Whether the codes overlap on every param both the profile and the

@@ -7,20 +7,11 @@ module InfernoSuiteGenerator
     # how to find the test that makes its request and how a section names it,
     # so a new kind is one new class.
     #
-    # The `Tracer` builds entries from the fields of the trace file. Groups that
-    # share a source share its entry, and two entries are the same only if they
-    # are the same object, so equal sources in a form stay apart.
+    # Groups that share a source share its entry, and two entries are the same
+    # only if they are the same object, so equal sources in a form stay apart.
     class TraceEntry
       def initialize(**fields)
         @fields = fields
-      end
-
-      # The fields of the trace file.
-      def to_h
-        fields = { source: self.class::SOURCE, **@fields }
-        fields[:query] &&= fields[:query].to_s
-        fields[:used_in] &&= fields[:used_in].map(&:to_h)
-        fields
       end
 
       def name
@@ -37,10 +28,9 @@ module InfernoSuiteGenerator
         item_uses.any?
       end
 
-      # The ItemUses sections list. Uses that only define a variable are left out:
-      # the items that read the variable are listed instead.
+      # The ItemUses sections list.
       def item_uses
-        @item_uses ||= @fields[:used_in].to_a.reject(&:variable?)
+        @fields[:item_uses].to_a
       end
 
       # The parameters of the search it makes, or `nil` when it makes no search.
@@ -74,8 +64,6 @@ module InfernoSuiteGenerator
 
       # A `launchContext` resource, like `%patient`.
       class LaunchContext < TraceEntry
-        SOURCE = "launch_context"
-
         def request_lookups(_resource) = [["read", {}]]
 
         def heading(resource)
@@ -85,8 +73,6 @@ module InfernoSuiteGenerator
 
       # An x-fhir-query variable: a search, or a read of one resource by id.
       class Query < TraceEntry
-        SOURCE = "query"
-
         # A query that fetches other resources through `_include` is shown even
         # when no item reads its own results.
         def shown?
@@ -128,8 +114,6 @@ module InfernoSuiteGenerator
       # What a query fetches through one `_include` target. Its request is the
       # query's, so its test is in a group of the query's own type.
       class Include < TraceEntry
-        SOURCE = "include"
-
         # The include test for the entry's type, preferably the one that
         # searches by the same parameters.
         def request_lookups(resource)
@@ -150,8 +134,6 @@ module InfernoSuiteGenerator
       # A contained resource a `templateExtract` fills from the answers. It is
       # shown even when it is extracted from the whole form, which no item uses.
       class Template < TraceEntry
-        SOURCE = "template_extract"
-
         def shown?
           true
         end

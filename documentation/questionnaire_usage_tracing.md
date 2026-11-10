@@ -47,31 +47,8 @@ The generator finds these tests through `Generator::TestIndex`. It writes:
   - each questionnaire and the tests that list it
   - **Not tested by this group**: the sources no test makes the request of, in full, with how the group's searches compare to a query's
   - **Elements not checked**: the elements items read that no group the entry links to marks Must Support or requires, each with the items that read it
-- An `entries` list in `<group dir>/questionnaire_usage.yml`, with one entry per source. `tested_by` lists the ids of the tests whose descriptions list the entry:
 
-```yaml
-entries:
-- source: launch_context
-  questionnaire_url: http://example.org/Questionnaire/form
-  questionnaire_version: 0.1.0
-  questionnaire_title: Example form
-  name: patient
-  elements_read:
-  - birthDate
-  used_in:
-  - link_id: dob
-    text: Date of birth
-    extension: initialExpression
-    reads:
-    - birthDate
-  tested_by:
-  - au_core_v200_patient_read_test
-  - au_core_v200_patient_must_support_test
-```
-
-`used_in` also records the variables items define, which sections leave out: they list the items that read the variable.
-
-Groups no questionnaire uses get no `questionnaire_usage.yml`, and their descriptions and their tests' descriptions don't change.
+Groups no questionnaire uses keep their descriptions and their tests' descriptions unchanged.
 
 ## How it runs
 
@@ -86,7 +63,6 @@ flowchart TD
     n4>"Trace sources"]
     n5>"Decide delivery"]
     n6>"Write sections"]
-    n7@{ shape: doc, label: "Write trace files" }
     n8(["Done"])
     n0 -.- n1
     n1 --> n2
@@ -94,8 +70,7 @@ flowchart TD
     n2 -->|"no"| n4
     n4 --> n5
     n5 --> n6
-    n6 --> n7
-    n7 --> n8
+    n6 --> n8
 ```
 
 ### Trace each questionnaire
@@ -201,18 +176,18 @@ flowchart TD
 
 ## How it picks a test
 
-Each trace entry of a group takes two paths: its request goes to one test (`Delivery#request_test`, through the entry's `TraceEntry#request_lookups`), and the elements its items read go to the Must Support test or the group summary (`Delivery::Placement#reads`). `Delivery` makes these decisions once, before anything is rendered, and the test sections, the group summaries and the trace files all read them.
+Each trace entry of a group takes two paths: its request goes to one test (`Delivery#request_test`, through the entry's `TraceEntry#request_lookups`), and the elements its items read go to the Must Support test or the group summary (`Delivery::Placement#reads`). `Delivery` makes these decisions once, before anything is rendered, and the test sections and the group summaries both read them.
 
 ### The request
 
 ```mermaid
 flowchart TD
     entry["Trace entry of group G"] --> shown{"Shown?<br/>an item uses it beyond a variable,<br/>or it is a template,<br/>or a query with its own _include"}
-    shown -- no --> yml["questionnaire_usage.yml only<br/>tested_by: []"]
+    shown -- no --> hidden["Listed by no test"]
     shown -- yes --> source{"source"}
 
     source -- launch_context --> read["G's read test"]
-    source -- query --> isread{"read: true?<br/>like Patient/id"}
+    source -- query --> isread{"A read?<br/>like Patient/id"}
     isread -- yes --> read
     isread -- no --> params{"FhirQuery#search_params<br/>empty?"}
     params -- yes --> none
@@ -262,7 +237,7 @@ Item lines in every section also show each path, with "(not checked)" after the 
 
 ### The group summary
 
-It lists each questionnaire with the labels of the tests its entries went to, adding the Must Support test when its items read an element the group's own profile checks. `tested_by` in `questionnaire_usage.yml` holds the same tests' ids.
+It lists each questionnaire with the labels of the tests its entries went to, adding the Must Support test when its items read an element the group's own profile checks.
 
 ## Generated Markdown
 
@@ -274,19 +249,18 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
 - `lib/inferno_suite_generator/questionnaire_usage/`:
   - `tracer.rb`: finds the sources in each questionnaire and the items that use them
   - `trace_entry.rb`: one source, with a class per kind that says whether it's shown, which test makes its request and how a section names it. Add a kind of source here.
-  - `item_use.rb`: one item reading a source: how sections name it, what it does to the item, and its trace file fields
+  - `item_use.rb`: one item reading a source: how sections name it and what it does to the item
   - `ast.rb`: reads FHIRPath expressions to find the variables and element paths they use
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
   - `fhir_query.rb`: one x-fhir-query, parsed once: its resource type, whether it's a read, its search parameters, `_include` values and codes
   - `delivery.rb`: decides which tests list each entry and which elements count as checked, and finds the test that makes each source's request
   - `sections.rb`: writes every "Used in questionnaires" section a delivery decided on: the test sections, the Must Support sections and the group summaries
-  - `trace_files.rb`: writes each group's `questionnaire_usage.yml`
   - `checked_elements.rb`: the rule for which element paths a group's tests check and how they are named, used by `delivery.rb`
 - `lib/inferno_suite_generator/core/test_index.rb`: finds a group's tests by kind and details
 - `lib/inferno_suite_generator/core/group_descriptions.rb`: collects and escapes the added description text
 - `test/questionnaire_usage/`, which tests through the two halves of `generate` and the whole of it:
   - `reads_test.rb`: what tracing reads, through `Tracer#trace`: forms in, trace entries out
-  - `writes_test.rb`: what tracing writes, through `QuestionnaireUsage.write`: trace entries in, sections and `tested_by` out
+  - `writes_test.rb`: what tracing writes, through `QuestionnaireUsage.write`: trace entries in, sections out
   - `generate_test.rb` and `generator_wiring_test.rb`: `QuestionnaireUsage.generate` end to end, the second with the real test generators
 
 ## Test

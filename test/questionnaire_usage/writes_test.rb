@@ -3,8 +3,7 @@
 require_relative "support"
 
 # What tracing writes, through `QuestionnaireUsage.write`: trace entries go in,
-# and the sections of the descriptions and the `tested_by` of each trace file
-# entry come out.
+# and the sections of the descriptions come out.
 module InfernoSuiteGenerator
   module QuestionnaireUsage
     # Verifies how the group summary lists each kind of source, the search check,
@@ -50,19 +49,18 @@ module InfernoSuiteGenerator
       end
 
       def test_a_query_no_item_reads_is_shown_only_when_it_includes_other_resources
-        assert_includes summary([query_entry(LOCATION_QUERY, used_in: [])]),
+        assert_includes summary([query_entry(LOCATION_QUERY, item_uses: [])]),
                         "- No item reads its results; it fetches PractitionerRole:location through _include\n"
-        assert_empty summary([query_entry("Patient?_id=1", used_in: [])])
+        assert_empty summary([query_entry("Patient?_id=1", item_uses: [])])
       end
 
       def test_sources_no_item_uses_are_left_out
-        assert_empty summary([launch_entry(used_in: []), launch_entry(used_in: [variable_use]),
-                              include_entry(LOCATION_QUERY, used_in: [])])
+        assert_empty summary([launch_entry(item_uses: []), include_entry(LOCATION_QUERY, item_uses: [])])
       end
 
       def test_an_include_entry
         entry = include_entry(LOCATION_QUERY, include: "PractitionerRole:location",
-                                              used_in: [ItemUse.new(link_id: "loc", text: "Location")])
+                                              item_uses: [ItemUse.new(link_id: "loc", text: "Location")])
 
         assert_includes summary([entry]), <<~MARKDOWN
           - **Query Roles**: fetches Patient resources through _include=PractitionerRole:location
@@ -73,7 +71,7 @@ module InfernoSuiteGenerator
 
       def test_extraction_templates
         create = template_entry(patch: false, template_codes: ["http://loinc.org|8302-2"])
-        markdown = summary([create, template_entry(patch: true, used_in: [])])
+        markdown = summary([create, template_entry(patch: true, item_uses: [])])
 
         assert_includes markdown, "- **Extraction template height**: creates a new Patient with code " \
                                   "http://loinc.org|8302-2 from the answers\n    " \
@@ -102,7 +100,7 @@ module InfernoSuiteGenerator
       def test_a_query_whose_only_include_is_not_traced_is_left_out
         query = "PractitionerRole?_id=1&_include:iterate=PractitionerRole:location"
 
-        assert_empty summary([query_entry(query, used_in: [])])
+        assert_empty summary([query_entry(query, item_uses: [])])
       end
 
       def test_a_compartment_search_selects_by_its_compartment
@@ -135,30 +133,31 @@ module InfernoSuiteGenerator
       include WriteFixtures
 
       def test_a_usage_on_the_root_is_named_as_the_whole_form
-        markdown = summary([launch_entry(used_in: [ItemUse.new(extension: "itemExtractionContext", reads: ["name"])])])
+        root = ItemUse.new(extension: "itemExtractionContext", reads: ["name"])
+        markdown = summary([launch_entry(item_uses: [root])])
 
         assert_includes markdown, "- **The whole form**: sets the extraction context; reads name (not checked)\n"
       end
 
       def test_an_item_without_text_is_named_by_its_link_id
-        markdown = summary([launch_entry(used_in: [ItemUse.new(link_id: "dob", text: " ", extension: "maxValue")])])
+        markdown = summary([launch_entry(item_uses: [ItemUse.new(link_id: "dob", text: " ", extension: "maxValue")])])
 
         assert_includes markdown, "- **dob**: maxValue\n"
       end
 
       def test_markdown_in_an_item_text_is_escaped
-        markdown = summary([launch_entry(used_in: [ItemUse.new(link_id: "dob", text: "Date  *of*\n birth_x")])])
+        markdown = summary([launch_entry(item_uses: [ItemUse.new(link_id: "dob", text: "Date  *of*\n birth_x")])])
 
         assert_includes markdown, "- **Date \\*of\\* birth\\_x**\n"
       end
 
       def test_items_beyond_the_limit_are_counted
-        used_in = (1..27).map { |index| ItemUse.new(link_id: "item-#{index}", text: "Item #{index}") }
-        markdown = summary([launch_entry(used_in:)])
+        item_uses = (1..27).map { |index| ItemUse.new(link_id: "item-#{index}", text: "Item #{index}") }
+        markdown = summary([launch_entry(item_uses:)])
 
         assert_includes markdown, "**Item 25**"
         refute_includes markdown, "**Item 26**"
-        assert_includes markdown, "- and 2 more items, listed in questionnaire_usage.yml\n"
+        assert_includes markdown, "- and 2 more items\n"
       end
     end
 
@@ -167,9 +166,11 @@ module InfernoSuiteGenerator
       include WriteFixtures
 
       def test_lists_each_element_with_the_items_that_read_it
-        entry = launch_entry(used_in: [reading("dob", "Date of birth", "birthDate"), reading("age", "Age", "birthDate"),
-                                       reading("dob", "Date of birth", "birthDate", extension: "calculatedExpression"),
-                                       reading("contact", "Contact", "contact")])
+        entry = launch_entry(item_uses: [reading("dob", "Date of birth", "birthDate"),
+                                         reading("age", "Age", "birthDate"),
+                                         reading("dob", "Date of birth", "birthDate",
+                                                 extension: "calculatedExpression"),
+                                         reading("contact", "Contact", "contact")])
 
         assert must_support([entry]).end_with?(<<~MARKDOWN)
           - **#{FORM_TITLE}**
@@ -179,17 +180,17 @@ module InfernoSuiteGenerator
       end
 
       def test_extensions_are_named_as_in_the_item_lines
-        entry = launch_entry(used_in: [reading("ind", "Status", "extension[url=#{INDIGENOUS_STATUS}].value"),
-                                       reading("pro", "Pronouns", "extension[url=#{PRONOUNS}].value")])
+        entry = launch_entry(item_uses: [reading("ind", "Status", "extension[url=#{INDIGENOUS_STATUS}].value"),
+                                         reading("pro", "Pronouns", "extension[url=#{PRONOUNS}].value")])
 
         assert_includes must_support([entry]), "- **extension:indigenousStatus.value**: Status"
         assert_includes summary([entry]), "- **extension[individual-pronouns].value**: Pronouns"
       end
 
       def test_items_beyond_the_limit_are_counted
-        used_in = (1..12).map { |index| reading("item-#{index}", "Item #{index}", "birthDate") }
+        item_uses = (1..12).map { |index| reading("item-#{index}", "Item #{index}", "birthDate") }
 
-        assert must_support([launch_entry(used_in:)]).end_with?("Item 10, and 2 more\n")
+        assert must_support([launch_entry(item_uses:)]).end_with?("Item 10, and 2 more\n")
       end
 
       def test_the_must_support_section_has_a_heading_or_is_left_out
@@ -250,7 +251,7 @@ module InfernoSuiteGenerator
       end
 
       def test_is_left_out_when_no_entry_is_shown
-        assert_empty summary([launch_entry(used_in: [])])
+        assert_empty summary([launch_entry(item_uses: [])])
       end
 
       private
@@ -343,8 +344,7 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Verifies which tests list each entry, as the trace file's `tested_by` and
-    # the descriptions of those tests say.
+    # Verifies which tests list each entry in their descriptions.
     class WritesTestedByTest < Minitest::Test
       include WriteFixtures
 
@@ -357,7 +357,7 @@ module InfernoSuiteGenerator
       def test_an_entry_is_listed_by_its_request_test_and_the_must_support_test_it_reads_for
         result = written([launch_entry], @patient)
 
-        assert_equal [%w[patient_read patient_must_support]], result.tested_by.fetch(@patient)
+        assert_equal %w[patient_read patient_must_support], result.tested_by
         assert_includes result.descriptions.for_test(@patient, "patient_read").join, "**Launch context patient**"
         assert_includes result.descriptions.for_test(@patient, "patient_must_support").join,
                         "**birthDate**: Date of birth"
@@ -375,7 +375,7 @@ module InfernoSuiteGenerator
       end
 
       def test_an_entry_that_is_not_shown_is_listed_by_no_test
-        assert_empty tested_by(launch_entry(used_in: [variable_use]), group: @patient)
+        assert_empty tested_by(launch_entry(item_uses: []), group: @patient)
       end
 
       def test_an_entry_with_no_test_for_its_request_is_listed_by_no_test
@@ -385,7 +385,7 @@ module InfernoSuiteGenerator
       def test_a_group_no_entry_links_to_is_left_out
         result = write({}, [@patient])
 
-        assert_nil result.tested_by.fetch(@patient)
+        assert_empty result.tested_by
         assert_empty result.descriptions.for(@patient)
       end
 
@@ -405,7 +405,7 @@ module InfernoSuiteGenerator
         result = write({ "first" => [entry], "second" => [entry] }, [role, first, second])
 
         assert_equal 1, result.descriptions.for_test(role, "role_include").join.scan("**Query Roles**").size
-        assert_equal [["role_include"]], result.tested_by.fetch(second)
+        assert_equal ["role_include"], result.tested_by
       end
     end
 
@@ -472,7 +472,7 @@ module InfernoSuiteGenerator
 
       # The ids of the tests that list the entry traced for the group.
       def route(group, entry)
-        write({ group.profile_url => [entry] }, @groups).tested_by.fetch(group).sole
+        write({ group.profile_url => [entry] }, @groups).tested_by
       end
 
       def summary_of(group, entry)
@@ -517,8 +517,7 @@ module InfernoSuiteGenerator
       end
 
       def test_only_the_group_that_checks_an_element_lists_it_in_its_must_support_test
-        assert_equal [[]], @written.tested_by.fetch(@unchecking)
-        assert_equal [["checking_must_support"]], @written.tested_by.fetch(@checking)
+        assert_equal ["checking_must_support"], @written.tested_by
         assert_empty(text { |written| written.for_test(@unchecking, "unchecking_must_support") })
         assert_includes text { |written| written.for_test(@checking, "checking_must_support") },
                         "- **status**: Date of birth\n  - **extension:indigenousStatus.value**: Date of birth"

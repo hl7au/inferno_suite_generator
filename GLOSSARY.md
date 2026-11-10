@@ -41,7 +41,7 @@ The test that makes the same request as a trace entry's source, or for a templat
 _Avoid_: Source test, matching test
 
 **Delivery**:
-The decision of which tests list each trace entry and which elements its items read count as checked. The test descriptions, group summaries and trace files all state this one decision.
+The decision of which tests list each trace entry and which elements its items read count as checked. The test descriptions and group summaries both state this one decision.
 _Avoid_: Routing, which only picks the request test
 
 **Placement**:
@@ -57,6 +57,3 @@ _Avoid_: Must Support element, which leaves out required elements and `id`
 **Section**:
 The "Used in questionnaires" Markdown added to a description: a test section for a test that makes a request, a Must Support section, or a group summary.
 _Avoid_: Usage section, which named only the list of sources
-
-**Trace file**:
-A group's `questionnaire_usage.yml`, with its trace entries and the tests that list each.
