@@ -458,7 +458,7 @@ module InfernoSuiteGenerator
     class ReadsAliasTest < Minitest::Test
       include FormFixtures
 
-      # The GP CCMP chain: `ObsBodyHeight` -> `ObsBodyHeightLatest` ->
+      # The chain is `ObsBodyHeight` -> `ObsBodyHeightLatest` ->
       # `ObsBodyHeightValue`, read by the `height` item.
       def test_an_item_reads_a_query_through_a_chain_of_aliases
         entry = trace(height_chain_form)[BODY_HEIGHT].first
@@ -531,8 +531,7 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Verifies which element paths an item's FHIRPath reads, using expressions
-    # from the 715 Health Check, GP CCMP and 715 Absolute CVD Risk forms.
+    # Verifies which element paths an item's FHIRPath reads.
     class ReadsExpressionTest < Minitest::Test
       include FormFixtures
 

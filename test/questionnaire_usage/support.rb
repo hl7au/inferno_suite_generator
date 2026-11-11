@@ -7,9 +7,7 @@ require "inferno_suite_generator"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Profiles and groups for the suites the tests trace, and `Written`, what tracing wrote for them. Body Height
-    # fixes its code with a `patternCodeableConcept`, Body Weight with `fixedCode` and `fixedUri` on a coding
-    # slice, like the real AU Core profiles.
+    # Profiles and groups for the suites the tests trace, and `Written`, what tracing wrote for them.
     module SuiteFixtures
       include InfernoSuiteGenerator::GeneratorFixtures
 
