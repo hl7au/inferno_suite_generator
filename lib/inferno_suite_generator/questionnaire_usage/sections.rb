@@ -16,16 +16,19 @@ module InfernoSuiteGenerator
                    "these forms get from them."
       NOT_CHECKED = "The profile neither marks these elements Must Support nor requires them, so no test checks " \
                     "that the server returns them."
-      # An include test lists entries of other groups, which can be of several profiles, so its intro names none.
+      UPDATE_INTRO = "These questionnaires in the IG update existing %<resource>s resources from their answers."
+      # By the listing test's kind. An include test lists entries of other groups, which can be of several
+      # profiles, so its intro names none.
       TEST_INTROS = {
-        read: "These questionnaires in the IG read %<resource>s resources as this test does: by id, or as the " \
-              "resource a form is opened for. #{GROUP_READS}",
-        search: "These questionnaires in the IG make this search. #{GROUP_READS}",
-        include: "These questionnaires in the IG fetch %<resource>s resources through this search's _include. " \
-                 "#{READS} Elements marked #{NOT_CHECKED_MARK} are neither Must Support nor required by any " \
-                 "%<resource>s profile in this suite, so no test checks them.",
-        create: "These questionnaires in the IG create %<resource>s resources from their answers.",
-        update: "These questionnaires in the IG update existing %<resource>s resources from their answers."
+        "read" => "These questionnaires in the IG read %<resource>s resources as this test does: by id, or as " \
+                  "the resource a form is opened for. #{GROUP_READS}",
+        "search" => "These questionnaires in the IG make this search. #{GROUP_READS}",
+        "include" => "These questionnaires in the IG fetch %<resource>s resources through this search's " \
+                     "_include. #{READS} Elements marked #{NOT_CHECKED_MARK} are neither Must Support nor " \
+                     "required by any %<resource>s profile in this suite, so no test checks them.",
+        "create" => "These questionnaires in the IG create %<resource>s resources from their answers.",
+        "patch" => UPDATE_INTRO,
+        "update" => UPDATE_INTRO
       }.freeze
 
       def initialize(groups, trace)
@@ -55,8 +58,8 @@ module InfernoSuiteGenerator
 
       def test_section(listing)
         group = listing.groups.first
-        intro = TEST_INTROS.fetch(listing.test.role)
-        section(format(intro, resource: group.resource), Lists.sources(listing.placements, group))
+        intro = format(TEST_INTROS.fetch(listing.test.kind), resource: group.resource)
+        section(intro, Lists.sources(listing.placements, group))
       end
 
       def must_support_section(group, placements)
@@ -130,18 +133,15 @@ module InfernoSuiteGenerator
         def source_lines(placement, group, search_check)
           entry = placement.entry
           query = entry.query
-          params = entry.search_params if search_check
           uses = entry.item_uses
-          details = [query && "Request: #{query}", (search_line(params, group) if params),
+          searched = search_check && entry.request == :search
+          details = [query && "Request: #{query}", (search_line(query.search_params, group) if searched),
                      *(uses.empty? ? [entry.unused_line] : item_lines(uses, placement.reads))].compact
           ["  - #{entry.heading(group.resource)}", *details.map { |line| "    - #{line}" }]
         end
 
-        # How the group's searches compare to a query none of its search tests
-        # makes, or `nil` when the query selects by no parameter.
+        # How the group's searches compare to a query none of its search tests makes.
         def search_line(names, group)
-          return if names.empty?
-
           tested = group.searches.to_a.map { |search| search[:names] }
           same = tested.find { |searched| searched.to_set == names.to_set }
           return "This group searches by the same parameters, #{same.join(" + ")}, but has no test for it" if same
@@ -206,9 +206,8 @@ module InfernoSuiteGenerator
       # Decides which tests list each trace entry and which elements count as checked, once, before rendering,
       # so the test sections and group summaries can't disagree.
       class Delivery
-        # A listing test. `role` is what it does, as `ListingTests::ROLES` gives it, and `label` names the test in
-        # the group summary.
-        ListingTest = Data.define(:group, :test_id, :role, :label)
+        # A listing test. `kind` is its generator test kind, and `label` names the test in the group summary.
+        ListingTest = Data.define(:group, :test_id, :kind, :label)
 
         # One path an entry's items read: its label in sections, and whether it counts as checked.
         ElementRead = Data.define(:path, :label, :checked)
@@ -229,6 +228,7 @@ module InfernoSuiteGenerator
         def initialize(groups, trace)
           @listing_tests = ListingTests.new(groups)
           @trace = trace
+          @checked = Hash.new { |checked, group| checked[group] = CheckedElements.new(group) }.compare_by_identity
           @placements = groups.filter_map do |group|
             entries = trace.entries(group)
             [group, placements(group, entries)] unless entries.empty?
@@ -252,10 +252,9 @@ module InfernoSuiteGenerator
         private
 
         def placements(group, entries)
-          checked_elements = CheckedElements.new([group])
           must_support = @listing_tests.must_support(group)
           entries.map do |entry|
-            own = element_reads(entry, checked_elements).select { |_path, read| read.checked }
+            own = element_reads(entry, [group]).select { |_path, read| read.checked }
             request = @listing_tests.request(entry, group) if entry.shown?
             Placement.new(group:, entry:, request:, must_support: (must_support if own.any?),
                           reads: shared_reads(entry), must_support_reads: own)
@@ -264,14 +263,16 @@ module InfernoSuiteGenerator
 
         # `{ path => ElementRead }`, answered for all the groups that share the entry.
         def shared_reads(entry)
-          (@shared_reads ||= {})[entry] ||= element_reads(entry, CheckedElements.new(@trace.groups(entry)))
+          (@shared_reads ||= {})[entry] ||= element_reads(entry, @trace.groups(entry))
         end
 
-        def element_reads(entry, checked_elements)
-          paths = entry.item_uses.flat_map(&:reads).uniq
-          paths.to_h do |path|
-            [path, ElementRead.new(path:, label: checked_elements.label(path),
-                                   checked: checked_elements.checked?(path))]
+        # A path is checked when any of the groups checks it, and labeled as that group names it, so a slice one
+        # profile defines keeps its name.
+        def element_reads(entry, groups)
+          checked = groups.map { |group| @checked[group] }
+          entry.item_uses.flat_map(&:reads).uniq.to_h do |path|
+            checking = checked.find { |elements| elements.checked?(path) }
+            [path, ElementRead.new(path:, label: (checking || checked.first).label(path), checked: !checking.nil?)]
           end
         end
       end
@@ -279,15 +280,12 @@ module InfernoSuiteGenerator
       # Finds the listing tests: an entry's request test and a group's Must Support test. Only it knows the
       # generator's test kinds, which `Generator::TestIndex` finds tests by.
       class ListingTests
-        # The role of each test kind, which picks its section intro.
-        ROLES = { "read" => :read, "search" => :search, "include" => :include, "create" => :create,
-                  "patch" => :update, "update" => :update, "must_support" => :must_support }.freeze
         # `[kind, details]` lookups for `TestIndex#find` by request, tried in order, from the entry and its group's
         # type. An `_include` prefers the include test that searches by the same parameters; a FHIRPath Patch goes
         # to the patch test, then the update test, not the one that creates a new resource through update.
         LOOKUPS = {
           read: ->(_entry, _resource) { [["read", {}]] },
-          search: ->(entry, _resource) { [["search", { search_names: entry.search_params }]] },
+          search: ->(entry, _resource) { [["search", { search_names: entry.query.search_params }]] },
           include: lambda do |entry, resource|
             [["include", { search_names: entry.query.search_params, include_targets: [resource] }],
              ["include", { include_targets: [resource] }]]
@@ -303,11 +301,12 @@ module InfernoSuiteGenerator
         # The first test that makes the entry's request, in the group it was traced for or, for an `_include`,
         # in the groups of the searched type. `nil` when the entry makes no request or no test makes it.
         def request(entry, group)
-          return unless entry.request
+          request = entry.request
+          return unless request
 
-          type = entry.request_type
+          type = entry.query.resource_type if request == :include
           bases = type ? @groups.select { |base| base.resource == type } : [group]
-          bases.product(LOOKUPS.fetch(entry.request).call(entry, group.resource)).lazy
+          bases.product(LOOKUPS.fetch(request).call(entry, group.resource)).lazy
                .filter_map { |base, (kind, details)| find(base, kind, **details) }.first
         end
 
@@ -321,7 +320,7 @@ module InfernoSuiteGenerator
           test = Generator::TestIndex.new(group).find(kind, **details)
           return unless test
 
-          Delivery::ListingTest.new(group:, test_id: test.id, role: ROLES.fetch(test.kind), label: label(group, test))
+          Delivery::ListingTest.new(group:, test_id: test.id, kind: test.kind, label: label(group, test))
         end
 
         def label(group, test)
@@ -335,113 +334,96 @@ module InfernoSuiteGenerator
       end
 
       # The element paths a group's tests check: Must Support or required by the profile, `id`, and a Must
-      # Support extension's value. Across groups, a path is checked when any checks it, and labeled as that group
-      # names it, so a slice one profile defines keeps its name.
+      # Support extension's value. The Must Support test only looks for a sliced extension's URL, so inside one only
+      # what validation enforces counts: its value, or a complex extension's `value` part. A choice element read by
+      # its type, like `valueQuantity`, is compared as the element, like `value`.
       class CheckedElements
-        def initialize(groups)
-          @profiles = groups.map { |group| Profile.new(group) }
-        end
+        ALWAYS_PRESENT = %w[id].freeze
+        EXTENSION_URL = /\A((?:modifierE|e)xtension)\[url=(.+)\]\z/
+        EXTENSION_SLICE = /\A(?:modifierE|e)xtension:/
+        # After the slice: nothing, the value, or the `value` part and its value.
+        EXTENSION_REQUIRED = /\A(?:extension\[url=value\](?:\.value(?:[A-Z]\w*)?)?|value(?:[A-Z]\w*)?)?\z/
 
-        def checked?(path)
-          @profiles.any? { |profile| profile.checked?(path) }
+        def initialize(group)
+          must_supports = group.must_supports || {}
+          paths = element_paths(must_supports, group.mandatory_elements.to_a)
+          @paths = paths.to_set { |path| plain(path) }
+          @choices = choice_paths(paths)
+          @slices = must_supports[:extensions].to_a.to_h { |extension| slice(extension) }
         end
 
         # The path as sections show it: a Must Support extension by its slice, like `extension:sliceName`, and any
         # other extension by the end of its URL, like `extension[individual-pronouns]`.
         def label(path)
-          (@profiles.find { |profile| profile.checked?(path) } || @profiles.first).label(path)
+          sliced(path).gsub(%r{\[url=(?:[^\]]*/)?([^\]/]+)\]}, '[\1]')
         end
 
-        # The rule for one profile. The Must Support test only looks for a sliced extension's URL, so inside one only
-        # what validation enforces counts: its value, or a complex extension's `value` part. A choice element read by
-        # its type, like `valueQuantity`, is compared as the element, like `value`.
-        class Profile
-          ALWAYS_PRESENT = %w[id].freeze
-          EXTENSION_URL = /\A((?:modifierE|e)xtension)\[url=(.+)\]\z/
-          EXTENSION_SLICE = /\A(?:modifierE|e)xtension:/
-          # After the slice: nothing, the value, or the `value` part and its value.
-          EXTENSION_REQUIRED = /\A(?:extension\[url=value\](?:\.value(?:[A-Z]\w*)?)?|value(?:[A-Z]\w*)?)?\z/
-
-          def initialize(group)
-            must_supports = group.must_supports || {}
-            paths = element_paths(must_supports, group.mandatory_elements.to_a)
-            @paths = paths.to_set { |path| plain(path) }
-            @choices = choice_paths(paths)
-            @slices = must_supports[:extensions].to_a.to_h { |extension| slice(extension) }
-          end
-
-          def label(path)
-            sliced(path).gsub(%r{\[url=(?:[^\]]*/)?([^\]/]+)\]}, '[\1]')
-          end
-
-          def checked?(path)
-            name = sliced(path)
-            ALWAYS_PRESENT.include?(name) || @paths.include?(without_choice_types(name)) || required_by_extension?(name)
-          end
-
-          private
-
-          def required_by_extension?(name)
-            steps = segments(name)
-            slice = steps.rindex { |segment| segment.match?(EXTENSION_SLICE) }
-            slice && steps.drop(slice + 1).join(".").match?(EXTENSION_REQUIRED)
-          end
-
-          # The path with each extension the profile slices named by its slice.
-          def sliced(path)
-            segments(path).each_with_object([]) do |segment, done|
-              _, member, url = segment.match(EXTENSION_URL).to_a
-              done << (@slices[[done.join("."), member, url]] || segment)
-            end.join(".")
-          end
-
-          # Must Support element and slice paths are relative, like
-          # `value[x]:valueQuantity.value` or `onset[x]` for an `onsetDateTime`
-          # type slice; mandatory ones start with the type, like `Observation.status`.
-          def element_paths(must_supports, mandatory)
-            elements = must_supports[:elements].to_a + must_supports[:slices].to_a
-            (elements.map { |element| element[:path] } + mandatory.map { |path| path.split(".", 2).last }).compact
-          end
-
-          # `[parent path, name]` for each choice element, like `["", "value"]`
-          # for `value[x]:valueQuantity.value`.
-          def choice_paths(paths)
-            paths.filter_map do |path|
-              parent, _, name = plain(path[/\A.*?\[x\]/]).rpartition(".") if path.include?("[x]")
-              [parent, name] if name
-            end.to_set
-          end
-
-          # The name with each segment that names a choice element by its type,
-          # like `valueQuantity` or `effectiveDateTime`, written as the element.
-          def without_choice_types(name)
-            segments(name).each_with_object([]) do |segment, done|
-              done << (choice_name(done.join("."), segment) || segment)
-            end.join(".")
-          end
-
-          def choice_name(parent, segment)
-            @choices.find { |choice_parent, name| choice_parent == parent && segment.match?(/\A#{name}[A-Z]/) }&.last
-          end
-
-          # `[[parent path, member, url], "extension:sliceName"]` for an extension
-          # with an id like `Patient.address.extension:foo`.
-          def slice(extension)
-            parent, _, segment = extension[:id].to_s.split(".", 2).last.to_s.rpartition(".")
-            [[plain(parent), segment.split(":").first, extension[:url]], segment]
-          end
-
-          # A snapshot path without `[x]` and slice names, as trace paths are.
-          def plain(path)
-            path.gsub("[x]", "").gsub(/:[^.]+/, "")
-          end
-
-          # Dot-separated steps, keeping the dots inside `[url=...]` together.
-          def segments(path)
-            path.scan(/(?:[^.\[]+|\[[^\]]*\])+/)
-          end
+        def checked?(path)
+          name = sliced(path)
+          ALWAYS_PRESENT.include?(name) || @paths.include?(without_choice_types(name)) || required_by_extension?(name)
         end
-        private_constant :Profile
+
+        private
+
+        def required_by_extension?(name)
+          steps = segments(name)
+          slice = steps.rindex { |segment| segment.match?(EXTENSION_SLICE) }
+          slice && steps.drop(slice + 1).join(".").match?(EXTENSION_REQUIRED)
+        end
+
+        # The path with each extension the profile slices named by its slice.
+        def sliced(path)
+          segments(path).each_with_object([]) do |segment, done|
+            _, member, url = segment.match(EXTENSION_URL).to_a
+            done << (@slices[[done.join("."), member, url]] || segment)
+          end.join(".")
+        end
+
+        # Must Support element and slice paths are relative, like
+        # `value[x]:valueQuantity.value` or `onset[x]` for an `onsetDateTime`
+        # type slice; mandatory ones start with the type, like `Observation.status`.
+        def element_paths(must_supports, mandatory)
+          elements = must_supports[:elements].to_a + must_supports[:slices].to_a
+          (elements.map { |element| element[:path] } + mandatory.map { |path| path.split(".", 2).last }).compact
+        end
+
+        # `[parent path, name]` for each choice element, like `["", "value"]`
+        # for `value[x]:valueQuantity.value`.
+        def choice_paths(paths)
+          paths.filter_map do |path|
+            parent, _, name = plain(path[/\A.*?\[x\]/]).rpartition(".") if path.include?("[x]")
+            [parent, name] if name
+          end.to_set
+        end
+
+        # The name with each segment that names a choice element by its type,
+        # like `valueQuantity` or `effectiveDateTime`, written as the element.
+        def without_choice_types(name)
+          segments(name).each_with_object([]) do |segment, done|
+            done << (choice_name(done.join("."), segment) || segment)
+          end.join(".")
+        end
+
+        def choice_name(parent, segment)
+          @choices.find { |choice_parent, name| choice_parent == parent && segment.match?(/\A#{name}[A-Z]/) }&.last
+        end
+
+        # `[[parent path, member, url], "extension:sliceName"]` for an extension
+        # with an id like `Patient.address.extension:foo`.
+        def slice(extension)
+          parent, _, segment = extension[:id].to_s.split(".", 2).last.to_s.rpartition(".")
+          [[plain(parent), segment.split(":").first, extension[:url]], segment]
+        end
+
+        # A snapshot path without `[x]` and slice names, as trace paths are.
+        def plain(path)
+          path.gsub("[x]", "").gsub(/:[^.]+/, "")
+        end
+
+        # Dot-separated steps, keeping the dots inside `[url=...]` together.
+        def segments(path)
+          path.scan(/(?:[^.\[]+|\[[^\]]*\])+/)
+        end
       end
 
       private_constant :Lists, :Delivery, :ListingTests, :CheckedElements

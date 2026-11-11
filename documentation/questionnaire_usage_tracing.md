@@ -247,10 +247,8 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
 
 - `lib/inferno_suite_generator/questionnaire_usage.rb`: `QuestionnaireUsage.generate`, which traces the IG, and `QuestionnaireUsage.write`, which writes the results
 - `lib/inferno_suite_generator/questionnaire_usage/`:
-  - `tracer.rb`: walks each questionnaire, and finds the items that use a source, directly or through aliases
-  - `sources.rb`: a class per kind of source that traces it in a form into trace entries and the groups they link to. Add a kind of source here and in `trace_entry.rb`.
-  - `trace_entry.rb`: one source, with a class per kind that says whether it's shown, which request it makes and how a section names it; the questionnaire it came from; and the item uses it holds: how sections name each and what it does to the item
-  - `trace.rb`: the trace entries with the groups that share each
+  - `tracer.rb`: everything that produces the trace. `Tracer` walks each questionnaire, and finds the items that use a source, directly or through aliases. `Sources` has a class per kind of source that traces it in a form into trace entries and the groups they link to. Add a kind of source here and in `trace.rb`.
+  - `trace.rb`: everything that crosses from tracing to writing. A trace entry is one source, with a class per kind that says whether it's shown, which request it makes and how a section names it; it holds the questionnaire it came from and its item uses: how sections name each and what it does to the item. The trace holds the entries with the groups that share each.
   - `ast.rb`: reads FHIRPath expressions: the variables they reference, and what each chain from a variable reads from where that variable starts, which is also where an alias of the chain starts
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
   - `fhir_query.rb`: one x-fhir-query, parsed once: its resource type, whether it's a read, its search parameters, `_include` values and codes

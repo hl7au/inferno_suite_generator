@@ -205,6 +205,9 @@ module InfernoSuiteGenerator
         # The functions that pick some of the Bundle entries, as an indexer does.
         ENTRY_PICKS = %w[where first last tail skip take single].freeze
         BUNDLE_READ = { type: nil, types: [], path: "", stopped: true, criteria: [] }.freeze
+        # The node types a condition holds for all of, and those an extension's `url` condition is also read through.
+        AND_NODES = %w[AndExpression TermExpression ParenthesizedTerm].freeze
+        URL_NODES = [*AND_NODES, "ParamList", "InvocationTerm"].freeze
 
         module_function
 
@@ -294,28 +297,25 @@ module InfernoSuiteGenerator
         # The `X` of a `url = 'X'` condition, also inside `and`, parentheses or an unqualified `exists(...)`. One
         # inside another chain, like `extension.where(url = 'Y')`, is about a sub-extension, so it is skipped.
         def url_filter(args)
-          url_condition(args.first) if args.one?
+          literals(args.first, "url", URL_NODES).first if args.one?
         end
 
-        def url_condition(node)
+        # The `X` of each `left = 'X'` in a condition, read through the node types in `through` and an unqualified
+        # `exists(...)`, which only `InvocationTerm` reaches: a qualified call is in an `InvocationExpression`.
+        def literals(node, left, through)
           case node&.dig("type")
-          when "EqualityExpression" then url_equality(node)
-          when "AndExpression", "ParamList", "ParenthesizedTerm"
-            Ast.children(node).lazy.filter_map { |child| url_condition(child) }.first
-          when "TermExpression", "InvocationTerm" then url_condition(Ast.children(node).first)
-          when "FunctionInvocation" then url_exists(*Ast.children(Ast.children(node).first))
+          when "EqualityExpression" then [equal_literal(node, left)].compact
+          when "FunctionInvocation"
+            name, params = Ast.children(Ast.children(node).first)
+            Ast.identifier(name) == "exists" ? literals(params, left, through) : []
+          when *through then Ast.children(node).flat_map { |child| literals(child, left, through) }
+          else []
           end
         end
 
-        def url_equality(node)
-          left, right = Ast.children(node)
-          string_literal(right) if node["terminalNodeText"].to_a == ["="] && left&.dig("text") == "url"
-        end
-
-        # Reached only for an unqualified call: a qualified one is the right
-        # child of an `InvocationExpression`, which `url_condition` skips.
-        def url_exists(name, params = nil)
-          url_condition(params) if Ast.identifier(name) == "exists"
+        def equal_literal(node, left)
+          name, value = Ast.children(node)
+          string_literal(value) if node["terminalNodeText"].to_a == ["="] && name&.dig("text") == left
         end
 
         def string_literal(node)
@@ -383,36 +383,11 @@ module InfernoSuiteGenerator
           @criteria.concat(paths.map { |path| [prefix, path].reject(&:empty?).join(".") })
         end
 
-        # A `where(resourceType = 'T')` on the chain's start picks resources of type `T`.
+        # A `where(resourceType = 'T')` on the chain's start picks resources of type `T`: the one it requires,
+        # alone or in an `and`, and every one it names in any `and` or `or` branch.
         def read_resource_type(condition)
-          @type ||= required_type(condition)
-          @types.concat(named_types(condition))
-        end
-
-        # The `T` a condition requires with `resourceType = 'T'`, alone or in an `and`.
-        def required_type(condition)
-          case condition&.dig("type")
-          when "EqualityExpression" then resource_type_equality(condition)
-          when "AndExpression", "TermExpression", "ParenthesizedTerm"
-            Ast.children(condition).lazy.filter_map { |child| required_type(child) }.first
-          end
-        end
-
-        # Every `T` a condition names with `resourceType = 'T'`, in any `and` or `or` branch.
-        def named_types(condition)
-          case condition&.dig("type")
-          when "EqualityExpression" then [resource_type_equality(condition)].compact
-          when "AndExpression", "OrExpression", "TermExpression", "ParenthesizedTerm"
-            Ast.children(condition).flat_map { |child| named_types(child) }
-          else []
-          end
-        end
-
-        def resource_type_equality(node)
-          left, right = Ast.children(node)
-          return unless node["terminalNodeText"].to_a == ["="] && left&.dig("text") == "resourceType"
-
-          ChainPath.string_literal(right)
+          @type ||= ChainPath.literals(condition, "resourceType", ChainPath::AND_NODES).first
+          @types.concat(ChainPath.literals(condition, "resourceType", [*ChainPath::AND_NODES, "OrExpression"]))
         end
 
         # Folds an extension filter's url into the path, and returns whether it did.
