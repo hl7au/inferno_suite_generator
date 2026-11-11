@@ -257,7 +257,7 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
 - `test/questionnaire_usage/`, which tests through the two halves of `generate` and the whole of it:
   - `reads_test.rb`: what tracing reads, through `Tracer#trace`: forms in, trace entries out
   - `writes_test.rb`: what tracing writes, through `QuestionnaireUsage.write`: trace entries in, sections out
-  - `generate_test.rb` and `generator_wiring_test.rb`: `QuestionnaireUsage.generate` end to end, the second with the real test generators
+  - `generate_test.rb`: `QuestionnaireUsage.generate` end to end, over tests added by hand and then, in `GeneratorWiringTest`, with the real test generators
 
 ## Test
 

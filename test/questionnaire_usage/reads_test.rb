@@ -101,10 +101,7 @@ module InfernoSuiteGenerator
 
       MEDICATION_STATEMENT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-medicationstatement"
       MEDICATION = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-medication"
-      PRACTITIONER_ROLE = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-practitionerrole"
-      LOCATION = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-location"
       MEDS_QUERY = "MedicationStatement?patient={{%patient.id}}&status=active&_include=MedicationStatement:medication"
-      LOCATION_NAME_EXPRESSION = "%PractitionerRoleLocation.entry.resource.ofType(Location).first().name"
       MEDS_EXPRESSION = "%MedicationStatement.entry.resource.ofType(Medication)" \
                         ".where(id in %MedicationStatement.entry.resource.medication.select(reference))"
 
@@ -124,22 +121,21 @@ module InfernoSuiteGenerator
       end
 
       def test_an_explicit_target_type
-        entry = trace(location_form("PractitionerRole:location:Location"), profiles: suite_profiles)[LOCATION].first
+        entry = trace(location_form, profiles: suite_profiles)[LOCATION].first
 
         assert_equal ["name"], reads(entry)
         assert_equal ["location"], link_ids(entry)
       end
 
       def test_a_target_type_from_of_type_in_the_form
-        entry = trace(location_form("PractitionerRole:location"), profiles: suite_profiles)[LOCATION].first
+        entry = trace(location_form(include: "PractitionerRole:location"), profiles: suite_profiles)[LOCATION].first
 
         assert_equal "**Query PractitionerRoleLocation**: fetches Location resources through " \
                      "_include=PractitionerRole:location", entry.heading("Location")
       end
 
       def test_an_include_without_a_search_parameter_or_of_type_is_unresolved
-        query = location_query("PractitionerRole:location")
-        form = questionnaire(extension: [query_variable("PractitionerRoleLocation", query)])
+        form = location_form(include: "PractitionerRole:location").merge("item" => [])
 
         assert_output(/unresolved .* include PractitionerRole:location: no target type/) do
           refute trace(form, profiles: suite_profiles).key?(LOCATION)
@@ -168,8 +164,8 @@ module InfernoSuiteGenerator
       private
 
       def suite_profiles
-        { MEDICATION_STATEMENT => profile("MedicationStatement"), MEDICATION => profile("Medication"),
-          PRACTITIONER_ROLE => profile("PractitionerRole"), LOCATION => profile("Location") }
+        role_profiles.merge(MEDICATION_STATEMENT => profile("MedicationStatement"),
+                            MEDICATION => profile("Medication"))
       end
 
       def medication_param
@@ -200,17 +196,6 @@ module InfernoSuiteGenerator
                       expression("initialExpression", "%Heights.entry.resource.ofType(Observation).value"))]
         )
       end
-
-      def location_query(include)
-        "PractitionerRole?practitioner={{%user.id}}&_include=#{include}"
-      end
-
-      def location_form(include)
-        questionnaire(
-          extension: [query_variable("PractitionerRoleLocation", location_query(include))],
-          item: [item("location", "Location", expression("initialExpression", LOCATION_NAME_EXPRESSION))]
-        )
-      end
     end
 
     # Verifies `Tracer` routes a chain that picks entries with
@@ -219,15 +204,11 @@ module InfernoSuiteGenerator
     class ReadsEntryFilterTest < Minitest::Test
       include FormFixtures
 
-      PRACTITIONER_ROLE = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-practitionerrole"
-      LOCATION = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-location"
-      QUERY = "PractitionerRole?practitioner={{%user.id}}&_include=PractitionerRole:location:Location"
-
       def test_an_is_filter_on_entry_routes_a_chain_to_its_include_entry
         traces = location_traces("%PractitionerRoleLocation.entry.where(resource is Location).resource.name")
 
         assert_equal ["name"], reads(traces[LOCATION].first)
-        assert_empty traces[PRACTITIONER_ROLE].first.item_uses
+        assert_empty traces[ROLE].first.item_uses
       end
 
       def test_an_alias_of_filtered_entries_routes_its_chains_to_the_include_entry
@@ -235,7 +216,7 @@ module InfernoSuiteGenerator
         traces = location_traces("%Locations.resource.name", variables: [locations])
 
         assert_equal ["name"], reads(traces[LOCATION].first)
-        assert_empty traces[PRACTITIONER_ROLE].first.item_uses
+        assert_empty traces[ROLE].first.item_uses
       end
 
       def test_an_is_call_on_entry_routes_like_an_is_filter
@@ -247,7 +228,7 @@ module InfernoSuiteGenerator
       def test_an_as_filter_on_entry_picks_no_type
         traces = location_traces("%PractitionerRoleLocation.entry.where(resource as Location).resource.name")
 
-        assert_equal ["name"], reads(traces[PRACTITIONER_ROLE].first)
+        assert_equal ["name"], reads(traces[ROLE].first)
         assert_empty traces[LOCATION].first.item_uses
       end
 
@@ -264,9 +245,7 @@ module InfernoSuiteGenerator
 
       # The traces of a form whose `location` item reads `fhirpath`.
       def location_traces(fhirpath, variables: [])
-        form = questionnaire(extension: [query_variable("PractitionerRoleLocation", QUERY), *variables],
-                             item: [item("location", "Location", expression("initialExpression", fhirpath))])
-        trace(form, profiles: { PRACTITIONER_ROLE => profile("PractitionerRole"), LOCATION => profile("Location") })
+        trace(location_form(fhirpath:, variables:), profiles: role_profiles)
       end
     end
 
@@ -402,7 +381,6 @@ module InfernoSuiteGenerator
       include FormFixtures
 
       AU_CORE_CONDITION = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-condition"
-      PATCH_URL = "https://smartforms.csiro.au/ig/StructureDefinition/TemplateExtractExtensionPatchRequestUrl"
 
       def test_an_item_with_a_body_height_template
         form = questionnaire(contained: [body_height_template],
@@ -426,7 +404,7 @@ module InfernoSuiteGenerator
       end
 
       def test_a_patch_template_targets_the_type_in_its_operation_paths
-        form = questionnaire(contained: [condition_patch_template(path: "Condition")],
+        form = questionnaire(contained: [patch_template("ConditionPatchTemplate", path: "Condition")],
                              item: [item("condition", "Condition", condition_patch_extract)])
         entry = trace(form, profiles: suite_profiles)[AU_CORE_CONDITION].first
 
@@ -435,7 +413,7 @@ module InfernoSuiteGenerator
       end
 
       def test_a_patch_template_without_paths_targets_the_type_in_its_request_url
-        form = questionnaire(contained: [condition_patch_template],
+        form = questionnaire(contained: [patch_template("ConditionPatchTemplate")],
                              item: [item("condition", "Condition", condition_patch_extract)])
 
         assert_equal "ConditionPatchTemplate", trace(form, profiles: suite_profiles)[AU_CORE_CONDITION].first.name
@@ -462,13 +440,6 @@ module InfernoSuiteGenerator
         observation_profiles.merge(AU_CORE_CONDITION => profile("Condition"))
       end
 
-      def template_extract(reference, patch_url: nil)
-        parts = [{ "url" => "template", "valueReference" => { "reference" => reference } }]
-        parts << { "url" => PATCH_URL, "valueString" => patch_url } if patch_url
-        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtract",
-          "extension" => parts }
-      end
-
       def condition_patch_extract
         template_extract("#ConditionPatchTemplate",
                          patch_url: "'Condition/' + item.where(linkId='conditionId').answer.value")
@@ -479,15 +450,6 @@ module InfernoSuiteGenerator
           "category" => [{ "coding" => [{ "system" => OBSERVATION_CATEGORY, "code" => "vital-signs" }] }],
           "code" => { "coding" => [{ "system" => LOINC, "code" => "8302-2" },
                                    { "system" => SNOMED, "code" => "50373000" }] } }
-      end
-
-      # A FHIRPath Patch `Parameters`, with one `add` operation on `path` when
-      # given.
-      def condition_patch_template(path: nil)
-        parts = [{ "name" => "type", "valueCode" => "add" }, { "name" => "name", "valueString" => "clinicalStatus" }]
-        parts << { "name" => "path", "valueString" => path } if path
-        { "resourceType" => "Parameters", "id" => "ConditionPatchTemplate",
-          "parameter" => [{ "name" => "operation", "part" => parts }] }
       end
     end
 
@@ -642,7 +604,7 @@ module InfernoSuiteGenerator
 
       def patient_entry(fhirpath)
         form = questionnaire(extension: [launch_context("patient", "Patient")], item: [reading_item(fhirpath)])
-        trace(form, profiles: { AU_CORE_PATIENT => profile("Patient") })[AU_CORE_PATIENT].sole
+        trace(form, profiles: patient_profile)[AU_CORE_PATIENT].sole
       end
 
       def bundle_entry(fhirpath)
@@ -708,7 +670,7 @@ module InfernoSuiteGenerator
       end
 
       def test_only_an_id_after_the_type_makes_a_read
-        patient = { AU_CORE_PATIENT => profile("Patient") }
+        patient = patient_profile
 
         assert_equal [true], read_flags("Patient/{{%patient.id}}", patient)
         assert_equal [false], read_flags("Patient/_search?family=x", patient)

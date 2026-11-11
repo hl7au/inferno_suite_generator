@@ -7,10 +7,12 @@ require "inferno_suite_generator"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Profiles for the suites the tests trace. Body Height fixes its code with a
-    # `patternCodeableConcept`, Body Weight with `fixedCode` and `fixedUri` on a
-    # coding slice, like the real AU Core profiles.
+    # Profiles and groups for the suites the tests trace, and `Written`, what tracing wrote for them. Body Height
+    # fixes its code with a `patternCodeableConcept`, Body Weight with `fixedCode` and `fixedUri` on a coding
+    # slice, like the real AU Core profiles.
     module SuiteFixtures
+      include InfernoSuiteGenerator::GeneratorFixtures
+
       LOINC = "http://loinc.org"
       SNOMED = "http://snomed.info/sct"
       OBSERVATION_CATEGORY = "http://terminology.hl7.org/CodeSystem/observation-category"
@@ -20,7 +22,18 @@ module InfernoSuiteGenerator
       DIAGNOSTIC_RESULT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-diagnosticresult"
       AU_CORE_PATIENT = "http://hl7.org.au/fhir/core/StructureDefinition/au-core-patient"
       AU_BASE_PATIENT = "http://hl7.org.au/fhir/StructureDefinition/au-patient"
-      RECORDED_SEX_URL = "http://hl7.org/fhir/StructureDefinition/individual-recordedSexOrGender"
+      ROLE = "http://example.org/StructureDefinition/role"
+      LOCATION = "http://example.org/StructureDefinition/location"
+      UNCHECKING = "http://example.org/StructureDefinition/obs-unchecking"
+      CHECKING = "http://example.org/StructureDefinition/obs-checking"
+
+      # What tracing wrote: each group's summary, and the section of each test that got one by its id, in group
+      # order. A group or test without one has "".
+      Written = Data.define(:summaries, :sections) do
+        def summary(group) = summaries.fetch(group)
+        def section(test_id) = sections.fetch(test_id, "")
+        def tested_by = sections.keys
+      end
 
       def observation_profiles
         {
@@ -29,6 +42,14 @@ module InfernoSuiteGenerator
           PATHOLOGY_RESULT => profile("Observation", pattern_element("Observation.category", "laboratory")),
           DIAGNOSTIC_RESULT => profile("Observation")
         }
+      end
+
+      def role_profiles
+        { ROLE => profile("PractitionerRole"), LOCATION => profile("Location") }
+      end
+
+      def patient_profile
+        { AU_CORE_PATIENT => profile("Patient") }
       end
 
       # The code as a `patternCodeableConcept`.
@@ -79,18 +100,55 @@ module InfernoSuiteGenerator
           "snapshot" => { "element" => definition["elements"] }
         )
       end
+
+      # What the descriptions hold for the groups. Call it under the config, which names groups that share a type.
+      def written_in(descriptions, groups)
+        Written.new(summaries: groups.to_h { |group| [group, descriptions.for(group).join] }.compare_by_identity,
+                    sections: groups.flat_map { |group| sections_in(descriptions, group) }.to_h)
+      end
+
+      # `[test id, section]` for each of the group's tests that got one.
+      def sections_in(descriptions, group)
+        ids = group.tests.to_a.map { |test| test[:id].to_s }
+        ids.map { |id| [id, descriptions.for_test(group, id).join] }.reject { |_id, section| section.empty? }
+      end
+
+      # Adds tests of these kinds to the group and returns it. A kind has one details Hash, or a list of them for
+      # several tests. Their ids are `<prefix>_<kind>`, numbered when the kind has a list.
+      def with_tests(group, prefix, **tests)
+        tests.each do |kind, details|
+          Array.wrap(details).each.with_index(1) do |test_details, index|
+            id = [prefix, kind, (index if details.is_a?(Array))].compact.join("_")
+            add_test(group, id, kind.to_s, **test_details)
+          end
+        end
+        group
+      end
+
+      def add_test(group, id, kind, **details)
+        group.add_test(id:, file_name: "#{id}.rb", kind:, **details)
+      end
+
+      # An Observation group with a `<name>_must_support` test.
+      def observation_group(name, profile_url, **must_supports)
+        with_tests(build_group_metadata(name: "obs_#{name}", resource: "Observation", profile_url:, must_supports:),
+                   name, must_support: {})
+      end
     end
 
-    # Questionnaire builders, and `trace`, which traces a form over a suite the
-    # way `Tracer#trace` does for the generator.
+    # Questionnaire builders, and `trace`, which traces a form over a suite the way `Tracer#trace` does for the
+    # generator.
     module FormFixtures
       include SuiteFixtures
-      include InfernoSuiteGenerator::GeneratorFixtures
 
+      RECORDED_SEX_URL = "http://hl7.org/fhir/StructureDefinition/individual-recordedSexOrGender"
+      SDC = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-"
+      PATCH_URL = "https://smartforms.csiro.au/ig/StructureDefinition/TemplateExtractExtensionPatchRequestUrl"
       FORM_URL = "http://www.health.gov.au/assessments/GPChronicConditionManagementPlan"
       FORM_TITLE = "GP Chronic Condition Management Plan"
       HEIGHT_QUERY = "Observation?code=8302-2&_sort=-date&patient={{%patient.id}}"
       WEIGHT_QUERY = "Observation?code=29463-7&_sort=-date&patient={{%patient.id}}"
+      LOCATION_NAME = "%PractitionerRoleLocation.entry.resource.ofType(Location).first().name"
 
       # `{ profile_url => [TraceEntry] }`.
       def trace(form, profiles: observation_profiles, resources: [])
@@ -113,15 +171,6 @@ module InfernoSuiteGenerator
         entry.item_uses.flat_map(&:reads).uniq
       end
 
-      # The ids of the groups' tests whose descriptions got a section, in group order.
-      def tests_with_sections(descriptions, groups)
-        with_config_keeper do
-          groups.flat_map do |group|
-            group.tests.to_a.map { |test| test[:id].to_s }.select { |id| descriptions.for_test(group, id).any? }
-          end
-        end
-      end
-
       def questionnaire(extension: [], item: [], contained: [])
         { "resourceType" => "Questionnaire", "url" => FORM_URL, "version" => "0.1.0",
           "title" => FORM_TITLE, "status" => "draft",
@@ -133,37 +182,57 @@ module InfernoSuiteGenerator
           "extension" => extensions, "item" => children }
       end
 
-      # The questionnaire of every trace entry the write tests build.
-      def form_header
-        FormHeader.new(url: FORM_URL, version: "0.1.0", title: FORM_TITLE)
+      # A form whose `location` item reads `fhirpath` from a PractitionerRole search that includes its Locations.
+      def location_form(include: "PractitionerRole:location:Location", fhirpath: LOCATION_NAME, variables: [])
+        questionnaire(extension: [query_variable("PractitionerRoleLocation", role_query(include)), *variables],
+                      item: [item("location", "Location", expression("initialExpression", fhirpath))])
+      end
+
+      def role_query(include = "PractitionerRole:location:Location")
+        "PractitionerRole?practitioner={{%user.id}}&_include=#{include}"
       end
 
       def query_variable(name, query)
+        variable(name, query, "application/x-fhir-query")
+      end
+
+      def fhirpath_variable(name, fhirpath)
+        variable(name, fhirpath, "text/fhirpath")
+      end
+
+      def variable(name, expression, language)
         { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
-          "valueExpression" => { "name" => name, "language" => "application/x-fhir-query", "expression" => query } }
+          "valueExpression" => { "name" => name, "language" => language, "expression" => expression } }
       end
 
       def expression(name, fhirpath)
-        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-#{name}",
-          "valueExpression" => { "language" => "text/fhirpath", "expression" => fhirpath } }
+        { "url" => "#{SDC}#{name}", "valueExpression" => { "language" => "text/fhirpath", "expression" => fhirpath } }
       end
 
       # `value_id: true` gives the name as `valueId`, like older SDC versions.
       def launch_context(name, *types, value_id: false)
         name_part = value_id ? { "valueId" => name } : { "valueCoding" => { "code" => name } }
-        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext",
+        { "url" => "#{SDC}launchContext",
           "extension" => [{ "url" => "name", **name_part },
                           *types.map { |type| { "url" => "type", "valueCode" => type } }] }
       end
 
       def assemble_context(name)
-        { "url" => "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembleContext",
-          "valueString" => name }
+        { "url" => "#{SDC}assembleContext", "valueString" => name }
       end
 
-      def fhirpath_variable(name, fhirpath)
-        { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
-          "valueExpression" => { "name" => name, "language" => "text/fhirpath", "expression" => fhirpath } }
+      # A `templateExtract` of a contained resource; `patch_url:` adds the smartforms PATCH request URL.
+      def template_extract(reference, patch_url: nil)
+        parts = [{ "url" => "template", "valueReference" => { "reference" => reference } }]
+        parts << { "url" => PATCH_URL, "valueString" => patch_url } if patch_url
+        { "url" => "#{SDC}templateExtract", "extension" => parts }
+      end
+
+      # A FHIRPath Patch `Parameters`, with one `add` operation on `path` when given.
+      def patch_template(id, path: nil)
+        parts = [{ "name" => "type", "valueCode" => "add" }, { "name" => "name", "valueString" => "clinicalStatus" }]
+        parts << { "name" => "path", "valueString" => path } if path
+        { "resourceType" => "Parameters", "id" => id, "parameter" => [{ "name" => "operation", "part" => parts }] }
       end
     end
 
@@ -176,14 +245,13 @@ module InfernoSuiteGenerator
       PRONOUNS = "http://hl7.org/fhir/StructureDefinition/individual-pronouns"
       LOCATION_QUERY = "PractitionerRole?_id={{%role.id}}&_include=PractitionerRole:location"
 
-      # What `QuestionnaireUsage.write` wrote: the descriptions, and the ids of
-      # the tests that got a section, in group order.
-      Written = Data.define(:descriptions, :tested_by)
-
+      # What `QuestionnaireUsage.write` wrote for the groups.
       def write(trace, groups)
         descriptions = InfernoSuiteGenerator::Generator::GroupDescriptions.new
-        with_config_keeper { QuestionnaireUsage.write(trace, groups:, descriptions:) }
-        Written.new(descriptions:, tested_by: tests_with_sections(descriptions, groups))
+        with_config_keeper do
+          QuestionnaireUsage.write(trace, groups:, descriptions:)
+          written_in(descriptions, groups)
+        end
       end
 
       # A Trace of the entries, each shared by all the groups.
@@ -199,13 +267,13 @@ module InfernoSuiteGenerator
       # The group's summary for the entries, "" when it has none. A group with no
       # tests lists every source in full under "Not tested by this group".
       def summary(entries, group: patient_group)
-        written(entries, group).descriptions.for(group).join
+        written(entries, group).summary(group)
       end
 
       # The section written to a test of this kind, "" when it has none.
       def section_of_test(entries, kind, group: patient_group, **details)
         add_test(group, "patient_#{kind}", kind, **details)
-        written(entries, group).descriptions.for_test(group, "patient_#{kind}").join
+        written(entries, group).section("patient_#{kind}")
       end
 
       # The ids of the tests that list the entry.
@@ -213,8 +281,9 @@ module InfernoSuiteGenerator
         written([entry], group).tested_by
       end
 
-      def add_test(group, id, kind, **details)
-        group.add_test(id:, file_name: "#{id}.rb", kind:, **details)
+      # The questionnaire of every trace entry the write tests build.
+      def form_header
+        FormHeader.new(url: FORM_URL, version: "0.1.0", title: FORM_TITLE)
       end
 
       def launch_entry(reads: ["birthDate"], header: form_header,
@@ -240,15 +309,16 @@ module InfernoSuiteGenerator
         TraceEntry::Template.new(header: form_header, name: "height", patch:, template_codes:, item_uses:)
       end
 
-      # A Patient group whose profile marks birthDate, deceasedBoolean and the
-      # Indigenous Status extension Must Support and requires gender.
-      def patient_group(searches: [{ names: ["_id"] }, { names: %w[family gender] }])
-        InfernoSuiteGenerator::Generator::GroupMetadata.new(
+      # A Patient group whose profile marks birthDate, deceasedBoolean and the Indigenous Status extension Must
+      # Support and requires gender, with `patient_<kind>` tests of the kinds in `tests`.
+      def patient_group(searches: [{ names: ["_id"] }, { names: %w[family gender] }], tests: {})
+        group = InfernoSuiteGenerator::Generator::GroupMetadata.new(
           resource: "Patient", profile_url: AU_CORE_PATIENT, searches:, mandatory_elements: ["Patient.gender"],
           must_supports: { elements: [{ path: "birthDate" }, { path: "deceasedBoolean" }],
                            slices: [{ slice_id: "Patient.deceased[x]:deceasedBoolean", path: "deceased[x]" }],
                            extensions: [{ id: "Patient.extension:indigenousStatus", url: INDIGENOUS_STATUS }] }
         )
+        with_tests(group, "patient", **tests)
       end
     end
 
@@ -269,25 +339,24 @@ module InfernoSuiteGenerator
         FileUtils.remove_entry(@dir)
       end
 
-      # Runs the tracing over the form and returns the descriptions it added.
-      def run_tracing(form = patient_form, groups: [@group], profiles: { AU_CORE_PATIENT => profile("Patient") })
+      # What `QuestionnaireUsage.generate` wrote for the groups when it traced the form.
+      def run_tracing(form = patient_form, groups: [@group], profiles: patient_profile)
+        with_config_keeper { written_in(descriptions_of(form, groups, profiles), groups) }
+      end
+
+      def descriptions_of(form, groups, profiles)
         _groups, ig_resources = suite_for(profiles)
         ig_resources.add(FHIR::Questionnaire.new(form))
         InfernoSuiteGenerator::Generator::GroupDescriptions.new.tap do |descriptions|
-          with_config_keeper do
-            QuestionnaireUsage.generate(ig_resources:, groups:, descriptions:)
-          end
+          QuestionnaireUsage.generate(ig_resources:, groups:, descriptions:)
         end
       end
 
-      def add_test(group, id, kind, **details)
-        group.add_test(id:, file_name: "#{id}.rb", kind:, **details)
-      end
-
-      # Writes the Patient group file with the descriptions and returns its path.
-      def generate_group_file(descriptions)
+      # Traces the form, writes the Patient group file with what that added, and returns its path.
+      def generate_group_file(form)
         FileUtils.mkdir_p(File.join(@dir, "patient"))
         with_config_keeper do
+          descriptions = descriptions_of(form, [@group], patient_profile)
           InfernoSuiteGenerator::Generator::GroupGenerator.generate(build_ig_metadata(groups: [@group]), @dir,
                                                                     descriptions)
         end

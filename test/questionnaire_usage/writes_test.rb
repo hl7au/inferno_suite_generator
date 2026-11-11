@@ -218,7 +218,7 @@ module InfernoSuiteGenerator
       include WriteFixtures
 
       def test_names_the_tests_that_list_each_questionnaire
-        markdown = summary([launch_entry], group: group_with("read", "must_support"))
+        markdown = summary([launch_entry], group: patient_group(tests: { read: {}, must_support: {} }))
 
         assert_includes markdown, "- **#{FORM_TITLE}**: see the read and Must Support tests\n"
         refute_includes markdown, "**Not tested by this group**"
@@ -243,7 +243,7 @@ module InfernoSuiteGenerator
       def test_lists_the_elements_no_test_checks
         entry = launch_entry(reads: %w[birthDate contact])
 
-        assert summary([entry], group: group_with("read")).end_with?(<<~MARKDOWN)
+        assert summary([entry], group: patient_group(tests: { read: {} })).end_with?(<<~MARKDOWN)
           **Elements not checked**
 
           The profile neither marks these elements Must Support nor requires them, so no test checks that the server returns them.
@@ -255,14 +255,6 @@ module InfernoSuiteGenerator
 
       def test_is_left_out_when_no_entry_is_shown
         assert_empty summary([launch_entry(item_uses: [])])
-      end
-
-      private
-
-      def group_with(*kinds)
-        patient_group.tap do |group|
-          kinds.each { |kind| group.add_test(id: "patient_#{kind}", file_name: "#{kind}.rb", kind:) }
-        end
       end
     end
 
@@ -352,18 +344,15 @@ module InfernoSuiteGenerator
       include WriteFixtures
 
       def setup
-        @patient = patient_group
-        add_test(@patient, "patient_read", "read")
-        add_test(@patient, "patient_must_support", "must_support")
+        @patient = patient_group(tests: { read: {}, must_support: {} })
       end
 
       def test_an_entry_is_listed_by_its_request_test_and_the_must_support_test_it_reads_for
         result = written([launch_entry], @patient)
 
         assert_equal %w[patient_read patient_must_support], result.tested_by
-        assert_includes result.descriptions.for_test(@patient, "patient_read").join, "**Launch context patient**"
-        assert_includes result.descriptions.for_test(@patient, "patient_must_support").join,
-                        "**birthDate**: Date of birth"
+        assert_includes result.section("patient_read"), "**Launch context patient**"
+        assert_includes result.section("patient_must_support"), "**birthDate**: Date of birth"
       end
 
       def test_an_entry_that_reads_no_checked_element_skips_the_must_support_test
@@ -371,10 +360,7 @@ module InfernoSuiteGenerator
       end
 
       def test_a_group_without_a_must_support_test_lists_the_request_only
-        group = patient_group
-        add_test(group, "patient_read", "read")
-
-        assert_equal %w[patient_read], tested_by(launch_entry, group:)
+        assert_equal %w[patient_read], tested_by(launch_entry, group: patient_group(tests: { read: {} }))
       end
 
       def test_an_entry_that_is_not_shown_is_listed_by_no_test
@@ -389,25 +375,25 @@ module InfernoSuiteGenerator
         result = write(Trace.new, [@patient])
 
         assert_empty result.tested_by
-        assert_empty result.descriptions.for(@patient)
+        assert_empty result.summary(@patient)
       end
 
       def test_two_equal_entries_of_a_group_stay_apart
-        section = written([launch_entry, launch_entry], @patient).descriptions.for_test(@patient, "patient_read")
+        section = written([launch_entry, launch_entry], @patient).section("patient_read")
 
-        assert_equal 2, section.join.scan("**Launch context patient**").size
+        assert_equal 2, section.scan("**Launch context patient**").size
       end
 
       def test_a_shared_include_is_listed_once_by_its_test
         role = build_group_metadata(name: "role", resource: "PractitionerRole", profile_url: "role", title: "Role")
-        add_test(role, "role_include", "include", search_names: ["practitioner"], include_targets: ["Observation"])
+        with_tests(role, "role", include: { search_names: ["practitioner"], include_targets: ["Observation"] })
         first, second = %w[first second].map do |name|
           build_group_metadata(name: "obs_#{name}", resource: "Observation", profile_url: name)
         end
-        entry = include_entry("PractitionerRole?practitioner={{%user.id}}&_include=PractitionerRole:location")
+        entry = include_entry(role_query("PractitionerRole:location"))
         result = write(trace_of([entry], [first, second]), [role, first, second])
 
-        assert_equal 1, result.descriptions.for_test(role, "role_include").join.scan("**Query Roles**").size
+        assert_equal 1, result.section("role_include").scan("**Query Roles**").size
         assert_equal ["role_include"], result.tested_by
       end
     end
@@ -415,8 +401,6 @@ module InfernoSuiteGenerator
     # Verifies which test makes the request of each kind of source.
     class WritesRequestTest < Minitest::Test
       include WriteFixtures
-
-      ROLE_QUERY = "PractitionerRole?practitioner={{%user.id}}&_include=PractitionerRole:location"
 
       def setup
         @patient = group("Patient", read: {}, create: {}, update: { option: "update" },
@@ -446,7 +430,7 @@ module InfernoSuiteGenerator
       end
 
       def test_an_include_goes_to_the_include_test_of_the_searching_group
-        entry = include_entry(ROLE_QUERY)
+        entry = include_entry(role_query("PractitionerRole:location"))
 
         assert_equal ["practitionerrole_include_2"], route(@location, entry)
         assert_includes summary_of(@location, entry), "see the search with _include in PractitionerRole test"
@@ -479,20 +463,14 @@ module InfernoSuiteGenerator
       end
 
       def summary_of(group, entry)
-        write(trace_of([entry], [group]), @groups).descriptions.for(group).join
+        write(trace_of([entry], [group]), @groups).summary(group)
       end
 
-      # A group with tests of these kinds, each kind with one details hash or a list of them.
+      # A group with tests of these kinds, as `with_tests` adds them.
       def group(resource, **tests)
-        InfernoSuiteGenerator::Generator::GroupMetadata.new(resource:, profile_url: resource, title: resource,
-                                                            searches: []).tap do |group|
-          tests.each do |kind, details|
-            Array.wrap(details).each.with_index(1) do |test_details, index|
-              id = [resource.downcase, kind, (index if details.is_a?(Array))].compact.join("_")
-              add_test(group, id, kind.to_s, **test_details)
-            end
-          end
-        end
+        group = InfernoSuiteGenerator::Generator::GroupMetadata.new(resource:, profile_url: resource,
+                                                                    title: resource, searches: [])
+        with_tests(group, resource.downcase, **tests)
       end
     end
 
@@ -502,8 +480,6 @@ module InfernoSuiteGenerator
     class WritesSharedEntryTest < Minitest::Test
       include WriteFixtures
 
-      UNCHECKING = "http://example.org/StructureDefinition/obs-unchecking"
-      CHECKING = "http://example.org/StructureDefinition/obs-checking"
       READS = "reads status, note (not checked), extension:indigenousStatus.value\n"
 
       def setup
@@ -516,28 +492,14 @@ module InfernoSuiteGenerator
       end
 
       def test_every_group_shows_an_element_as_checked_and_named_as_the_group_that_checks_it
-        [@unchecking, @checking].each { |group| assert_includes text { |written| written.for(group) }, READS }
+        [@unchecking, @checking].each { |group| assert_includes @written.summary(group), READS }
       end
 
       def test_only_the_group_that_checks_an_element_lists_it_in_its_must_support_test
         assert_equal ["checking_must_support"], @written.tested_by
-        assert_empty(text { |written| written.for_test(@unchecking, "unchecking_must_support") })
-        assert_includes text { |written| written.for_test(@checking, "checking_must_support") },
+        assert_empty @written.section("unchecking_must_support")
+        assert_includes @written.section("checking_must_support"),
                         "- **status**: Date of birth\n  - **extension:indigenousStatus.value**: Date of birth"
-      end
-
-      private
-
-      # An Observation group with a Must Support test.
-      def observation_group(name, profile_url, **must_supports)
-        build_group_metadata(name: "obs_#{name}", resource: "Observation", profile_url:, must_supports:)
-          .tap { |group| add_test(group, "#{name}_must_support", "must_support") }
-      end
-
-      # What the block reads from the descriptions. Observation groups are named
-      # through the config, as several profiles share the type.
-      def text
-        with_config_keeper { yield(@written.descriptions).join }
       end
     end
   end
