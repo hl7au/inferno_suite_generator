@@ -217,7 +217,7 @@ flowchart TD
     update -- not found --> none
 ```
 
-An include test belongs to group B, so it lists entries traced for group G. An `_include` links to every group of its target type, so the test lists the entry once, and an element counts as checked when any of those groups checks it. All lookups go through `Generator::TestIndex`, which finds tests by the kind and details the generators recorded. Those exist only in memory, so `Generator#generate` runs the tracing after the test generators and before `GroupGenerator`, which writes what it adds. Tracing raises when no group has a recorded test. `test/questionnaire_usage/generator_wiring_test.rb` runs the real generators in that order.
+An include test belongs to group B, so it lists entries traced for group G. An `_include` links to every group of its target type, so the test lists the entry once, and an element counts as checked when any of those groups checks it. All lookups go through `Generator::TestIndex`, which finds tests by the kind and details the generators recorded. Those exist only in memory, so `Generator#generate` runs the tracing after the test generators and before `GroupGenerator`, which writes what it adds. Tracing raises when no group has a recorded test. `GeneratorWiringTest` in `test/questionnaire_usage/generate_test.rb` runs the real generators in that order.
 
 ### The elements
 
@@ -251,7 +251,7 @@ Inferno shows tables without borders and raw HTML as text, so the sections use o
   - `trace.rb`: everything that crosses from tracing to writing. A trace entry is one source, with a class per kind that says whether it's shown, which request it makes and how a section names it; it holds the questionnaire it came from and its item uses: how sections name each and what it does to the item. The trace holds the entries with the groups that share each. A query's entries carry its `FhirQuery`: one x-fhir-query, parsed once: its resource type, whether it's a read, its search parameters, `_include` values and codes.
   - `ast.rb`: reads FHIRPath expressions: the variables they reference, and what each chain from a variable reads from where that variable starts, which is also where an alias of the chain starts
   - `profile_matcher.rb`: matches a source to the groups whose profile it fits
-  - `sections.rb`: decides which tests list each entry and which elements count as checked (its private `Delivery`, `ListingTests`, which alone knows the generator's test kinds, and `CheckedElements`), then writes every "Used in questionnaires" section: the test sections, the Must Support sections and the group summaries
+  - `sections.rb`: decides which tests list each entry and which elements count as checked (its private `Delivery`, `ListingTests`, which finds tests by the generator's test kinds, and `CheckedElements`), then writes every "Used in questionnaires" section: the test sections, the Must Support sections and the group summaries
 - `lib/inferno_suite_generator/core/test_index.rb`: finds a group's tests by kind and details
 - `lib/inferno_suite_generator/core/group_descriptions.rb`: collects and escapes the added description text
 - `test/questionnaire_usage/`, which tests through the two halves of `generate` and the whole of it:

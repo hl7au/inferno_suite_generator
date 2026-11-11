@@ -277,8 +277,8 @@ module InfernoSuiteGenerator
         end
       end
 
-      # Finds the listing tests: an entry's request test and a group's Must Support test. Only it knows the
-      # generator's test kinds, which `Generator::TestIndex` finds tests by.
+      # Finds the listing tests: an entry's request test and a group's Must Support test, by the generator's test
+      # kinds, which `Generator::TestIndex` finds tests by.
       class ListingTests
         # `[kind, details]` lookups for `TestIndex#find` by request, tried in order, from the entry and its group's
         # type. An `_include` prefers the include test that searches by the same parameters; a FHIRPath Patch goes
@@ -333,10 +333,9 @@ module InfernoSuiteGenerator
         end
       end
 
-      # The element paths a group's tests check: Must Support or required by the profile, `id`, and a Must
-      # Support extension's value. The Must Support test only looks for a sliced extension's URL, so inside one only
-      # what validation enforces counts: its value, or a complex extension's `value` part. A choice element read by
-      # its type, like `valueQuantity`, is compared as the element, like `value`.
+      # The element paths a group's tests check: Must Support or required by the profile, `id`, and a Must Support
+      # extension's value or `value` part, which is all validation enforces inside one: the Must Support test only
+      # looks for its URL. A choice element read by its type, like `valueQuantity`, is compared as the element.
       class CheckedElements
         ALWAYS_PRESENT = %w[id].freeze
         EXTENSION_URL = /\A((?:modifierE|e)xtension)\[url=(.+)\]\z/
