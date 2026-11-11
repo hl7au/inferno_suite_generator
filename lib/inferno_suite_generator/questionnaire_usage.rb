@@ -2,7 +2,6 @@
 
 require_relative "core/test_index"
 require_relative "questionnaire_usage/ast"
-require_relative "questionnaire_usage/fhir_query"
 require_relative "questionnaire_usage/profile_matcher"
 require_relative "questionnaire_usage/trace"
 require_relative "questionnaire_usage/tracer"

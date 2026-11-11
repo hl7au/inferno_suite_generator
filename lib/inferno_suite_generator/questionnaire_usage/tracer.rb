@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "ast"
-require_relative "fhir_query"
 require_relative "profile_matcher"
 require_relative "trace"
 
