@@ -66,6 +66,10 @@ module InfernoSuiteGenerator
           get("suite.links", EMPTY_ARRAY)
         end
 
+        def questionnaire_usage_tracing?
+          get("configs.generic.questionnaire_usage_tracing", false) == true
+        end
+
         def package_archive_path
           get("ig.package_archive_path", nil)
         end

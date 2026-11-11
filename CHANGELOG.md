@@ -12,11 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `suite.validation_message_overrides` configuration option to change the severity of FHIR validator messages matched by regex (optionally narrowed by `from`, `location` and `message_id`). Implemented by `InfernoSuiteGenerator::ValidationMessageOverrides`, which generated suites extend their default validator with.
 - Added `suite.groups_order` configuration option to control the order of `groups` in the generated `metadata.yml`. Profiles listed in `groups_order` are placed first in the given order, with any remaining profiles appended afterward in their existing relative order.
 - Added shared `bin/hot-reload` dev-tooling asset and `InfernoSuiteGenerator::DevTools::HotReloadInstaller` to install/update it in a consumer test kit, replacing the copy-pasted watcher script previously maintained separately in each kit repo.
+- Added `configs.generic.questionnaire_usage_tracing`, off by default. When a kit sets it to `true`, the generator traces which SDC questionnaires in the IG use each profile, through `x-fhir-query` variables and their `_include` targets, launch contexts and `templateExtract` templates, and which items use them and the element paths they read. Sources that match no group are logged and left out. Each source goes into the description of the test that makes its request: the read test for launch contexts and reads, the search test by the same parameters, the include test of the searching group, and the create, patch or update test for templates. The Must Support test lists the elements items read that the profile marks Must Support or requires. The group description keeps a summary: the questionnaires with the tests that list them, the sources no test makes the request of, and the elements no test checks. Groups no questionnaire uses are unchanged. `metadata.yml` and `demodata.yml` are unchanged. See `documentation/questionnaire_usage_tracing.md`.
+- Added `Generator::TestIndex`, which finds a group's tests by kind and details, and `Generator::GroupDescriptions`, which appends escaped Markdown to group and test descriptions. Built-in generators now record each test's kind and details through `GroupMetadata#add_test(id:, file_name:, kind: nil, **details)`, kept in memory and out of `metadata.yml`.
 
 ### Changed
 
 - Tightened the `inferno_core` dependency to `~> 1.4`, `>= 1.4.1`: validation message overrides rely on the validator issue pipeline introduced in the 1.4 series.
 - Relaxed `required_ruby_version` from `= 3.3.6` to `>= 3.3.6, < 3.4` so consumers can run any Ruby 3.3 patch release. Development, CI and the Docker image now use Ruby 3.3.12.
+
+### Fixed
+
+- `GeneratorConfigKeeper` no longer merges every config into one shared hash, which leaked one keeper's config into the next when several were created in the same process.
 
 ## [0.2.0] - 2026-07-07
 
