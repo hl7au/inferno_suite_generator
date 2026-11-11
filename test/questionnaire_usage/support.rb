@@ -31,7 +31,7 @@ module InfernoSuiteGenerator
       # order. A group or test without one has "".
       Written = Data.define(:summaries, :sections) do
         def summary(group) = summaries.fetch(group)
-        def section(test_id) = sections.fetch(test_id, "")
+        def section(test_id) = sections[test_id].to_s
         def tested_by = sections.keys
       end
 
