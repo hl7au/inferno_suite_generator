@@ -5,6 +5,7 @@ require "active_support/all"
 require "sequel"
 require "stringio"
 require "fhir_models"
+require "rack/mock"
 require "inferno_suite_generator/utils/kept_resources_repository"
 require "inferno_suite_generator/utils/resource_keeper_endpoints"
 
@@ -307,6 +308,44 @@ module InfernoSuiteGenerator
 
     def kept_resource(endpoint, resource_type:, resource_id:)
       endpoint.kept_resources_repository.find(session_id: "session-1", resource_type:, resource_id:)
+    end
+  end
+
+  # Wraps the real Hanami endpoint, the way a generated suite registers it.
+  class FhirpathLabCorsAroundFetchResourceEndpointTest < Minitest::Test
+    include WithRepositoryDb
+
+    LAB_ORIGIN = "https://fhirpath-lab.com"
+
+    def setup
+      @db = Sequel.sqlite
+      @handler = FhirpathLabCors.new(FetchResourceEndpoint, lab_url: "#{LAB_ORIGIN}/FhirPath")
+    end
+
+    def test_a_kept_resource_is_served_with_the_lab_origin_allowed
+      resource = FHIR::Patient.new(id: "patient-1", gender: "male")
+
+      status, headers, body = with_repository_db do
+        KeptResourcesRepository.new.save(session_id: "session-1", resource:)
+        get_resource("patient-1")
+      end
+
+      assert_equal [200, resource.to_json], [status, body.join]
+      assert_equal LAB_ORIGIN, headers["Access-Control-Allow-Origin"]
+    end
+
+    def test_a_missing_resource_is_a_404_the_lab_origin_can_read
+      status, headers, = with_repository_db { get_resource("nope") }
+
+      assert_equal 404, status
+      assert_equal LAB_ORIGIN, headers["Access-Control-Allow-Origin"]
+    end
+
+    private
+
+    def get_resource(resource_id)
+      params = { session_id: "session-1", resource_type: "Patient", resource_id: }
+      @handler.call(Rack::MockRequest.env_for("/", "HTTP_ORIGIN" => LAB_ORIGIN, "router.params" => params))
     end
   end
 end

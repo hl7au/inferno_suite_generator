@@ -231,6 +231,8 @@ Every generated suite automatically keeps a copy of every FHIR resource it reads
 
 Kept resources expire after `RESOURCE_KEEPER_EXPIRATION_MS` milliseconds (env var, default `604800000` / 7 days) — an expired resource is served as a 404, but its row is not deleted. `DELETE /custom/<suite_id>/resources/:session_id` removes a session's *references* to its resources (rows in `kept_fhir_resources`), which is enough to make them unreachable via this API; it does **not** purge the underlying resource bodies from `kept_resource_bodies` — those are content-addressed and shared across sessions (see below), so they're left in place indefinitely rather than garbage-collected. This endpoint is not a data-erasure mechanism.
 
+FHIRPath Lab fetches a kept resource from the browser, so the `GET` route is CORS-enabled for exactly one origin: that of `fhirpathlab_url` (see `InfernoSuiteGenerator::FhirpathLabCors` in [`fhirpath_lab_cors.rb`](lib/inferno_suite_generator/utils/fhirpath_lab_cors.rb)). A request from that origin gets `Access-Control-Allow-Origin` (plus `Vary: Origin`), and the route answers the `OPTIONS` preflight allowing `GET` with the `Accept` and `Cache-Control` headers. The origin must match exactly, so `fhirpathlab_url` has to be the URL testers actually open. The `DELETE` route is deliberately not CORS-enabled, so another origin cannot preflight a delete.
+
 Storage is deduplicated by content hash: identical resource bodies (e.g. the same resource fetched across many sessions against a stable test server) share a single row in `kept_resource_bodies` instead of being stored once per session.
 
 ---

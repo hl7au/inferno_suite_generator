@@ -2,6 +2,7 @@
 
 require "inferno/dsl/suite_endpoint"
 require_relative "kept_resources_repository"
+require_relative "fhirpath_lab_cors"
 
 module InfernoSuiteGenerator
   # `Inferno::DSL::SuiteEndpoint#handle` always looks up a *waiting* test run

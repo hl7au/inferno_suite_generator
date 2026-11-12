@@ -5,7 +5,8 @@ require "inferno_suite_generator"
 require "tmpdir"
 
 module InfernoSuiteGenerator
-  class SuiteGeneratorValidationMessageOverridesTest < Minitest::Test
+  # Builds a SuiteGenerator over fake IG metadata and config, so a test can render the suite template.
+  module SuiteGeneratorTestHelpers
     SuiteGenerator = InfernoSuiteGenerator::Generator::SuiteGenerator
     GeneratorConfigKeeper = InfernoSuiteGenerator::Generator::GeneratorConfigKeeper
 
@@ -24,14 +25,6 @@ module InfernoSuiteGenerator
       keyword_init: true
     )
 
-    VALID_RULE = {
-      "pattern" => "The value provided \\('(xml|json)'\\) was not found",
-      "location" => "^Bundle\\.entry",
-      "from" => ["error"],
-      "to" => "warning",
-      "comment" => "Known tx server issue"
-    }.freeze
-
     def setup
       @previous_config_keeper = Registry.get(:config_keeper)
     end
@@ -39,6 +32,41 @@ module InfernoSuiteGenerator
     def teardown
       Registry.register(:config_keeper, @previous_config_keeper)
     end
+
+    private
+
+    def build_generator(rules)
+      Registry.register(:config_keeper, fake_config_keeper(rules))
+      SuiteGenerator.new(fake_ig_metadata, Dir.tmpdir)
+    end
+
+    def fake_config_keeper(rules)
+      FakeConfigKeeper.new(
+        validation_message_overrides: rules, tx_server_url: "http://tx.example.org", snomed_edition: "au",
+        fhirpathlab_url: "https://fhirpath-lab.com/FhirPath", rewrite_igs: nil, ig_name: "Example IG",
+        ig_link: "http://example.org/ig", default_fhir_server: "http://fhir.example.org", links: [],
+        outer_groups: [], extra_imports: [], suite_module_name: "ExampleTestKit"
+      )
+    end
+
+    def fake_ig_metadata
+      FakeIgMetadata.new(
+        ig_test_id_prefix: "example", ig_module_name_prefix: "Example", reformatted_version: "100",
+        ig_title: "Example", ig_version: "v1.0.0", ig_id: "example.ig", ordered_groups: []
+      )
+    end
+  end
+
+  class SuiteGeneratorValidationMessageOverridesTest < Minitest::Test
+    include SuiteGeneratorTestHelpers
+
+    VALID_RULE = {
+      "pattern" => "The value provided \\('(xml|json)'\\) was not found",
+      "location" => "^Bundle\\.entry",
+      "from" => ["error"],
+      "to" => "warning",
+      "comment" => "Known tx server issue"
+    }.freeze
 
     def test_config_getter_defaults_to_empty_array
       assert_equal [], config_keeper_with({ "suite" => {} }).validation_message_overrides
@@ -110,26 +138,30 @@ module InfernoSuiteGenerator
     def config_keeper_with(config)
       GeneratorConfigKeeper.allocate.tap { |keeper| keeper.instance_variable_set(:@config, config) }
     end
+  end
 
-    def build_generator(rules)
-      Registry.register(:config_keeper, fake_config_keeper(rules))
-      SuiteGenerator.new(fake_ig_metadata, Dir.tmpdir)
+  class SuiteGeneratorResourceKeeperRoutesTest < Minitest::Test
+    include SuiteGeneratorTestHelpers
+
+    DELETE_ROUTE =
+      %r{suite_endpoint :delete, '/resources/:session_id',\s+InfernoSuiteGenerator::DeleteSessionResourcesEndpoint}
+
+    def test_suite_template_serves_kept_resources_to_fhirpath_lab_cross_origin
+      output = build_generator([]).output
+      resource_path = "'/resources/:session_id/:resource_type/:resource_id'"
+
+      RubyVM::InstructionSequence.compile(output)
+      assert_includes output, "InfernoSuiteGenerator::FhirpathLabCors.new("
+      assert_includes output, "lab_url: FHIRPATHLAB_URL"
+      assert_includes output, "suite_endpoint :get, #{resource_path}, kept_resource_handler"
+      assert_includes output, "suite_endpoint :options, #{resource_path}, kept_resource_handler"
     end
 
-    def fake_config_keeper(rules)
-      FakeConfigKeeper.new(
-        validation_message_overrides: rules, tx_server_url: "http://tx.example.org", snomed_edition: "au",
-        fhirpathlab_url: "https://fhirpath-lab.com/FhirPath", rewrite_igs: nil, ig_name: "Example IG",
-        ig_link: "http://example.org/ig", default_fhir_server: "http://fhir.example.org", links: [],
-        outer_groups: [], extra_imports: [], suite_module_name: "ExampleTestKit"
-      )
-    end
+    def test_suite_template_keeps_the_session_delete_route_same_origin_only
+      output = build_generator([]).output
 
-    def fake_ig_metadata
-      FakeIgMetadata.new(
-        ig_test_id_prefix: "example", ig_module_name_prefix: "Example", reformatted_version: "100",
-        ig_title: "Example", ig_version: "v1.0.0", ig_id: "example.ig", ordered_groups: []
-      )
+      assert_match(DELETE_ROUTE, output)
+      refute_includes output, "suite_endpoint :options, '/resources/:session_id',"
     end
   end
 end
