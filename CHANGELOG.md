@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tightened the `inferno_core` dependency to `~> 1.4`, `>= 1.4.1`: validation message overrides rely on the validator issue pipeline introduced in the 1.4 series.
 - Relaxed `required_ruby_version` from `= 3.3.6` to `>= 3.3.6, < 3.4` so consumers can run any Ruby 3.3 patch release. Development, CI and the Docker image now use Ruby 3.3.12.
 
+### Fixed
+
+- FHIRPath Lab links can now load the kept resource: generated suites wrap the `GET /custom/<suite_id>/resources/:session_id/:resource_type/:resource_id` route in `InfernoSuiteGenerator::FhirpathLabCors`, which answers the browser's `OPTIONS` preflight and sets `Access-Control-Allow-Origin` (with `Vary: Origin`) for the origin of `suite.fhirpathlab_url`. The session delete route stays same-origin only. Test kits must regenerate their suites to pick this up.
+
 ## [0.2.0] - 2026-07-07
 
 ### Added
