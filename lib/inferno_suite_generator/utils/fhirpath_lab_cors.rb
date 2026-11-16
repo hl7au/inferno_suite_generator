@@ -3,7 +3,7 @@
 require "uri"
 
 module InfernoSuiteGenerator
-  # Rack wrapper that lets the FHIRPath Lab origin read a kept resource
+  # Rack wrapper that lets the FHIRPath Lab origin read a session resource
   # cross-origin: FHIRPath Lab fetches the `resource=` URL from the browser.
   class FhirpathLabCors
     # `Cache-Control` is not CORS-safelisted, so FHIRPath Lab's GET is preflighted.

@@ -2,7 +2,6 @@
 
 require_relative "../decorators/parameters_parameter_decorator"
 require_relative "../utils/basic_test_helpers"
-require_relative "../utils/kept_resources_repository"
 
 module InfernoSuiteGenerator
   # Module provides shared utility methods for FHIR test modules.
@@ -87,20 +86,6 @@ module InfernoSuiteGenerator
 
     def teardown_candidates
       scratch[:teardown_candidates] ||= []
-    end
-
-    def keep_resource(resource)
-      return unless resource
-
-      kept_resources_repository.save(session_id: test_session_id, resource:)
-    end
-
-    def keep_resources(resources)
-      kept_resources_repository.save_all(session_id: test_session_id, resources:)
-    end
-
-    def kept_resources_repository
-      @kept_resources_repository ||= InfernoSuiteGenerator::KeptResourcesRepository.new
     end
 
     def demo_resources

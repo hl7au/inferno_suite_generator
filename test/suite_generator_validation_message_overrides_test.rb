@@ -140,28 +140,25 @@ module InfernoSuiteGenerator
     end
   end
 
-  class SuiteGeneratorResourceKeeperRoutesTest < Minitest::Test
+  class SuiteGeneratorSessionResourceRoutesTest < Minitest::Test
     include SuiteGeneratorTestHelpers
 
-    DELETE_ROUTE =
-      %r{suite_endpoint :delete, '/resources/:session_id',\s+InfernoSuiteGenerator::DeleteSessionResourcesEndpoint}
-
-    def test_suite_template_serves_kept_resources_to_fhirpath_lab_cross_origin
+    def test_suite_template_serves_session_resources_to_fhirpath_lab_cross_origin
       output = build_generator([]).output
       resource_path = "'/resources/:session_id/:resource_type/:resource_id'"
 
       RubyVM::InstructionSequence.compile(output)
       assert_includes output, "InfernoSuiteGenerator::FhirpathLabCors.new("
       assert_includes output, "lab_url: FHIRPATHLAB_URL"
-      assert_includes output, "suite_endpoint :get, #{resource_path}, kept_resource_handler"
-      assert_includes output, "suite_endpoint :options, #{resource_path}, kept_resource_handler"
+      assert_includes output, "suite_endpoint :get, #{resource_path}, session_resource_handler"
+      assert_includes output, "suite_endpoint :options, #{resource_path}, session_resource_handler"
     end
 
-    def test_suite_template_keeps_the_session_delete_route_same_origin_only
+    def test_suite_template_registers_no_route_that_changes_data
       output = build_generator([]).output
 
-      assert_match(DELETE_ROUTE, output)
-      refute_includes output, "suite_endpoint :options, '/resources/:session_id',"
+      refute_includes output, "suite_endpoint :delete"
+      refute_includes output, "DeleteSessionResourcesEndpoint"
     end
   end
 end

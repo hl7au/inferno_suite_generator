@@ -57,8 +57,8 @@ module InfernoSuiteGenerator
       safely_for_message_linker { self.class.suite::FHIRPATHLAB_URL }
     end
 
-    # A resource kept by this suite is reachable at this suite's own
-    # `/custom/<suite_id>/resources` route (see resource_keeper_endpoints.rb)
+    # A resource the session received is reachable at this suite's own
+    # `/custom/<suite_id>/resources` route (see session_resource_endpoint.rb)
     # rather than an externally configured URL.
     def resource_base_url_for_message_linker
       safely_for_message_linker { "#{Inferno::Application["base_url"]}/custom/#{self.class.suite.id}/resources" }
