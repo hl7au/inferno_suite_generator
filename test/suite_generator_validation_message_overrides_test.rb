@@ -22,7 +22,7 @@ module InfernoSuiteGenerator
     FakeConfigKeeper = Struct.new(
       :validation_message_overrides, :tx_server_url, :snomed_edition, :fhirpathlab_url, :rewrite_igs,
       :ig_name, :ig_link, :default_fhir_server, :links, :outer_groups, :extra_imports, :suite_module_name,
-      keyword_init: true
+      :fhirpathlab_serve_resources?, keyword_init: true
     )
 
     def setup
@@ -35,13 +35,14 @@ module InfernoSuiteGenerator
 
     private
 
-    def build_generator(rules)
-      Registry.register(:config_keeper, fake_config_keeper(rules))
+    def build_generator(rules, serve_resources: true)
+      Registry.register(:config_keeper, fake_config_keeper(rules, serve_resources))
       SuiteGenerator.new(fake_ig_metadata, Dir.tmpdir)
     end
 
-    def fake_config_keeper(rules)
+    def fake_config_keeper(rules, serve_resources)
       FakeConfigKeeper.new(
+        fhirpathlab_serve_resources?: serve_resources,
         validation_message_overrides: rules, tx_server_url: "http://tx.example.org", snomed_edition: "au",
         fhirpathlab_url: "https://fhirpath-lab.com/FhirPath", rewrite_igs: nil, ig_name: "Example IG",
         ig_link: "http://example.org/ig", default_fhir_server: "http://fhir.example.org", links: [],
@@ -148,10 +149,26 @@ module InfernoSuiteGenerator
       resource_path = "'/resources/:session_id/:resource_type/:resource_id'"
 
       RubyVM::InstructionSequence.compile(output)
+      assert_includes output, "FHIRPATHLAB_SERVE_RESOURCES = true"
       assert_includes output, "InfernoSuiteGenerator::FhirpathLabCors.new("
       assert_includes output, "lab_url: FHIRPATHLAB_URL"
       assert_includes output, "suite_endpoint :get, #{resource_path}, session_resource_handler"
       assert_includes output, "suite_endpoint :options, #{resource_path}, session_resource_handler"
+    end
+
+    def test_suite_template_registers_no_resource_route_when_serving_is_disabled
+      output = build_generator([], serve_resources: false).output
+
+      RubyVM::InstructionSequence.compile(output)
+      assert_includes output, "FHIRPATHLAB_SERVE_RESOURCES = false"
+      refute_includes output, "suite_endpoint"
+      refute_includes output, "FetchResourceEndpoint"
+    end
+
+    def test_fhirpathlab_serve_resources_is_on_unless_explicitly_false
+      assert serve_resources?({})
+      assert serve_resources?({ "fhirpathlab_serve_resources" => true })
+      refute serve_resources?({ "fhirpathlab_serve_resources" => false })
     end
 
     def test_suite_template_registers_no_route_that_changes_data
@@ -159,6 +176,14 @@ module InfernoSuiteGenerator
 
       refute_includes output, "suite_endpoint :delete"
       refute_includes output, "DeleteSessionResourcesEndpoint"
+    end
+
+    private
+
+    def serve_resources?(suite_config)
+      keeper = GeneratorConfigKeeper.allocate
+      keeper.instance_variable_set(:@config, { "suite" => suite_config })
+      keeper.fhirpathlab_serve_resources?
     end
   end
 end

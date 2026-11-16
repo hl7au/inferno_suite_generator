@@ -129,6 +129,7 @@ At a high level, a config file contains:
 - **`tx_server_url`**: Terminology server URL used by generated tests
 - **`snomed_edition`**: SNOMED CT edition the validator resolves version-less `http://snomed.info/sct` codes against, emitted as `cliContext.snomedCT`. An edition SCTID, or an alias such as `au`, `us`, `uk`, `intl`. Defaults to `au`. Must match an edition the configured `tx_server_url` actually carries: the validator otherwise fails every SNOMED lookup with "A definition for CodeSystem 'http://snomed.info/sct' version 'null' could not be found" and then reports valid codes as absent from their value sets.
 - **`fhirpathlab_url`**: Base URL of a [FHIRPath Lab](https://fhirpath-lab.com/) instance used to turn FHIRPath locations in result messages into interactive debugging links (see [Linking FHIRPath locations to FHIRPath Lab](#linking-fhirpath-locations-to-fhirpath-lab)). Defaults to `https://fhirpath-lab.com/`. Overridable per deployment via the `FHIRPATHLAB_URL` env var.
+- **`fhirpathlab_serve_resources`**: Whether the suite serves a session's fetched resources to FHIRPath Lab (see [Serving fetched resources to FHIRPath Lab](#serving-fetched-resources-to-fhirpath-lab)). Defaults to `true`. Set to `false` to generate a suite without the resource route; FHIRPath Lab links then open the expression only, with no resource loaded.
 - **`links`**: Links shown in the Inferno UI (e.g. “Report Issue”, “IG Documentation”)
 - **`outer_groups`**: Extra groups to include before/after generated groups:
     - `import_type`
@@ -239,6 +240,8 @@ The suite stores nothing of its own. The route reads the response bodies inferno
 
 Anyone who knows the session id can read these resources, which is the same access inferno-core gives to the session's request log.
 
+To turn this off, set `suite.fhirpathlab_serve_resources` to `false` in the config file and regenerate the suite. The generated suite then registers no `/resources` route, and FHIRPath Lab links carry the expression without a `resource=` parameter.
+
 FHIRPath Lab fetches the resource from the browser, so the `GET` route is CORS-enabled for exactly one origin: that of `fhirpathlab_url` (see `InfernoSuiteGenerator::FhirpathLabCors` in [`fhirpath_lab_cors.rb`](lib/inferno_suite_generator/utils/fhirpath_lab_cors.rb)). A request from that origin gets `Access-Control-Allow-Origin` (plus `Vary: Origin`), and the route answers the `OPTIONS` preflight allowing `GET` with the `Accept` and `Cache-Control` headers. The origin must match exactly, so `fhirpathlab_url` has to be the URL testers actually open.
 
 Earlier revisions of the generator copied every fetched resource into two tables of their own, `kept_fhir_resources` and `kept_resource_bodies`. Nothing uses them any more; a host that ran such a revision can drop both tables.
@@ -261,7 +264,7 @@ Patient/123: [Patient.name[0].given](https://fhirpath-lab.com?expression=...&eng
 
 This is a general-purpose patch: it applies to any message text passing through `add_message` (validator issues, `perform_additional_validation` results, custom test messages, etc.) — not just a specific validator code path — so long as the text matches the `<ResourceType>/<resource_id>: <path>: <detail>` pattern.
 
-The `resource=` link points at this suite's [resource route](#serving-fetched-resources-to-fhirpath-lab). Linking is applied when `fhirpathlab_url` is configured and the message belongs to a test session; otherwise messages are left untouched.
+The `resource=` parameter points at this suite's [resource route](#serving-fetched-resources-to-fhirpath-lab); it is left out when `suite.fhirpathlab_serve_resources` is `false`. Linking is applied when `fhirpathlab_url` is configured and the message belongs to a test session; otherwise messages are left untouched.
 
 ---
 

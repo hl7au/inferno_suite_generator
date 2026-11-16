@@ -40,6 +40,8 @@ module <%= suite_module_name %>
 
       FHIRPATHLAB_URL = '<%= fhirpathlab_url %>'
 
+      FHIRPATHLAB_SERVE_RESOURCES = <%= fhirpathlab_serve_resources? %>
+      <% if fhirpathlab_serve_resources? %>
       # FHIRPath Lab fetches a session's resource from the browser, so that route (and
       # its preflight) is CORS-enabled for the lab's origin.
       session_resource_handler = InfernoSuiteGenerator::FhirpathLabCors.new(
@@ -47,6 +49,7 @@ module <%= suite_module_name %>
       )
       suite_endpoint :get, '/resources/:session_id/:resource_type/:resource_id', session_resource_handler
       suite_endpoint :options, '/resources/:session_id/:resource_type/:resource_id', session_resource_handler
+      <% end %>
 
       def self.metadata
         @metadata ||= YAML.load_file(File.join(__dir__, 'metadata.yml'), aliases: true)[:groups].map do |raw_metadata|

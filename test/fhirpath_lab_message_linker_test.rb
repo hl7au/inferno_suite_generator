@@ -52,9 +52,12 @@ module InfernoSuiteGenerator
       assert_equal message, linkify(message, base_url: nil)
     end
 
-    def test_linkify_leaves_message_untouched_when_resource_base_url_missing
-      message = "Patient/123: Patient.name[0].given: detail"
-      assert_equal message, linkify(message, resource_base_url: nil)
+    def test_linkify_links_without_a_resource_when_resource_base_url_missing
+      result = linkify("Patient/123: Patient.name[0].given: detail", resource_base_url: nil)
+
+      expected_link = "[Patient.name[0].given](https://fhirpath-lab.com?" \
+                      "expression=Patient.name%5B0%5D.given&engine=fhirpath.js)"
+      assert_equal "Patient/123: #{expected_link}: detail", result
     end
 
     def test_linkify_leaves_message_untouched_when_session_id_missing
@@ -125,10 +128,15 @@ module InfernoSuiteGenerator
     # pulling that in.
     class FakeSuite
       FHIRPATHLAB_URL = "https://fhirpath-lab.com/"
+      FHIRPATHLAB_SERVE_RESOURCES = true
 
       def self.id
         :fake_suite
       end
+    end
+
+    class FakeSuiteNotServingResources < FakeSuite
+      FHIRPATHLAB_SERVE_RESOURCES = false
     end
 
     class FakeRunnable
@@ -145,6 +153,12 @@ module InfernoSuiteGenerator
       end
     end
 
+    class FakeRunnableNotServingResources < FakeRunnable
+      def self.suite
+        FakeSuiteNotServingResources
+      end
+    end
+
     class FakeRunnableWithoutSuite
       include Inferno::DSL::Messages
 
@@ -152,6 +166,9 @@ module InfernoSuiteGenerator
         "session-1"
       end
     end
+
+    LINK_WITHOUT_RESOURCE = "[Patient.name[0].given](https://fhirpath-lab.com?" \
+                            "expression=Patient.name%5B0%5D.given&engine=fhirpath.js)"
 
     def test_add_message_rewrites_matching_validator_style_message
       runnable = FakeRunnable.new
@@ -179,15 +196,21 @@ module InfernoSuiteGenerator
       assert_equal original, runnable.messages.first[:message]
     end
 
-    def test_add_message_leaves_message_untouched_when_base_url_lookup_raises_dry_container_error
+    def test_add_message_links_without_a_resource_when_base_url_lookup_raises_dry_container_error
       runnable = FakeRunnable.new
-      original = "Patient/123: Patient.name[0].given: detail"
 
       Inferno::Application.stub(:[], ->(_key) { raise Dry::Container::Error, "Nothing registered with the key" }) do
-        runnable.add_message("error", original)
+        runnable.add_message("error", "Patient/123: Patient.name[0].given: detail")
       end
 
-      assert_equal original, runnable.messages.first[:message]
+      assert_equal "Patient/123: #{LINK_WITHOUT_RESOURCE}: detail", runnable.messages.first[:message]
+    end
+
+    def test_add_message_links_without_a_resource_when_the_suite_does_not_serve_resources
+      runnable = FakeRunnableNotServingResources.new
+      runnable.add_message("error", "Patient/123: Patient.name[0].given: detail")
+
+      assert_equal "Patient/123: #{LINK_WITHOUT_RESOURCE}: detail", runnable.messages.first[:message]
     end
   end
 end
