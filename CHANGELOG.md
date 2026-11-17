@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added `suite.validation_message_overrides` configuration option to change the severity of FHIR validator messages matched by regex (optionally narrowed by `from`, `location` and `message_id`). Implemented by `InfernoSuiteGenerator::ValidationMessageOverrides`, which generated suites extend their default validator with.
-- Added `suite.fhirpathlab_serve_resources` configuration option (default `true`). Set to `false` to generate a suite that does not serve fetched resources to FHIRPath Lab: no `/custom/<suite_id>/resources/...` route is registered and FHIRPath Lab links carry the expression without a `resource=` parameter.
+- Added `suite.fhirpathlab_serve_resources` configuration option (default `true`). Set to `false` to generate a suite without the FHIRPath Lab integration: it defines no `FHIRPATHLAB_URL`, registers no `/custom/<suite_id>/resources/...` route and adds no FHIRPath Lab links to result messages.
 - Added `suite.groups_order` configuration option to control the order of `groups` in the generated `metadata.yml`. Profiles listed in `groups_order` are placed first in the given order, with any remaining profiles appended afterward in their existing relative order.
 - Added shared `bin/hot-reload` dev-tooling asset and `InfernoSuiteGenerator::DevTools::HotReloadInstaller` to install/update it in a consumer test kit, replacing the copy-pasted watcher script previously maintained separately in each kit repo.
 
@@ -26,7 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Deprecated
 
 - `utils/resource_keeper_endpoints.rb` and `InfernoSuiteGenerator::DeleteSessionResourcesEndpoint` remain only so suites generated before the resource keeper was removed still boot without regeneration. The endpoint now answers `204` without deleting anything, since served resources disappear with the session. Both will be removed in the next minor release; regenerate suites, or switch hand-written suites to `utils/session_resource_endpoint.rb`, before then.
-- Suites that do not define `FHIRPATHLAB_SERVE_RESOURCES` (generated before `suite.fhirpathlab_serve_resources` existed) are treated as serving resources, so their FHIRPath Lab links keep the `resource=` parameter.
 
 ### Fixed
 

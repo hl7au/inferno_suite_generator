@@ -38,10 +38,9 @@ module <%= suite_module_name %>
 
       VALIDATION_MESSAGE_OVERRIDES = <%= validation_message_overrides %>.freeze
 
+      <% if fhirpathlab_serve_resources? %>
       FHIRPATHLAB_URL = '<%= fhirpathlab_url %>'
 
-      FHIRPATHLAB_SERVE_RESOURCES = <%= fhirpathlab_serve_resources? %>
-      <% if fhirpathlab_serve_resources? %>
       session_resource_handler = InfernoSuiteGenerator::FhirpathLabCors.new(
         InfernoSuiteGenerator::FetchResourceEndpoint, lab_url: FHIRPATHLAB_URL
       )

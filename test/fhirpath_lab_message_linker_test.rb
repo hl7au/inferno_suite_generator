@@ -128,23 +128,16 @@ module InfernoSuiteGenerator
     # pulling that in.
     class FakeSuite
       FHIRPATHLAB_URL = "https://fhirpath-lab.com/"
-      FHIRPATHLAB_SERVE_RESOURCES = true
 
       def self.id
         :fake_suite
       end
     end
 
-    class FakeSuiteNotServingResources < FakeSuite
-      FHIRPATHLAB_SERVE_RESOURCES = false
-    end
-
-    # A suite generated before `suite.fhirpathlab_serve_resources` existed.
-    class FakeSuiteWithoutServeOption
-      FHIRPATHLAB_URL = "https://fhirpath-lab.com/"
-
+    # A suite generated with `suite.fhirpathlab_serve_resources: false`.
+    class FakeSuiteNotServingResources
       def self.id
-        :old_suite
+        :fake_suite
       end
     end
 
@@ -165,12 +158,6 @@ module InfernoSuiteGenerator
     class FakeRunnableNotServingResources < FakeRunnable
       def self.suite
         FakeSuiteNotServingResources
-      end
-    end
-
-    class FakeRunnableWithoutServeOption < FakeRunnable
-      def self.suite
-        FakeSuiteWithoutServeOption
       end
     end
 
@@ -221,19 +208,12 @@ module InfernoSuiteGenerator
       assert_equal "Patient/123: #{LINK_WITHOUT_RESOURCE}: detail", runnable.messages.first[:message]
     end
 
-    def test_add_message_links_without_a_resource_when_the_suite_does_not_serve_resources
+    def test_add_message_leaves_message_untouched_when_the_suite_does_not_serve_resources
       runnable = FakeRunnableNotServingResources.new
-      runnable.add_message("error", "Patient/123: Patient.name[0].given: detail")
+      original = "Patient/123: Patient.name[0].given: detail"
+      runnable.add_message("error", original)
 
-      assert_equal "Patient/123: #{LINK_WITHOUT_RESOURCE}: detail", runnable.messages.first[:message]
-    end
-
-    def test_add_message_links_the_resource_when_the_suite_predates_the_serve_option
-      runnable = FakeRunnableWithoutServeOption.new
-      runnable.add_message("error", "Patient/123: Patient.name[0].given: detail")
-
-      assert_includes runnable.messages.first[:message],
-                      CGI.escape("http://localhost:4567/custom/old_suite/resources/session-1/Patient/123")
+      assert_equal original, runnable.messages.first[:message]
     end
   end
 end

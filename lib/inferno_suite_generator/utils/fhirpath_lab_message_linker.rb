@@ -67,16 +67,11 @@ module InfernoSuiteGenerator
 
     # A resource the session received is reachable at this suite's own
     # `/custom/<suite_id>/resources` route (see session_resource_endpoint.rb)
-    # rather than an externally configured URL. Nil when the suite was
-    # generated with `suite.fhirpathlab_serve_resources: false`; suites
-    # generated before that option existed don't define it and still serve.
+    # rather than an externally configured URL. A suite generated with
+    # `suite.fhirpathlab_serve_resources: false` has no `FHIRPATHLAB_URL`,
+    # so its messages are never linked and this is never used.
     def resource_base_url_for_message_linker
-      safely_for_message_linker do
-        suite = self.class.suite
-        next nil if suite.const_defined?(:FHIRPATHLAB_SERVE_RESOURCES) && !suite::FHIRPATHLAB_SERVE_RESOURCES
-
-        "#{Inferno::Application["base_url"]}/custom/#{suite.id}/resources"
-      end
+      safely_for_message_linker { "#{Inferno::Application["base_url"]}/custom/#{self.class.suite.id}/resources" }
     end
 
     # `self.class.suite` raises NameError/NoMethodError for a runnable with no

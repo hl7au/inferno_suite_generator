@@ -149,18 +149,18 @@ module InfernoSuiteGenerator
       resource_path = "'/resources/:session_id/:resource_type/:resource_id'"
 
       RubyVM::InstructionSequence.compile(output)
-      assert_includes output, "FHIRPATHLAB_SERVE_RESOURCES = true"
+      assert_includes output, "FHIRPATHLAB_URL = 'https://fhirpath-lab.com/FhirPath'"
       assert_includes output, "InfernoSuiteGenerator::FhirpathLabCors.new("
       assert_includes output, "lab_url: FHIRPATHLAB_URL"
       assert_includes output, "suite_endpoint :get, #{resource_path}, session_resource_handler"
       assert_includes output, "suite_endpoint :options, #{resource_path}, session_resource_handler"
     end
 
-    def test_suite_template_registers_no_resource_route_when_serving_is_disabled
+    def test_suite_template_has_no_fhirpath_lab_link_or_route_when_serving_is_disabled
       output = build_generator([], serve_resources: false).output
 
       RubyVM::InstructionSequence.compile(output)
-      assert_includes output, "FHIRPATHLAB_SERVE_RESOURCES = false"
+      refute_includes output, "FHIRPATHLAB_URL"
       refute_includes output, "suite_endpoint"
       refute_includes output, "FetchResourceEndpoint"
     end
