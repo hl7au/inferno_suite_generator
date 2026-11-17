@@ -94,7 +94,15 @@ module InfernoSuiteGenerator
       end
 
       def to_hash
-        ATTRIBUTES.each_with_object({}) { |key, hash| hash[key] = send(key) unless send(key).nil? }
+        omitted = omitted_attributes
+        ATTRIBUTES.each_with_object({}) do |key, hash|
+          value = send(key)
+          hash[key] = value unless value.nil? || omitted.include?(key)
+        end
+      end
+
+      def omitted_attributes
+        update_create == true ? [] : %i[update_create update_create_expectation]
       end
 
       def add_delayed_references(delayed_profiles, ig_resources)

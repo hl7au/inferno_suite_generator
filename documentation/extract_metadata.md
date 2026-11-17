@@ -175,7 +175,7 @@ These run lazily while group_metadata_hash is evaluated.
 
 1. base_output_dir is File.join(config.result_folder, ig_metadata.ig_version). result_folder is "./lib/TEST_ID_PREFIX_test_kit/generated/".
 2. FileUtils.mkdir_p creates the folder.
-3. ig_metadata.to_hash returns ig_id, ig_title, ig_module_name_prefix, ig_test_id_prefix, ig_version and groups. Each group's to_hash leaves out nil attributes.
+3. ig_metadata.to_hash returns ig_id, ig_title, ig_module_name_prefix, ig_test_id_prefix, ig_version and groups. Each group's to_hash leaves out nil attributes, and leaves out update_create and update_create_expectation unless update_create is true.
 4. YAML.dump serialises it with symbol keys, and File.write overwrites metadata.yml. File errors are not rescued.
 
 ### Step 9: Return
