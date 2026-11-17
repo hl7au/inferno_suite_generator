@@ -21,7 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- Removed the resource keeper: `InfernoSuiteGenerator::KeptResourcesRepository`, its `kept_fhir_resources` and `kept_resource_bodies` tables, the `RESOURCE_KEEPER_EXPIRATION_MS` setting and the `DELETE /custom/<suite_id>/resources/:session_id` route with `InfernoSuiteGenerator::DeleteSessionResourcesEndpoint`. `utils/resource_keeper_endpoints.rb` is now `utils/session_resource_endpoint.rb`. Test kits must regenerate their suites; a host that already has the two tables can drop them.
+- Removed the resource keeper: `InfernoSuiteGenerator::KeptResourcesRepository`, its `kept_fhir_resources` and `kept_resource_bodies` tables and the `RESOURCE_KEEPER_EXPIRATION_MS` setting. Newly generated suites require `utils/session_resource_endpoint.rb` and no longer register the `DELETE /custom/<suite_id>/resources/:session_id` route. A host that already has the two tables can drop them.
+
+### Deprecated
+
+- `utils/resource_keeper_endpoints.rb` and `InfernoSuiteGenerator::DeleteSessionResourcesEndpoint` remain only so suites generated before the resource keeper was removed still boot without regeneration. The endpoint now answers `204` without deleting anything, since served resources disappear with the session. Both will be removed in the next minor release; regenerate suites, or switch hand-written suites to `utils/session_resource_endpoint.rb`, before then.
+- Suites that do not define `FHIRPATHLAB_SERVE_RESOURCES` (generated before `suite.fhirpathlab_serve_resources` existed) are treated as serving resources, so their FHIRPath Lab links keep the `resource=` parameter.
 
 ### Fixed
 

@@ -139,6 +139,15 @@ module InfernoSuiteGenerator
       FHIRPATHLAB_SERVE_RESOURCES = false
     end
 
+    # A suite generated before `suite.fhirpathlab_serve_resources` existed.
+    class FakeSuiteWithoutServeOption
+      FHIRPATHLAB_URL = "https://fhirpath-lab.com/"
+
+      def self.id
+        :old_suite
+      end
+    end
+
     class FakeRunnable
       include Inferno::DSL::Messages
 
@@ -156,6 +165,12 @@ module InfernoSuiteGenerator
     class FakeRunnableNotServingResources < FakeRunnable
       def self.suite
         FakeSuiteNotServingResources
+      end
+    end
+
+    class FakeRunnableWithoutServeOption < FakeRunnable
+      def self.suite
+        FakeSuiteWithoutServeOption
       end
     end
 
@@ -211,6 +226,14 @@ module InfernoSuiteGenerator
       runnable.add_message("error", "Patient/123: Patient.name[0].given: detail")
 
       assert_equal "Patient/123: #{LINK_WITHOUT_RESOURCE}: detail", runnable.messages.first[:message]
+    end
+
+    def test_add_message_links_the_resource_when_the_suite_predates_the_serve_option
+      runnable = FakeRunnableWithoutServeOption.new
+      runnable.add_message("error", "Patient/123: Patient.name[0].given: detail")
+
+      assert_includes runnable.messages.first[:message],
+                      CGI.escape("http://localhost:4567/custom/old_suite/resources/session-1/Patient/123")
     end
   end
 end
