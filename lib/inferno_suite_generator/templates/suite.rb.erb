@@ -42,8 +42,6 @@ module <%= suite_module_name %>
 
       FHIRPATHLAB_SERVE_RESOURCES = <%= fhirpathlab_serve_resources? %>
       <% if fhirpathlab_serve_resources? %>
-      # FHIRPath Lab fetches a session's resource from the browser, so that route (and
-      # its preflight) is CORS-enabled for the lab's origin.
       session_resource_handler = InfernoSuiteGenerator::FhirpathLabCors.new(
         InfernoSuiteGenerator::FetchResourceEndpoint, lab_url: FHIRPATHLAB_URL
       )
