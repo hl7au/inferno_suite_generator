@@ -17,6 +17,8 @@ module InfernoSuiteGenerator
           primary_key :index
           String :test_session_id, null: false
           String :url, text: true
+          String :direction, null: false
+          Integer :status
           String :response_body, text: true
         end
       end
@@ -29,9 +31,10 @@ module InfernoSuiteGenerator
       SessionResourceFinder.stub(:db, -> { @db }, &)
     end
 
-    def log_response(body, session_id: "session-1")
+    def log_response(body, session_id: "session-1", direction: "outgoing", status: 200)
       body = JSON.generate(body) unless body.is_a?(String)
-      @db[:requests].insert(test_session_id: session_id, url: "http://fhir.example/", response_body: body)
+      @db[:requests].insert(test_session_id: session_id, url: "http://fhir.example/", direction:, status:,
+                            response_body: body)
     end
 
     def patient(id, gender)
@@ -116,6 +119,39 @@ module InfernoSuiteGenerator
         log_response(%({ "resourceType": "Bundle", "entry": ["Patient", "patient-1"] }))
 
         assert_equal patient("patient-1", "male"), JSON.parse(find("Patient", "patient-1"))
+      end
+    end
+
+    def test_a_response_to_an_incoming_request_is_not_found
+      with_request_log_db do
+        log_response(patient("patient-1", "male"), direction: "incoming")
+
+        assert_nil find("Patient", "patient-1")
+      end
+    end
+
+    def test_a_failed_or_statusless_response_is_skipped
+      with_request_log_db do
+        log_response(patient("patient-1", "male"))
+        log_response(patient("patient-1", "female"), status: 404)
+        log_response(patient("patient-1", "other"), status: nil)
+
+        assert_equal "male", JSON.parse(find("Patient", "patient-1"))["gender"]
+      end
+    end
+
+    def test_only_the_newest_candidates_are_searched
+      decoy = patient("patient-2", "patient-1")
+
+      with_request_log_db do
+        log_response(patient("patient-1", "male"))
+        (SessionResourceFinder::MAX_CANDIDATES - 1).times { log_response(decoy) }
+
+        refute_nil find("Patient", "patient-1")
+
+        log_response(decoy)
+
+        assert_nil find("Patient", "patient-1")
       end
     end
 

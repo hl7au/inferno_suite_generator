@@ -10,3 +10,4 @@
 /.idea/
 mise.toml
 .DS_Store
+.kata.local.toml

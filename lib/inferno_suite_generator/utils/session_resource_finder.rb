@@ -10,6 +10,10 @@ module InfernoSuiteGenerator
     REQUESTS_TABLE = :requests
     RESOURCE_TYPE_PATTERN = /\A[A-Z][A-Za-z]{0,63}\z/
     RESOURCE_ID_PATTERN = /\A[A-Za-z0-9\-.]{1,64}\z/
+    SUCCESS_STATUSES = (200..299)
+    # A resource only found in an older response than the newest
+    # MAX_CANDIDATES candidates is reported as missing.
+    MAX_CANDIDATES = 20
 
     def self.db
       Inferno::Application["db.connection"]
@@ -35,18 +39,21 @@ module InfernoSuiteGenerator
     end
 
     # The LIKE filters only narrow the scan; `extract` decides. Both values are
-    # pattern-checked above, so neither can carry a LIKE wildcard.
+    # pattern-checked above, so neither can carry a LIKE wildcard. Incoming rows
+    # hold responses Inferno wrote itself, not the server under test.
     def candidate_indexes(session_id, resource_type, resource_id)
       requests
-        .where(test_session_id: session_id)
-        .where(Sequel.like(:response_body, "%\"#{resource_type}\"%"))
+        .where(test_session_id: session_id, direction: "outgoing", status: SUCCESS_STATUSES)
         .where(Sequel.like(:response_body, "%\"#{resource_id}\"%"))
+        .where(Sequel.like(:response_body, "%\"#{resource_type}\"%"))
         .reverse_order(:index)
+        .limit(MAX_CANDIDATES)
         .select_map(:index)
     end
 
-    # Bodies are loaded one at a time: a search bundle can be large and the
-    # first candidate is usually the match.
+    # Bodies are loaded one at a time: a search bundle can be large, the first
+    # candidate is usually the match, and Sequel on Postgres buffers a whole
+    # result set unless it uses a cursor.
     def response_body(index)
       requests.where(index:).get(:response_body)
     end
