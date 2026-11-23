@@ -36,7 +36,7 @@ module InfernoSuiteGenerator
 
     def test_item_labels_are_escaped_and_uses_merged_per_item
       items = [item("odd", "  Patient's *first*\n name_[x] `code` ", "%patient.name.family"),
-               item("dup", nil, "%patient.name.family", expression("%patient.name.family", "enableWhenExpression"),
+               item("dup_*1", nil, "%patient.name.family", expression("%patient.name.family", "enableWhenExpression"),
                     "%patient.name.family", "%patient.exists()")]
       root = [launch("patient", "Patient"), expression("%patient.name.given", "itemPopulationContext")]
 
@@ -44,7 +44,7 @@ module InfernoSuiteGenerator
 
       assert_equal ["    - **The whole form**: sets the population context; reads name.given (not checked)\n",
                     "    - **#{escaped}**: pre-fills the answer; reads name.family\n",
-                    "    - **dup**: pre-fills the answer, shows or hides the item; reads name.family\n"],
+                    "    - **dup\\_\\*1**: pre-fills the answer, shows or hides the item; reads name.family\n"],
                    patient_entry(form(items, extension: root))["patient_read"].lines.grep(/^    - /)
     end
 

@@ -97,7 +97,8 @@ module InfernoSuiteGenerator
 
       def self.label(item)
         text = QuestionnaireUsage.text(item, "text")&.gsub(/\s+/, " ")&.strip
-        text.to_s.empty? ? item["linkId"].to_s : text.gsub(MARKDOWN) { |char| "\\#{char}" }
+        text = item["linkId"].to_s if text.to_s.empty?
+        text.gsub(MARKDOWN) { |char| "\\#{char}" }
       end
 
       def initialize(data)
