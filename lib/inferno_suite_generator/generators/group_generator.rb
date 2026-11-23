@@ -7,15 +7,20 @@ require_relative "../utils/registry"
 
 module InfernoSuiteGenerator
   class Generator
+    # Writes one group file and its metadata.yml per profile group, with any added
+    # Markdown appended to the group and test descriptions.
     class GroupGenerator < BasicTestGenerator
       class << self
         def generate(ig_metadata, base_output_dir, descriptions = {})
-          ig_metadata.ordered_groups
-                     .compact
-                     .reject do |group|
-                       Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
-                     end
-                     .each { |group| new(group, base_output_dir, ig_metadata, descriptions.fetch(group, {})).generate }
+          ig_metadata.ordered_groups.compact.each do |group|
+            next if Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
+
+            added = descriptions.fetch(group, {})
+            # Kit subclasses may keep a three-argument initialize, so pass descriptions only when there are some.
+            args = [group, base_output_dir, ig_metadata]
+            args << added if added.present?
+            new(*args).generate
+          end
         end
       end
 
@@ -24,9 +29,7 @@ module InfernoSuiteGenerator
       self.template_type = TEMPLATE_TYPES[:GROUP]
 
       def initialize(group_metadata, base_output_dir, ig_metadata, descriptions = {})
-        self.group_metadata = group_metadata
-        self.base_output_dir = base_output_dir
-        self.ig_metadata = ig_metadata
+        super(group_metadata, base_output_dir, ig_metadata)
         self.descriptions = descriptions
       end
 
@@ -102,7 +105,8 @@ module InfernoSuiteGenerator
 
       def description
         Helpers.get_group_description_text(title, resource_type, profile_name, group_metadata.version, profile_url,
-                                           required_searches, search_param_name_string, search_validation_resource_type, resource_type)
+                                           required_searches, search_param_name_string,
+                                           search_validation_resource_type, resource_type)
       end
 
       def group_description
@@ -110,9 +114,13 @@ module InfernoSuiteGenerator
         added ? "#{description}\n#{added}\n" : description
       end
 
-      # Added text goes inside a %( ) literal in the group file.
+      # Added text goes inside a %( ) literal in the group file. CR is written as \r,
+      # because Ruby turns a CRLF in source into LF.
       def added_description(key)
-        descriptions[key]&.gsub(/[\\()]|#(?=[{@$])/) { |char| "\\#{char}" }
+        text = descriptions[key]
+        return if text.blank?
+
+        text.gsub(/[\\()]|#(?=[{@$])/) { |char| "\\#{char}" }.gsub("\r", '\r')
       end
     end
   end

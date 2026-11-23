@@ -67,6 +67,32 @@ module InfernoSuiteGenerator
       assert_equal "\n  #{built_in}\n#{NASTY}\n\n      ", eval(literal) # rubocop:disable Security/Eval
     end
 
+    def test_carriage_returns_survive_the_literal
+      descriptions = { @group => { "example_v100_patient_read_test" => "a\r\nb\rc" } }
+      group = generate { |dir| GroupGenerator.generate(@ig_metadata, dir, descriptions) }[:group]
+
+      assert_equal "a\r\nb\rc", eval(group[TEST_LITERAL, 1]).strip # rubocop:disable Security/Eval
+    end
+
+    def test_blank_added_text_is_ignored
+      descriptions = { @group => { "example_v100_patient_read_test" => "", group: " \n " } }
+
+      assert_equal File.read(GOLDEN),
+                   generate { |dir| GroupGenerator.generate(@ig_metadata, dir, descriptions) }[:group]
+    end
+
+    def test_subclass_with_three_argument_initialize_still_generates
+      subclass = Class.new(GroupGenerator) do
+        def initialize(group_metadata, base_output_dir, ig_metadata) # rubocop:disable Lint/UselessMethodDefinition
+          super
+        end
+      end
+      descriptions = { build_group => { group: NASTY } }
+
+      assert_equal File.read(GOLDEN), generate { |dir| subclass.generate(@ig_metadata, dir) }[:group]
+      assert_equal File.read(GOLDEN), generate { |dir| subclass.generate(@ig_metadata, dir, descriptions) }[:group]
+    end
+
     def test_metadata_is_unchanged_by_descriptions
       assert_equal generate { |dir| GroupGenerator.generate(@ig_metadata, dir) }[:metadata],
                    with_descriptions[:metadata]

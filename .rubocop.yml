@@ -33,7 +33,6 @@ AllCops:
     - "lib/inferno_suite_generator/generators/include_search_test_generator.rb"
     - "lib/inferno_suite_generator/generators/suite_generator.rb"
     - "lib/inferno_suite_generator/generators/basic_test_generator.rb"
-    - "lib/inferno_suite_generator/generators/group_generator.rb"
     - "lib/inferno_suite_generator/generators/chain_search_test_generator.rb"
     - "lib/inferno_suite_generator/extractors/search_definition_metadata_extractor.rb"
     - "lib/inferno_suite_generator/extractors/value_extractor.rb"
