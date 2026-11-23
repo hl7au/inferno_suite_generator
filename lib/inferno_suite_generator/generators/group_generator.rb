@@ -4,13 +4,13 @@ require_relative "../utils/naming"
 require_relative "basic_test_generator"
 require_relative "../utils/helpers"
 require_relative "../utils/registry"
-require_relative "../core/group_descriptions"
 
 module InfernoSuiteGenerator
   class Generator
     class GroupGenerator < BasicTestGenerator
       class << self
-        def generate(ig_metadata, base_output_dir, descriptions = GroupDescriptions.new)
+        # descriptions: Markdown to append, as { group_metadata => { test id or :group => text } }.
+        def generate(ig_metadata, base_output_dir, descriptions = {})
           ig_metadata.ordered_groups
                      .compact
                      .reject do |group|
@@ -24,7 +24,7 @@ module InfernoSuiteGenerator
 
       self.template_type = TEMPLATE_TYPES[:GROUP]
 
-      def initialize(group_metadata, base_output_dir, ig_metadata, descriptions: GroupDescriptions.new)
+      def initialize(group_metadata, base_output_dir, ig_metadata, descriptions: {})
         self.group_metadata = group_metadata
         self.base_output_dir = base_output_dir
         self.ig_metadata = ig_metadata
@@ -101,19 +101,25 @@ module InfernoSuiteGenerator
           .join("\n")
       end
 
-      # The built-in description, then a blank line and any text added through descriptions.
+      # The built-in description, then a blank line and any text added for the group.
       def description
-        section = descriptions.section(group_metadata)
-        section ? "#{built_in_description}\n#{section}\n" : built_in_description
+        added = added_description(:group)
+        added ? "#{built_in_description}\n#{added}\n" : built_in_description
       end
 
-      # The escaped Markdown added to the test, or nil. The template appends it to the test's own
-      # description in a `test from:` block, so a test without added text keeps a plain `test from:` line.
+      # The Markdown added to the test, or nil. The template appends it to the test's own description in a
+      # `test from:` block, so a test without added text keeps a plain `test from:` line.
       def test_description(test_id)
-        descriptions.test_section(group_metadata, test_id)
+        added_description(test_id.to_s)
       end
 
       private
+
+      # Added text is plain Markdown. The group template puts it inside a %( ... ) literal, where a backslash,
+      # a parenthesis or #{ would break the file, so it is escaped here.
+      def added_description(key)
+        descriptions.dig(group_metadata, key)&.gsub(/[\\()]|#[{@$]/) { |match| "\\#{match}" }
+      end
 
       def built_in_description
         Helpers.get_group_description_text(title, resource_type, profile_name, group_metadata.version, profile_url,

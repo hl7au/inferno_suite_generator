@@ -1,33 +1,39 @@
 # frozen_string_literal: true
 
-require_relative "core/test_index"
-require_relative "questionnaire_usage/ast"
-require_relative "questionnaire_usage/profile_matcher"
-require_relative "questionnaire_usage/trace"
-require_relative "questionnaire_usage/tracer"
+require_relative "questionnaire_usage/sources"
 require_relative "questionnaire_usage/sections"
 
 module InfernoSuiteGenerator
-  # Traces every Questionnaire in the IG over the suite's groups and writes "Used in questionnaires" sections to the
-  # tests that make each source's request, the Must Support test and the group. It reads the tests the generators
-  # recorded and adds to what GroupGenerator writes, so it runs between them.
+  # Finds what every Questionnaire in the IG reads from the server or writes to it, over the suite's groups, and
+  # writes "Used in questionnaires" sections for the tests that make the same requests, the Must Support test and
+  # the group.
   module QuestionnaireUsage
-    def self.generate(ig_resources:, groups:, descriptions:)
-      if groups.any? && groups.none? { |group| Generator::TestIndex.new(group).any? }
+    # The kinds of source, in the order a form's sources are listed.
+    KINDS = [Query, LaunchContext, Template].freeze
+
+    # The Markdown to add to descriptions, as `{ group => { test id or :group => Markdown } }`. It reads the tests
+    # the generators recorded and GroupGenerator writes what it returns, so it runs between them.
+    def self.descriptions(ig_resources:, groups:)
+      if groups.any? && groups.none? { |group| group.test_kinds.any? }
         raise "Questionnaire usage tracing must run after the test generators: no group has a recorded test."
       end
 
-      write(Tracer.new(ig_resources, groups).trace, groups:, descriptions:)
+      Sections.new(groups, sources(ig_resources:, groups:)).to_h
+    end
+
+    # The Sources of every questionnaire that some group fits, in document order.
+    def self.sources(ig_resources:, groups:)
+      matcher = ProfileMatcher.new(groups, ig_resources)
+      ig_resources.get_resources_by_type("Questionnaire").flat_map do |questionnaire|
+        form = Form.new(questionnaire.to_hash)
+        KINDS.flat_map { |kind| kind.in(form, matcher, ig_resources) }
+      end
     end
 
     # Prints a tracing message. Returns `nil`, so a caller can `return log(...)`.
     def self.log(message)
       puts "Questionnaire usage tracing: #{message}"
       nil
-    end
-
-    def self.write(trace, groups:, descriptions:)
-      Sections.new(groups, trace).write(descriptions)
     end
   end
 end

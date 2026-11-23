@@ -6,7 +6,7 @@ require "tmpdir"
 require "inferno_suite_generator"
 
 module InfernoSuiteGenerator
-  # Built-in generators record each test's kind and details on the group, so TestIndex finds them.
+  # Built-in generators record each test's kind and details on the group, so find_test finds them.
   class GeneratorTestKindsTest < Minitest::Test
     include GeneratorFixtures
 
@@ -31,8 +31,7 @@ module InfernoSuiteGenerator
         generator.generate
 
         assert_equal({ kind: "search", search_names: %w[name birthdate] }, @group.test_kind(generator.test_id))
-        assert_equal generator.test_id,
-                     Generator::TestIndex.new(@group).find("search", search_names: %w[birthdate name]).id
+        assert_equal generator.test_id, @group.find_test("search", search_names: %w[birthdate name])[:id]
       end
     end
 

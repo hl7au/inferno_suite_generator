@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "trace"
+require_relative "fhir_query"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage

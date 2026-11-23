@@ -33,7 +33,7 @@ module InfernoSuiteGenerator
       generator = Generator.new(nil)
       generator.ig_metadata = build_ig_metadata(groups:)
       with_config_keeper({ "configs" => configs }) do
-        QuestionnaireUsage.stub(:generate, ->(**args) { calls << args }) { generator.generate_questionnaire_usage }
+        QuestionnaireUsage.stub(:descriptions, ->(**args) { calls << args }) { generator.generate_questionnaire_usage }
       end
       calls
     end

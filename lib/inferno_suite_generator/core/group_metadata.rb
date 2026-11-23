@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../utils/generator_constants"
+
 module InfernoSuiteGenerator
   class Generator
     class GroupMetadata
@@ -79,8 +81,7 @@ module InfernoSuiteGenerator
       end
 
       # kind is the generator's template type, like "search" or "read", and details what tells tests of one
-      # kind apart, like search_names. Both stay in memory for TestIndex and are not
-      # written to metadata.yml.
+      # kind apart, like search_names. Both stay in memory for find_test and are not written to metadata.yml.
       def add_test(id:, file_name:, kind: nil, **details)
         self.tests ||= []
 
@@ -101,6 +102,25 @@ module InfernoSuiteGenerator
 
       def test_kinds
         @test_kinds ||= {}
+      end
+
+      # The first test in group order of this kind (a GeneratorConstants::TEMPLATE_TYPES value) whose recorded
+      # details include the given ones, like find_test("search", search_names: %w[patient code]), or nil.
+      # Arrays match in any order. Returns { id:, kind:, **details }. Kinds are recorded in memory, so a test is
+      # found only in the process that generated it, after it was generated.
+      def find_test(kind, **details)
+        raise ArgumentError, "Unknown test kind: #{kind}" unless GeneratorConstants::TEMPLATE_TYPES.value?(kind)
+
+        tests.to_a.each do |test|
+          recorded = test_kind(test[:id])
+          next unless recorded[:kind] == kind
+
+          same = details.all? do |key, value|
+            value.is_a?(Array) ? recorded[key].is_a?(Array) && recorded[key].sort == value.sort : recorded[key] == value
+          end
+          return { id: test[:id], **recorded } if same
+        end
+        nil
       end
 
       def to_hash

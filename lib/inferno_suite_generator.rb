@@ -23,8 +23,6 @@ require_relative "inferno_suite_generator/generators/create_test_generator"
 require_relative "inferno_suite_generator/generators/update_test_generator"
 require_relative "inferno_suite_generator/generators/patch_test_generator"
 require_relative "inferno_suite_generator/core/generator_config_keeper"
-require_relative "inferno_suite_generator/core/test_index"
-require_relative "inferno_suite_generator/core/group_descriptions"
 require_relative "inferno_suite_generator/questionnaire_usage"
 require_relative "inferno_suite_generator/utils/registry"
 require_relative "inferno_suite_generator/utils/helpers"
@@ -180,15 +178,11 @@ module InfernoSuiteGenerator
       return unless config.questionnaire_usage_tracing?
 
       groups = ig_metadata.groups.reject { |group| config.exclude_resource?(group.profile_url, group.resource) }
-      QuestionnaireUsage.generate(ig_resources:, groups:, descriptions: group_descriptions)
+      @group_descriptions = QuestionnaireUsage.descriptions(ig_resources:, groups:)
     end
 
     def generate_groups
-      GroupGenerator.generate(ig_metadata, base_output_dir, group_descriptions)
-    end
-
-    def group_descriptions
-      @group_descriptions ||= GroupDescriptions.new
+      GroupGenerator.generate(ig_metadata, base_output_dir, @group_descriptions || {})
     end
 
     def generate_suites
