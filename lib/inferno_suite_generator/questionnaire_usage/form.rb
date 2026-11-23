@@ -1,0 +1,152 @@
+# frozen_string_literal: true
+
+module InfernoSuiteGenerator
+  module QuestionnaireUsage
+    # The items of one form that use one source: actions and element paths, merged per linkId.
+    class Use
+      attr_reader :label, :actions, :paths
+
+      def initialize(label)
+        @label = label
+        @actions = []
+        @paths = []
+      end
+
+      def add(action, paths)
+        @actions |= [action]
+        @paths |= paths
+      end
+
+      def reads(source)
+        paths.map { |path| Read.new(source, path, label) }
+      end
+    end
+
+    # One element path an item reads through a source.
+    Read = Struct.new(:source, :path, :label) do
+      def form = source.form
+    end
+
+    # The form root or one item, with the [action, FHIRPath text] pairs on its extensions.
+    Node = Struct.new(:key, :label, :expressions) do
+      def entries
+        expressions.map { |action, text| [key, label, action, text] }
+      end
+    end
+
+    # One traced Questionnaire, given as a fhir_models resource or a plain Hash.
+    class Form
+      ACTIONS = {
+        "initialExpression" => "pre-fills the answer",
+        "calculatedExpression" => "calculates the answer",
+        "itemPopulationContext" => "sets the population context",
+        "enableWhenExpression" => "shows or hides the item",
+        "answerExpression" => "lists the answer options",
+        "candidateExpression" => "suggests answers",
+        "contextExpression" => "gives context for answering",
+        "itemExtractionContext" => "sets the extraction context",
+        "templateExtract" => "its answers fill the template"
+      }.freeze
+      MARKDOWN = /[*_`\[\]]/
+
+      attr_reader :title
+
+      # The IG's forms, one per (url, id-when-no-url, version), same titles told apart by version.
+      def self.load(ig_resources)
+        forms = ig_resources.get_resources_by_type("Questionnaire").map { |resource| new(resource.to_hash) }
+        forms = forms.uniq(&:key)
+        repeated = forms.map(&:base_title).tally
+        forms.each { |form| form.show_version if repeated[form.base_title] > 1 }
+      end
+
+      def self.action(url)
+        short = url.split("/").last.to_s.delete_prefix("sdc-questionnaire-")
+        ACTIONS.fetch(short, short)
+      end
+
+      def self.expressions(node)
+        QuestionnaireUsage.list(node, "extension").flat_map { |extension| extension_expressions(extension) }
+      end
+
+      # A variable definition is not a use; the expressions that read the variable are.
+      def self.extension_expressions(extension)
+        url = extension["url"].to_s
+        return [] if url.end_with?("/variable")
+
+        action = action(url)
+        texts(extension).map { |text| [action, text] }
+      end
+
+      # FHIRPath expressions on the extension and its sub-extensions.
+      def self.texts(extension)
+        own = QuestionnaireUsage.text(extension, "valueExpression", "expression")
+        own = nil unless QuestionnaireUsage.text(extension, "valueExpression", "language") == "text/fhirpath"
+        [own, *QuestionnaireUsage.list(extension, "extension").flat_map { |sub| texts(sub) }].compact
+      end
+
+      def self.label(item)
+        text = QuestionnaireUsage.text(item, "text")&.gsub(/\s+/, " ")&.strip
+        text.to_s.empty? ? item["linkId"].to_s : text.gsub(MARKDOWN) { |char| "\\#{char}" }
+      end
+
+      def initialize(data)
+        @data = data
+        @title = base_title
+        @chains = {}
+      end
+
+      def key = [url, url ? nil : field("id"), field("version")]
+
+      def base_title = field("title") || url || field("id") || "Untitled questionnaire"
+
+      def show_version
+        version = field("version")
+        @title = "#{base_title}, version #{version}" if version
+      end
+
+      # Launch contexts; later slices add queries before and templates after them (§3.5 order).
+      def sources
+        QuestionnaireUsage.list(@data, "extension").flat_map { |extension| LaunchContext.from(self, extension) }
+      end
+
+      # Each distinct expression is parsed once per form.
+      def chains(text)
+        @chains[text] ||= Chain.parse(text)
+      end
+
+      # The uses of %name merged per item; the block gives a chain's paths, or nil when it is not a use.
+      def uses(name)
+        merged = {}
+        readings.fetch(name, []).each do |key, label, action, _text, chain|
+          paths = yield(chain)
+          (merged[key] ||= Use.new(label)).add(action, paths) if paths
+        end
+        merged.values
+      end
+
+      private
+
+      def field(name) = QuestionnaireUsage.text(@data, name)
+
+      def url = field("url")
+
+      # [key, label, action, text, chain] for every chain, grouped by the name the chain starts at.
+      def readings
+        @readings ||= nodes.flat_map(&:entries).flat_map { |entry| with_chains(entry) }
+                           .group_by { |reading| reading.last.name }
+      end
+
+      def with_chains(entry) = chains(entry.last).map { |chain| [*entry, chain] }
+
+      def nodes
+        [Node.new(:root, "The whole form", Form.expressions(@data)), *items(@data)]
+      end
+
+      def items(parent)
+        QuestionnaireUsage.list(parent, "item").flat_map do |item|
+          [Node.new(item["linkId"], Form.label(item), Form.expressions(item)), *items(item)]
+        end
+      end
+    end
+  end
+end

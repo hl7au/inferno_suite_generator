@@ -25,6 +25,7 @@ require_relative "inferno_suite_generator/generators/patch_test_generator"
 require_relative "inferno_suite_generator/core/generator_config_keeper"
 require_relative "inferno_suite_generator/utils/registry"
 require_relative "inferno_suite_generator/utils/helpers"
+require_relative "inferno_suite_generator/questionnaire_usage"
 
 module InfernoSuiteGenerator
   class Generator
