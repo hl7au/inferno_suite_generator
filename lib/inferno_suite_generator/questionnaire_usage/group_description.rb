@@ -61,10 +61,13 @@ module InfernoSuiteGenerator
 
       # One line per element and form, with the labels of the items that read it.
       def self.element_list(reads)
-        rows = reads.group_by { |read| [read.form, read.path] }.values.map do |same|
-          Read.new(same.first.source, same.first.path, capped(same.map(&:label).uniq))
-        end
+        rows = reads.group_by { |read| [read.form, read.path] }.values.map { |same| element_row(same) }
         by_form(rows) { |row| "  - **#{row.path}**: #{row.label}" }
+      end
+
+      def self.element_row(same)
+        source, path = same.first.to_a
+        Read.new(source, path, capped(same.map(&:label).uniq))
       end
 
       # "- **<title>**" for each form, followed by the lines of its entries.
@@ -117,12 +120,18 @@ module InfernoSuiteGenerator
       def reads = @fitting.flat_map(&:reads)
 
       def summary
-        lines = @fitting.map { |placement| placement.source.form }.uniq.map { |form| summary_line(form) }
-        unchecked = reads.reject { |read| @trace.by_source?(read.source, read.path) }
-        Markdown.section(format(Markdown::INTROS[:group], resource: @group.profile_name || @group.resource),
-                         lines.join("\n"),
-                         *Markdown.block(:not_tested, Markdown.source_list(@fitting.reject(&:test), @trace)),
-                         *Markdown.block(:not_checked, Markdown.element_list(unchecked)))
+        intro = format(Markdown::INTROS[:group], resource: @group.profile_name || @group.resource)
+        Markdown.section(intro, summary_lines, *not_tested, *not_checked)
+      end
+
+      def summary_lines
+        @fitting.map { |placement| placement.source.form }.uniq.map { |form| summary_line(form) }.join("\n")
+      end
+
+      def not_tested = Markdown.block(:not_tested, Markdown.source_list(@fitting.reject(&:test), @trace))
+
+      def not_checked
+        Markdown.block(:not_checked, Markdown.element_list(reads.reject { |read| read.checked_in?(@trace) }))
       end
 
       def summary_line(form)

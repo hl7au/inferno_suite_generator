@@ -40,14 +40,17 @@ module InfernoSuiteGenerator
 
       # Unwinds the left spine of a.b[0].c() down to its start.
       def self.from(node, steps = [])
-        type = node["type"]
-        return constant_name(node)&.then { |name| new(name, steps) } unless SPINE.include?(type)
+        return constant_name(node)&.then { |name| new(name, steps) } unless SPINE.include?(node["type"])
 
-        left, right = node["children"]
-        from(left, [type == "IndexerExpression" ? Step.new(:index, nil, [right]) : step(right), *steps])
+        from(node.dig("children", 0), [step(node), *steps])
       end
 
-      def self.step(invocation)
+      def self.step(spine)
+        right = spine.dig("children", 1)
+        spine["type"] == "IndexerExpression" ? Step.new(:index, nil, [right]) : invocation_step(right)
+      end
+
+      def self.invocation_step(invocation)
         child = invocation.dig("children", 0)
         case invocation["type"]
         when "MemberInvocation" then Step.new(:member, identifier(child), [])

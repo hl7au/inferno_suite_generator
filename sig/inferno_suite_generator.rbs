@@ -16,6 +16,10 @@ module InfernoSuiteGenerator
     def resolve_dynamic_values: (untyped value) -> untyped
   end
 
+  module QuestionnaireUsage
+    def self.descriptions: (ig_resources: untyped, groups: Array[untyped]) -> Hash[untyped, Hash[String | Symbol, String]]
+  end
+
   class Generator
     class GeneratorConfigKeeper
       include Getters

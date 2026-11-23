@@ -17,10 +17,17 @@ module InfernoSuiteGenerator
     # Returns { group_metadata => { test_id_string | :group => markdown } }; writes no files.
     def self.descriptions(ig_resources:, groups:)
       return {} if groups.empty?
-      raise ORDER_ERROR unless groups.any? { |group| recorded?(group) }
 
-      trace = Trace.new(placements(Form.load(ig_resources), groups))
-      groups.to_h { |group| [group, GroupDescription.new(group, trace).to_h] }.reject { |_, text| text.empty? }
+      ensure_tests_recorded(groups)
+      describe(groups, Trace.new(placements(Form.load(ig_resources), groups)))
+    end
+
+    def self.describe(groups, trace)
+      groups.to_h { |group| [group, GroupDescription.new(group, trace).to_h] }.reject { |_group, text| text.empty? }
+    end
+
+    def self.ensure_tests_recorded(groups)
+      raise ORDER_ERROR unless groups.any? { |group| recorded?(group) }
     end
 
     def self.placements(forms, groups)

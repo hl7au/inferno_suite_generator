@@ -15,7 +15,7 @@ module InfernoSuiteGenerator
       def fitting(group) = @by_group.fetch(group, [])
 
       def listed(group)
-        @placements.select { |placement| placement.test && placement.owner.equal?(group) }
+        @placements.select { |placement| placement.listed_in?(group) }
       end
 
       def by_group?(group, path) = @profiles[group].checks?(path)

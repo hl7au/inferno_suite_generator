@@ -7,6 +7,8 @@ module InfernoSuiteGenerator
       # The group whose test lists the source.
       def owner = group
 
+      def listed_in?(other) = test && owner.equal?(other)
+
       def test_label = test[:kind]
 
       def intro = format(Markdown::INTROS.fetch(test[:kind]), resource: group.resource)
@@ -24,13 +26,17 @@ module InfernoSuiteGenerator
 
       # One source per type; none when the extension is not a launch context or has no name.
       def self.from(form, extension)
-        parts = QuestionnaireUsage.list(extension, "extension").group_by { |part| part["url"] }
+        parts = parts(extension)
         name = name_of(parts["name"]&.first)
-        return [] unless name && extension["url"].to_s.end_with?(URL)
-
-        types = parts.fetch("type", []).filter_map { |part| QuestionnaireUsage.text(part, "valueCode") }
-        types.map { |type| new(form, name, type) }
+        name ? types(parts).map { |type| new(form, name, type) } : []
       end
+
+      def self.parts(extension)
+        parts = extension["url"].to_s.end_with?(URL) ? QuestionnaireUsage.list(extension, "extension") : []
+        parts.group_by { |part| part["url"] }
+      end
+
+      def self.types(parts) = [*parts["type"]].filter_map { |part| QuestionnaireUsage.text(part, "valueCode") }
 
       def self.name_of(part)
         QuestionnaireUsage.text(part, "valueCoding", "code") || QuestionnaireUsage.text(part, "valueId")

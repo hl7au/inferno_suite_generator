@@ -17,6 +17,16 @@ module InfernoSuiteGenerator
         @paths |= paths
       end
 
+      # Merges [key, label, action, text, chain] readings per item key; the block gives a chain's paths or nil.
+      def self.merge(readings)
+        merged = {}
+        readings.each do |key, label, action, _text, chain|
+          paths = yield(chain)
+          (merged[key] ||= new(label)).add(action, paths) if paths
+        end
+        merged.values
+      end
+
       def reads(source)
         paths.map { |path| Read.new(source, path, label) }
       end
@@ -25,6 +35,8 @@ module InfernoSuiteGenerator
     # One element path an item reads through a source.
     Read = Struct.new(:source, :path, :label) do
       def form = source.form
+
+      def checked_in?(trace) = trace.by_source?(source, path)
     end
 
     # The form root or one item, with the [action, FHIRPath text] pairs on its extensions.
@@ -53,8 +65,7 @@ module InfernoSuiteGenerator
 
       # The IG's forms, one per (url, id-when-no-url, version), same titles told apart by version.
       def self.load(ig_resources)
-        forms = ig_resources.get_resources_by_type("Questionnaire").map { |resource| new(resource.to_hash) }
-        forms = forms.uniq(&:key)
+        forms = ig_resources.get_resources_by_type("Questionnaire").map { |resource| new(resource.to_hash) }.uniq(&:key)
         repeated = forms.map(&:base_title).tally
         forms.each { |form| form.show_version if repeated[form.base_title] > 1 }
       end
@@ -115,14 +126,7 @@ module InfernoSuiteGenerator
       end
 
       # The uses of %name merged per item; the block gives a chain's paths, or nil when it is not a use.
-      def uses(name)
-        merged = {}
-        readings.fetch(name, []).each do |key, label, action, _text, chain|
-          paths = yield(chain)
-          (merged[key] ||= Use.new(label)).add(action, paths) if paths
-        end
-        merged.values
-      end
+      def uses(name, &) = Use.merge(readings.fetch(name, []), &)
 
       private
 
