@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../utils/generator_constants"
+
 module InfernoSuiteGenerator
   class Generator
     class GroupMetadata
@@ -78,8 +80,9 @@ module InfernoSuiteGenerator
         NON_USCDI_RESOURCES.key?(resource) && NON_USCDI_RESOURCES[resource].include?(reformatted_version)
       end
 
-      def add_test(id:, file_name:)
+      def add_test(id:, file_name:, kind: nil, **details)
         self.tests ||= []
+        test_kinds[id] = { kind:, **details } if kind
 
         test_metadata = {
           id:,
@@ -91,6 +94,22 @@ module InfernoSuiteGenerator
         else
           self.tests << test_metadata
         end
+      end
+
+      def test_kind(id)
+        test_kinds.fetch(id, {})
+      end
+
+      def find_test(kind, **details)
+        raise ArgumentError, "Unknown test kind: #{kind}" unless GeneratorConstants::TEMPLATE_TYPES.value?(kind)
+
+        (tests || []).each do |test|
+          recorded = test_kind(test[:id])
+          next unless recorded[:kind] == kind && details.all? { |key, value| same_detail?(recorded, key, value) }
+
+          return { id: test[:id], **recorded }
+        end
+        nil
       end
 
       def to_hash
@@ -109,6 +128,20 @@ module InfernoSuiteGenerator
               resources: delayed_resources
             }
           end
+      end
+
+      private
+
+      # Kept outside ATTRIBUTES so kinds never reach to_hash / metadata.yml.
+      def test_kinds
+        @test_kinds ||= {}
+      end
+
+      def same_detail?(recorded, key, value)
+        return false unless recorded.key?(key)
+
+        recorded_value = recorded[key]
+        value.is_a?(Array) && recorded_value.is_a?(Array) ? recorded_value.tally == value.tally : recorded_value == value
       end
     end
   end

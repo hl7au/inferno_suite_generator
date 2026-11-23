@@ -76,6 +76,10 @@ module InfernoSuiteGenerator
         end
       end
 
+      def test_details
+        super.merge(include_targets: includes.map { |include| include["target_resource"] })
+      end
+
       def target_resources_string
         includes.map { |include| include["target_resource"] }.join(", ")
       end

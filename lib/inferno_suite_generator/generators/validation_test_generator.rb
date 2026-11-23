@@ -65,12 +65,7 @@ module InfernoSuiteGenerator
         FileUtils.mkdir_p(output_file_directory)
         File.write(output_file_name, output)
 
-        test_metadata = {
-          id: test_id,
-          file_name: base_output_file_name
-        }
-
-        group_metadata.add_test(**test_metadata)
+        group_metadata.add_test(id: test_id, file_name: base_output_file_name, kind: template_type, **test_details)
       end
 
       def description

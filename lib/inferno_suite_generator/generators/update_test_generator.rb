@@ -70,6 +70,10 @@ module InfernoSuiteGenerator
         current_update_test_data["test_id_option"] if current_update_test_data
       end
 
+      def test_details
+        { option: test_id_option }
+      end
+
       def executor
         current_update_test_data["executor"] if current_update_test_data
       end

@@ -75,7 +75,9 @@ module InfernoSuiteGenerator
 
         group_metadata.add_test(
           id: test_id,
-          file_name: base_output_file_name
+          file_name: base_output_file_name,
+          kind: template_type,
+          **test_details
         )
       end
     end
