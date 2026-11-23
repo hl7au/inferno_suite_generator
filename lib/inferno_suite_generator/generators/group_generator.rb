@@ -9,24 +9,25 @@ module InfernoSuiteGenerator
   class Generator
     class GroupGenerator < BasicTestGenerator
       class << self
-        def generate(ig_metadata, base_output_dir)
+        def generate(ig_metadata, base_output_dir, descriptions = {})
           ig_metadata.ordered_groups
                      .compact
                      .reject do |group|
                        Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
                      end
-                     .each { |group| new(group, base_output_dir, ig_metadata).generate }
+                     .each { |group| new(group, base_output_dir, ig_metadata, descriptions.fetch(group, {})).generate }
         end
       end
 
-      attr_accessor :group_metadata, :base_output_dir, :ig_metadata
+      attr_accessor :group_metadata, :base_output_dir, :ig_metadata, :descriptions
 
       self.template_type = TEMPLATE_TYPES[:GROUP]
 
-      def initialize(group_metadata, base_output_dir, ig_metadata)
+      def initialize(group_metadata, base_output_dir, ig_metadata, descriptions = {})
         self.group_metadata = group_metadata
         self.base_output_dir = base_output_dir
         self.ig_metadata = ig_metadata
+        self.descriptions = descriptions
       end
 
       def base_metadata_file_name
@@ -102,6 +103,16 @@ module InfernoSuiteGenerator
       def description
         Helpers.get_group_description_text(title, resource_type, profile_name, group_metadata.version, profile_url,
                                            required_searches, search_param_name_string, search_validation_resource_type, resource_type)
+      end
+
+      def group_description
+        added = added_description(:group)
+        added ? "#{description}\n#{added}\n" : description
+      end
+
+      # Added text goes inside a %( ) literal in the group file.
+      def added_description(key)
+        descriptions[key]&.gsub(/[\\()]|#(?=[{@$])/) { |char| "\\#{char}" }
       end
     end
   end
