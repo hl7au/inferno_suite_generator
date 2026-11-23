@@ -82,6 +82,10 @@ module InfernoSuiteGenerator
           get("configs.generic.expectation", EMPTY_ARRAY)
         end
 
+        def questionnaire_usage_tracing?
+          get("configs.generic.questionnaire_usage_tracing") == true
+        end
+
         def outer_groups
           get("suite.outer_groups", EMPTY_ARRAY)
         end
