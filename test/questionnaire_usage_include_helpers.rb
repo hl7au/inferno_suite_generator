@@ -83,5 +83,12 @@ module QuestionnaireUsageIncludeHelpers
     meds_result([group, med_group], *, **).fetch(group)
   end
 
+  # Also picks Substance, so a target inferred from the form would add a Substance include.
+  def med_and_substance_items
+    [*med_items, item("sub", "Substance", "%Meds.entry.resource.ofType(Substance).code")]
+  end
+
+  def no_reads(*values) = "    - No item reads its results; it fetches #{values.join(", ")} through _include\n"
+
   def logged(*lines) = lines.map { |line| "Questionnaire usage tracing: #{line}\n" }
 end

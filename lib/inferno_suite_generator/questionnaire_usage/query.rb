@@ -75,7 +75,7 @@ module InfernoSuiteGenerator
         owner.downcase if FHIR::RESOURCES.include?(owner)
       end
 
-      # [name without modifiers, value] of each parameter, the value decoded unless it holds a template.
+      # [name as written, value] of each parameter, the value decoded unless it holds a template.
       def self.params(query)
         query.to_s.scan(PARAM).map do |param|
           name, value = param.split("=", 2)
@@ -131,18 +131,20 @@ module InfernoSuiteGenerator
       # The uses of chains on its results that pick the type.
       def picked_uses(type) = Use.merge(readings) { |chain| chain.picked_bundle_paths_for(type) }
 
+      # The values of its own _include params, resolved or not.
+      def include_values
+        @include_values ||= Include.values(self, @request.params)
+      end
+
       # A query with its own _include is shown without item uses too.
-      def shown? = uses.any? || includes.any?
+      def shown? = uses.any? || include_values.any?
 
       def context = "#{form.title} query #{name}"
 
       def details(_group) = ["Request: #{text}"]
 
       # The line a query with no item uses gets instead of item lines.
-      def unused_lines
-        values = includes.map(&:value).uniq
-        ["No item reads its results; it fetches #{values.join(", ")} through _include"]
-      end
+      def unused_lines = ["No item reads its results; it fetches #{include_values.join(", ")} through _include"]
 
       private
 

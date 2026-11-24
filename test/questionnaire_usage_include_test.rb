@@ -15,6 +15,15 @@ module InfernoSuiteGenerator
                    result[mr]["mr_include"]
     end
 
+    def test_same_include_written_twice_is_one_source
+      mr = mr_group
+      result = meds_result([mr, med_group], meds_query("#{MEDS_QUERY}&_include=#{INCLUDE}"))
+
+      assert_equal section(INCLUDE_INTRO, "- **Meds form**\n#{include_heading("#{MEDS_QUERY}&_include=#{INCLUDE}")}" \
+                                          "#{MED_ITEMS.chomp}"),
+                   result[mr]["mr_include"]
+    end
+
     def test_both_summaries_name_the_searching_group_and_it_shows_the_no_reads_line
       mr = mr_group
       med = med_group

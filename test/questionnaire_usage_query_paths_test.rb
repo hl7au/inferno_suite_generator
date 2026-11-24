@@ -20,6 +20,14 @@ module InfernoSuiteGenerator
                     "    - **A**: pre-fills the answer; reads value.value, status (not checked)\n"], search_lines(items)
     end
 
+    def test_resource_type_pick_types_the_chain
+      items = [item("a", "A", "%Obs.entry.resource.where(resourceType = 'Observation').status"),
+               item("b", "B", "%Obs.entry.resource.where(resourceType = 'Patient').name")]
+
+      assert_equal ["    - Request: #{HEIGHT_QUERY}\n",
+                    "    - **A**: pre-fills the answer; reads status (not checked)\n"], search_lines(items)
+    end
+
     def test_entry_pick_arguments_read_paths_on_the_resource
       items = [item("a", "A", "%Obs.entry.where(resource.status = 'final').resource.value.value")]
 

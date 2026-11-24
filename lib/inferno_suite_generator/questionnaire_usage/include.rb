@@ -8,13 +8,21 @@ module InfernoSuiteGenerator
       PARAM = "_include"
 
       # The include sources of the query's [name, value] params, one per target type; logs the untraced ones.
+      # The same include written twice is one.
       def self.all(query, params)
-        params.select { |name, _value| name.split(":").first == PARAM }.flat_map { |param| of(query, *param) }
+        params.uniq.select { |name, _value| name.split(":").first == PARAM }.flat_map { |param| of(query, *param) }
       end
 
-      # _include:iterate and an _include of another type are not traced.
+      # The values of the query's own _include params that name a parameter, resolved or not.
+      def self.values(query, params)
+        params.select { |param| own?(query, *param) && param.last.split(":")[1].present? }.map(&:last).uniq
+      end
+
+      # _include:iterate and an _include of another type are not the query's own.
+      def self.own?(query, name, value) = [name, value.split(":").first] == [PARAM, query.type]
+
       def self.of(query, name, value)
-        return skip(query, name, value) unless name == PARAM && value.split(":").first == query.type
+        return skip(query, name, value) unless own?(query, name, value)
 
         targets(query, value).map { |type| new(query, value, type) }
       end
@@ -26,12 +34,16 @@ module InfernoSuiteGenerator
       end
 
       # The explicit target, else the SearchParameter's targets, else the types the form picks on the results.
+      # None without a parameter part.
       def self.targets(query, value)
         _type, param, target = value.split(":", 3)
-        types = [*target.presence].presence || search_targets(query, param).presence ||
-                (query.picked_types - [query.type])
+        types = param.present? ? found_targets(query, param, target) : []
         QuestionnaireUsage.log("unresolved #{query.context} include #{value}: no target type") if types.empty?
         types.uniq
+      end
+
+      def self.found_targets(query, param, target)
+        [*target.presence].presence || search_targets(query, param).presence || (query.picked_types - [query.type])
       end
 
       def self.search_targets(query, param)
@@ -66,8 +78,7 @@ module InfernoSuiteGenerator
         @uses ||= type == query.type ? [] : query.picked_uses(type)
       end
 
-      # It belongs to a query that is shown because it has an _include.
-      def shown? = true
+      def shown? = uses.any?
 
       def context = "#{query.context} include #{value}"
 
