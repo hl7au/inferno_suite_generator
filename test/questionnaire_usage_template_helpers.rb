@@ -20,9 +20,8 @@ module QuestionnaireUsageTemplateHelpers
   CATEGORY_URL = "http://example.org/StructureDefinition/category-"
 
   def template(ref, patch_url: nil)
-    parts = [{ "url" => "template", "valueReference" => { "reference" => ref } },
-             ({ "url" => PATCH_URL, "valueString" => patch_url } if patch_url)].compact
-    { "url" => "#{SDC}templateExtract", "extension" => parts }
+    templates(*[{ "url" => "template", "valueReference" => { "reference" => ref } },
+                ({ "url" => PATCH_URL, "valueString" => patch_url } if patch_url)].compact)
   end
 
   def observation(id, *codes)
@@ -85,16 +84,16 @@ module QuestionnaireUsageTemplateHelpers
     end
   end
 
-  # The groups of the type whose profiles fix category one and two that a root template creating the type with
-  # this category is described in.
-  def category_groups(type, category)
+  # The entry keys, by profile URL, of the groups of the type whose profiles fix category one and two that a root
+  # template creating the type with this category is described in.
+  def category_entries(type, category)
     groups = %w[one two].map { |code| category_group(type, code) }
     form = template_form([template("#new")], [], [{ "resourceType" => type, "id" => "new", "category" => category }])
     resources = ig(form).tap { |ig| %w[one two].each { |code| ig.add(category_profile(type, code)) } }
-    describe(resources, *groups).keys.map(&:profile_url)
+    describe(resources, *groups).to_h { |group, entry| [group.profile_url, entry.keys] }
   end
 
-  def skipped(line) = "Questionnaire usage tracing: skipping Vitals form templateExtract #{line}\n"
+  def skipped(line) = logged("skipping Vitals form templateExtract #{line}")
 
   # Root extensions in reverse source order: a template, a launch context, then a query with an _include.
   def meds_form_with_all_sources

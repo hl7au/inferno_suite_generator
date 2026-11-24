@@ -31,11 +31,12 @@ module InfernoSuiteGenerator
     end
 
     def test_create_template_goes_to_the_profile_whose_fixed_category_overlaps
-      assert_equal ["#{CATEGORY_URL}two"], category_groups("Observation", [concept("two")])
+      assert_equal({ "#{CATEGORY_URL}two" => ["create_two", :group] },
+                   category_entries("Observation", [concept("two")]))
     end
 
     def test_create_template_with_a_single_category_goes_to_the_profile_whose_fixed_category_overlaps
-      assert_equal ["#{CATEGORY_URL}two"], category_groups("Procedure", concept("two"))
+      assert_equal({ "#{CATEGORY_URL}two" => ["create_two", :group] }, category_entries("Procedure", concept("two")))
     end
 
     def test_template_on_a_nested_item_is_used_by_that_item

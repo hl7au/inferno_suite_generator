@@ -76,5 +76,14 @@ module InfernoSuiteGenerator
       assert_equal "Questionnaire usage tracing: skipping FHIRPath \"%patient.name.(\": " \
                    "Failed to parse \"%patient.name.(\"\n", @log
     end
+
+    def test_variable_on_an_item_without_link_id_is_logged_with_a_fallback_label
+      names = item("names", "Names", variable("First", "%Second.family"), variable("Second", "%patient.name"),
+                   "%First").except("linkId")
+      describe(ig(form([names])), group)
+
+      assert_equal "Questionnaire usage tracing: untraced Demo form variable First on an item without linkId: " \
+                   "it uses Second, defined after it\n", @log
+    end
   end
 end
