@@ -10,7 +10,9 @@ module InfernoSuiteGenerator
 
     READ = "MedicationRequest/1?_include=#{INCLUDE}".freeze
 
-    def skipped(param, reason = "a read by id takes no _include") = "skipping #{param} in Meds form query Meds: #{reason}"
+    READ_REASON = "a read by id takes no _include"
+
+    def skipped(param, reason = READ_REASON) = "skipping #{param} in Meds form query Meds: #{reason}"
 
     def test_read_query_include_is_not_traced
       mr = mr_group

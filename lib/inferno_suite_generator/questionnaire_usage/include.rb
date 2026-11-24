@@ -13,9 +13,11 @@ module InfernoSuiteGenerator
         written(params).flat_map { |param| of(query, *param) }.uniq { |include| [include.param, include.type] }
       end
 
-      # A read by id takes no _include: its includes are logged, not traced.
+      # A read by id takes no _include: its includes are logged, not traced. A foreign one gets the usual reason.
       def self.read(query, params)
-        written(params).each { |name, value| skip(query, "#{name}=#{value}", "a read by id takes no _include") }
+        written(params).each do |param|
+          skip(query, param.join("="), own?(query, *param) ? "a read by id takes no _include" : foreign(query))
+        end
         []
       end
 
@@ -30,9 +32,10 @@ module InfernoSuiteGenerator
       # _include:iterate and an _include of another type are not the query's own.
       def self.own?(query, name, value) = [name, value.split(":").first] == [PARAM, query.type]
 
+      def self.foreign(query) = "only _include of #{query.type} is traced"
+
       def self.of(query, name, value)
-        reason = "only _include of #{query.type} is traced"
-        return skip(query, "#{name}=#{value}", reason) unless own?(query, name, value)
+        return skip(query, "#{name}=#{value}", foreign(query)) unless own?(query, name, value)
 
         targets(query, value).map { |type| new(query, value, type) }
       end
@@ -46,9 +49,7 @@ module InfernoSuiteGenerator
       # None without a parameter part.
       def self.targets(query, value)
         _type, param, target = value.split(":", 3)
-        return unresolved(query, value, "no search parameter") if param.blank?
-
-        types = found_targets(query, param, target).uniq
+        types = param.blank? ? [] : found_targets(query, param, target).uniq
         types.empty? ? unresolved(query, value, "no target type") : types
       end
 
