@@ -9,7 +9,15 @@ module InfernoSuiteGenerator
 
       def listed_in?(other) = test && owner.equal?(other)
 
-      def test_label = test[:kind]
+      def form = source.form
+
+      def test_label
+        kind = test[:kind]
+        kind == "search" ? "search by #{test[:search_names].join(" + ")}" : kind
+      end
+
+      # Lines between the heading and the item lines; a source no test lists also compares to the group.
+      def details(untested) = source.details(untested ? group : nil)
 
       def intro = format(Markdown::INTROS.fetch(test[:kind]), resource: group.resource)
 
@@ -54,9 +62,10 @@ module InfernoSuiteGenerator
 
       def shown? = uses.any?
 
-      def fits(groups)
-        groups.select { |group| group.resource == type }
-      end
+      # Matched by type only.
+      def codes = nil
+
+      def details(_group) = []
 
       def placement(group)
         Placement.new(self, group, group.find_test("read"))

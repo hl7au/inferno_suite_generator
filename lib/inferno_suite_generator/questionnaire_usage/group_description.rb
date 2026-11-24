@@ -13,6 +13,7 @@ module InfernoSuiteGenerator
       INTROS = {
         "read" => "These questionnaires in the IG read %<resource>s resources as this test does: by id, or as " \
                   "the resource a form is opened for. #{reads} #{not_checked}",
+        "search" => "These questionnaires in the IG make this search. #{reads} #{not_checked}",
         "must_support" => "Items in these questionnaires read elements of %<resource>s that this group's tests " \
                           "check. #{reads}",
         group: "These questionnaires in the IG read or create %<resource>s resources. The tests that make the " \
@@ -43,15 +44,18 @@ module InfernoSuiteGenerator
         init.empty? ? "#{last} test" : "#{init.join(", ")} and #{last} tests"
       end
 
-      def self.source_list(placements, trace)
-        by_form(placements.map(&:source)) { |source| source_lines(source, trace) }
+      # untested: the sources no test of the group lists, which also compare to the group's searches.
+      def self.source_list(placements, trace, untested: false)
+        by_form(placements) { |placement| source_lines(placement, trace, untested) }
       end
 
-      def self.source_lines(source, trace)
+      def self.source_lines(placement, trace, untested)
+        source = placement.source
         uses = source.uses
         rest = uses.size - ITEM_CAP
-        lines = uses.first(ITEM_CAP).map { |use| "    - #{item_line(source, use, trace)}" }
-        ["  - #{source.heading}", *lines, *("    - and #{rest} more items" if rest.positive?)]
+        lines = [*placement.details(untested), *uses.first(ITEM_CAP).map { |use| item_line(source, use, trace) },
+                 *("and #{rest} more items" if rest.positive?)]
+        ["  - #{source.heading}", *lines.map { |line| "    - #{line}" }]
       end
 
       def self.item_line(source, use, trace)
@@ -131,7 +135,9 @@ module InfernoSuiteGenerator
         @fitting.map { |placement| placement.source.form }.uniq.map { |form| summary_line(form) }.join("\n")
       end
 
-      def not_tested = Markdown.block(:not_tested, Markdown.source_list(@fitting.reject(&:test), @trace))
+      def not_tested
+        Markdown.block(:not_tested, Markdown.source_list(@fitting.reject(&:test), @trace, untested: true))
+      end
 
       def not_checked
         Markdown.block(:not_checked, Markdown.element_list(reads.reject { |read| read.checked_in?(@trace) }, @trace))

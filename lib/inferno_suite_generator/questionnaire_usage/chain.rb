@@ -10,6 +10,8 @@ module InfernoSuiteGenerator
       FILTERS = %w[where exists all select].freeze
       STOPS = %w[ofType select resolve children descendants].freeze
       EXTENSIONS = %w[extension modifierExtension].freeze
+      ENTRY_PICKS = %w[where first last tail skip take single].freeze
+      IS_TYPE = /\Aresource\.is\((\w+)\)\z/
 
       # kind is :member, :function, :index or :other; params are the parse nodes of its arguments.
       Step = Struct.new(:kind, :name, :params) do
@@ -25,6 +27,26 @@ module InfernoSuiteGenerator
         end
 
         def function?(names) = kind == :function && names.include?(name)
+
+        def member?(member) = kind == :member && name == member
+
+        def entry_pick? = kind == :index || function?(ENTRY_PICKS)
+
+        # T for where(resource is T) or where(resource.is(T)).
+        def entry_type
+          condition = params.first if name == "where"
+          return unless condition
+
+          children = condition.fetch("children", [])
+          if condition["type"] == "TypeExpression" && children.first&.dig("text") == "resource"
+            children.last["text"]
+          else
+            condition["text"].to_s[IS_TYPE, 1]
+          end
+        end
+
+        # T for ofType(T).
+        def of_type = (params.first["text"] if function?(["ofType"]) && params.size == 1)
 
         # The element a member step or extension('<url>') reads; resourceType is not an element.
         def elements
@@ -169,6 +191,21 @@ module InfernoSuiteGenerator
       # The paths the chain reads on a resource of the given type, or nil when it picks another type.
       def paths_for(type)
         paths if [nil, type].include?(picked_type)
+      end
+
+      # The paths a chain on a search's Bundle reads on its resources of the given type, or nil when it
+      # picks another type. Only entry … resource reads elements; entry picks may come before resource.
+      def bundle_paths_for(type)
+        return [] unless steps.first&.member?("entry")
+
+        picks = steps.drop(1).take_while(&:entry_pick?)
+        resource, *rest = steps.drop(picks.size + 1)
+        on_resource = resource&.member?("resource")
+        of_type = rest.first&.of_type if on_resource
+        picked = [*picks.filter_map(&:entry_type), *of_type].last
+        return unless [nil, type].include?(picked)
+
+        on_resource ? Reading.new.paths(rest.drop(of_type ? 1 : 0)) : []
       end
 
       protected
