@@ -61,7 +61,7 @@ module InfernoSuiteGenerator
       end
       GroupGenerator.stub(:generate, stub) { record_descriptions { generator.generate } }
 
-      assert_equal STEPS_BEFORE + %i[generate_groups] + STEPS_AFTER, steps
+      assert_equal STEPS_BEFORE + %i[generate_questionnaire_usage generate_groups] + STEPS_AFTER, steps
       assert_equal [{ @kept => { group: "text" } }], group_args.drop(2)
     end
 
@@ -89,9 +89,14 @@ module InfernoSuiteGenerator
       end
     end
 
+    # Stubs the other steps; the tracing step is recorded and still runs.
     def record_steps(generator)
       [].tap do |steps|
         (STEPS_BEFORE + STEPS_AFTER).each { |step| generator.define_singleton_method(step) { steps << step } }
+        generator.define_singleton_method(:generate_questionnaire_usage) do
+          steps << :generate_questionnaire_usage
+          super()
+        end
       end
     end
 
