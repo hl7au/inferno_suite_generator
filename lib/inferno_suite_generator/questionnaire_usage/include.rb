@@ -19,6 +19,7 @@ module InfernoSuiteGenerator
         []
       end
 
+      # The query's _include params of any kind; the same include written twice is one.
       def self.written(params) = params.uniq.select { |name, _value| name.split(":").first == PARAM }
 
       # The values of the query's own _include params that name a parameter, resolved or not.
@@ -36,8 +37,8 @@ module InfernoSuiteGenerator
         targets(query, value).map { |type| new(query, value, type) }
       end
 
-      def self.skip(query, param, reason)
-        QuestionnaireUsage.log("skipping #{param} in #{query.context}: #{reason}")
+      def self.skip(query, text, reason)
+        QuestionnaireUsage.log("skipping #{text} in #{query.context}: #{reason}")
         []
       end
 
