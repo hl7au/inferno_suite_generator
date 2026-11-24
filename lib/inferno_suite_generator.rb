@@ -177,7 +177,9 @@ module InfernoSuiteGenerator
       config = Registry.get(:config_keeper)
       return unless config.questionnaire_usage_tracing?
 
-      groups = ig_metadata.groups.reject { |group| config.exclude_resource?(group.profile_url, group.resource) }
+      groups = ig_metadata.ordered_groups.compact.reject do |group|
+        config.exclude_resource?(group.profile_url, group.resource)
+      end
       @group_descriptions = QuestionnaireUsage.descriptions(ig_resources:, groups:)
     end
 

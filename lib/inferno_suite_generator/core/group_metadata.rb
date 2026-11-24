@@ -100,10 +100,6 @@ module InfernoSuiteGenerator
         test_kinds.fetch(id) { {} }
       end
 
-      def test_kinds
-        @test_kinds ||= {}
-      end
-
       # The first test in group order of this kind (a GeneratorConstants::TEMPLATE_TYPES value) whose recorded
       # details include the given ones, like find_test("search", search_names: %w[patient code]), or nil.
       # Arrays match in any order. Returns { id:, kind:, **details }. Kinds are recorded in memory, so a test is
@@ -139,6 +135,12 @@ module InfernoSuiteGenerator
               resources: delayed_resources
             }
           end
+      end
+
+      private
+
+      def test_kinds
+        @test_kinds ||= {}
       end
     end
   end

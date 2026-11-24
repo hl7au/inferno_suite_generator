@@ -7,9 +7,13 @@ module InfernoSuiteGenerator
     # Where a FHIRPath value came from in what a source returns. `shape` is `:bundle` for a search's Bundle,
     # `:entries` for Bundle entries, else `:resource`. `type` is the resource type, when a filter picked one.
     # `path` is the value's element path: "" at the resource itself, nil once it is no longer one of its elements.
-    Origin = Data.define(:shape, :type, :path) do
+    # `carried` is the element paths read to get the value, apart from `path`: what its filters read, and the
+    # path it left the resource's elements at. Every chain from the value reads them too.
+    Origin = Data.define(:shape, :type, :path, :carried) do
       def self.bundle = new(shape: :bundle, type: nil, path: "")
       def self.resource = new(shape: :resource, type: nil, path: "")
+
+      def initialize(carried: [], **) = super
     end
 
     # What one chain from a `%name` reads: the element `paths`, every resource type its filters name (`types`),
@@ -188,13 +192,17 @@ module InfernoSuiteGenerator
       def value_origin
         type = @origin.type || (@type if @origin.path == "")
         path = at(@names.join(".")) if @origin.path && !@stopped
-        Origin.new(shape: @entries ? :entries : :resource, type:, path:)
+        Origin.new(shape: @entries ? :entries : :resource, type:, path:, carried: path ? carried : paths)
       end
 
       def paths
-        return [] unless @origin.path
+        [(at(@names.join(".")) if @origin.path), *carried].compact.reject(&:empty?).uniq
+      end
 
-        [@names.join("."), *@criteria.uniq].map { |path| at(path) }.reject(&:empty?)
+      def carried
+        return @origin.carried unless @origin.path
+
+        [*@origin.carried, *@criteria.map { |path| at(path) }].uniq
       end
 
       def at(path)
@@ -238,17 +246,19 @@ module InfernoSuiteGenerator
           case step[:kind]
           when :member then @names << step[:name]
           when :function
-            read_function(step) unless extension_filter(step)
+            read_function(step, url_in_path: extension_filter(step))
             break leave if STOPS.include?(step[:name])
           end
         end
       end
 
-      def read_function(step)
+      # url_in_path: whether the step's `url` condition is already in the path, so it is not listed again.
+      def read_function(step, url_in_path:)
         name, args = step.values_at(:name, :args)
         if CRITERIA.include?(name)
           prefix = @names.join(".")
-          @criteria.concat(args.flat_map { |arg| criteria_paths(arg) }.map { |path| join(prefix, path) })
+          read = args.flat_map { |arg| criteria_paths(arg) } - (url_in_path ? ["url"] : [])
+          @criteria.concat(read.map { |path| join(prefix, path) })
         end
         read_resource_type(args.first) if name == "where" && args.one? && @names.empty?
       end

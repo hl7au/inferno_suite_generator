@@ -124,10 +124,20 @@ module InfernoSuiteGenerator
       # variable that reads one of its names adds itself for the node's own expressions and the items under it.
       def walk(node, env, accept)
         env = variables_on(node, FHIRPATH).reduce(env) do |bound, (name, text)|
-          read = variable_read(fhirpath(text).reads(bound), accept)
-          read ? bound.merge(name => read.origin) : bound
+          origin = variable_origin(fhirpath(text).reads(bound), accept)
+          origin ? bound.merge(name => origin) : bound
         end
         uses_on(node, env, accept) + list(node["item"]).flat_map { |item| walk(item, env, accept) }
+      end
+
+      # The Origin a variable is bound to: that of the read it stands for, which also carries what the other
+      # chains of its expression read, like the `%name` chain in a `where(id in %name...)`.
+      def variable_origin(reads, accept)
+        read = variable_read(reads, accept)
+        return unless read
+
+        others = (reads - [read]).select { |other| accept.call(other.origin.type) }.flat_map(&:paths)
+        read.origin.with(carried: (read.origin.carried + others).uniq)
       end
 
       # The read a variable stands for: the first that counts. A variable that picks several types, like

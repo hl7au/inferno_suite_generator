@@ -133,7 +133,7 @@ module InfernoSuiteGenerator
         - **Form**
           - **Query ObsHeight**: searches Observation resources
             - Request: Observation?code=8302-2&_sort=-date&patient={{%patient.id}}
-            - **Height**: pre-fills the answer; reads value.value (not checked)
+            - **Height**: pre-fills the answer; reads value.value (not checked), status (not checked), value.unit (not checked)
       MARKDOWN
     end
 
@@ -223,6 +223,29 @@ module InfernoSuiteGenerator
       form = patient_form(reading("pronouns", "Pronouns", "%patient.extension('http://example.org/pronouns').value"))
 
       assert_includes section(form, patient_group, :read), "reads extension[pronouns].value (not checked)"
+    end
+
+    def test_an_item_reads_what_the_other_chains_of_its_variable_read
+      form = questionnaire(
+        extension: [query("Meds", "MedicationStatement?patient={{%patient.id}}"),
+                    variable("Contained", "%Meds.entry.resource.contained.ofType(Medication)" \
+                                          ".where(id in %Meds.entry.resource.medication.select(reference))")],
+        item: [reading("med", "Medication", "%Contained.code")]
+      )
+      group = group("meds", "MedicationStatement", { search: { search_names: %w[patient] } })
+
+      assert_includes section(form, group, :search),
+                      "reads contained (not checked), medication (not checked), medication.reference (not checked)"
+    end
+
+    def test_a_filter_that_names_an_extension_by_url_still_reads_the_rest_of_its_condition
+      fhirpath = "%patient.extension.where(exists(url='http://example.org/pronouns') and " \
+                 "extension.where(url='period').value.end.empty()).extension.where(url='value').value"
+      form = patient_form(reading("pronouns", "Pronouns", fhirpath))
+
+      assert_includes section(form, patient_group, :read),
+                      "reads extension[pronouns].extension[value].value (not checked), " \
+                      "extension[pronouns].extension[period].value.end (not checked)\n"
     end
 
     def test_a_filter_on_this_reads_the_filtered_element
@@ -400,6 +423,20 @@ module InfernoSuiteGenerator
 
     def teardown
       FileUtils.remove_entry(@dir)
+    end
+
+    def test_a_kit_subclass_with_a_three_argument_initialize_still_generates
+      group = build_group_metadata(tests: [{ id: "example_patient_read_test", file_name: "patient_read_test.rb" }])
+      subclass = Class.new(Generator::GroupGenerator) do
+        def initialize(group_metadata, base_output_dir, ig_metadata)
+          super
+          @kit_option = true
+        end
+      end
+
+      with_config_keeper { subclass.generate(build_ig_metadata(groups: [group]), @dir) }
+
+      assert_path_exists File.join(@dir, "patient_group.rb")
     end
 
     def test_added_text_is_escaped_so_the_group_file_stays_valid_ruby

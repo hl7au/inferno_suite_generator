@@ -14,7 +14,7 @@ module InfernoSuiteGenerator
     # The Markdown to add to descriptions, as `{ group => { test id or :group => Markdown } }`. It reads the tests
     # the generators recorded and GroupGenerator writes what it returns, so it runs between them.
     def self.descriptions(ig_resources:, groups:)
-      if groups.any? && groups.none? { |group| group.test_kinds.any? }
+      if groups.any? && groups.none? { |group| group.tests.to_a.any? { |test| group.test_kind(test[:id]).any? } }
         raise "Questionnaire usage tracing must run after the test generators: no group has a recorded test."
       end
 
