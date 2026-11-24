@@ -254,13 +254,13 @@ sequenceDiagram
 The tests build small in-memory questionnaires and groups and call the public entry points: QuestionnaireUsage.descriptions, GroupMetadata, GroupGenerator.generate and Generator#generate_questionnaire_usage.
 
 ```sh
-bundle exec rake test                  # whole suite
+bundle exec rake                       # tests, RuboCop and Reek
+bundle exec rake test                  # whole suite only
 bundle exec ruby -Ilib -Itest test/questionnaire_usage_query_test.rb   # one file
-bundle exec rake                       # RuboCop
-bundle exec reek .                     # Reek
+bundle exec reek .                     # Reek only
 ```
 
-Pass `.` to reek: without a path it reads source from stdin when stdin is not a terminal, as in an editor task or an agent shell.
+When running reek by hand, pass `.`: without a path it reads source from stdin when stdin is not a terminal, as in an editor task or an agent shell. The rake task already does.
 
 | Test file | Covers |
 |---|---|
