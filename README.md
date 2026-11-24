@@ -179,6 +179,7 @@ These constants can be referred to from profile/resource configs, allowing you t
     - `path_to_template`
     - `test_type` (e.g. `"search"`)
 - **`questionnaire_usage_tracing`**: Set to `true` to add a "Used in questionnaires" section to the generated group and test descriptions, naming the SDC questionnaire items in the IG that depend on each test's request. Off by default; any value other than `true` leaves the output unchanged. See [documentation/questionnaire_usage_tracing.md](documentation/questionnaire_usage_tracing.md).
+
 When the IG has **no CapabilityStatement** (e.g. AU PS, IPS), groups are built automatically from every profile `StructureDefinition` found in the loaded IG resources (`kind = "resource"` and `derivation = "constraint"`), grouped by resource type. This is only consulted when `ig_resources.cs_resources` is empty — IGs that publish a CapabilityStatement are unaffected, and no config is needed to opt in. Because there's no CapabilityStatement to source them from, groups built this way have no interactions, operations, or searches — only must‑support elements, mandatory elements, terminology bindings, and references. If the IG has neither a CapabilityStatement nor any profile StructureDefinitions, no groups are generated and a warning is logged.
 
 ### Configs – profiles section

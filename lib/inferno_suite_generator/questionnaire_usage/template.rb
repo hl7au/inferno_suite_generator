@@ -70,7 +70,7 @@ module InfernoSuiteGenerator
 
       def form = @site.form
 
-      def id = @resource["id"]
+      def id = resource["id"]
 
       def shown? = true
 
@@ -129,10 +129,12 @@ module InfernoSuiteGenerator
 
       def heading = "**Extraction template #{id}**: updates an existing #{type} with a FHIRPath Patch"
 
-      # An update test that creates a resource is never used.
-      # :reek:FeatureEnvy
+      # Tests tried in order; an update test that creates a resource is never used.
+      TESTS = [["patch", {}], ["update", { option: "update" }]].freeze
+
       def placement(group, _groups)
-        Placement.new(self, group, group.find_test("patch") || group.find_test("update", option: "update"))
+        test = TESTS.lazy.filter_map { |kind, details| group.find_test(kind, **details) }.first
+        Placement.new(self, group, test)
       end
 
       private
