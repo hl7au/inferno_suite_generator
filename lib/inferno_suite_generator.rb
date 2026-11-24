@@ -35,7 +35,7 @@ module InfernoSuiteGenerator
       new(config.ig_deps_path).generate
     end
 
-    attr_accessor :ig_resources, :ig_metadata, :ig_deps_path, :ig_demodata
+    attr_accessor :ig_resources, :ig_metadata, :ig_deps_path, :ig_demodata, :questionnaire_usage
 
     def initialize(ig_deps_path)
       self.ig_deps_path = ig_deps_path
@@ -55,6 +55,7 @@ module InfernoSuiteGenerator
       generate_create_tests
       generate_update_tests
       generate_patch_tests
+      generate_questionnaire_usage
       generate_groups
       generate_suites
       use_tests
@@ -172,8 +173,18 @@ module InfernoSuiteGenerator
       PatchTestGenerator.generate(ig_metadata, base_output_dir, ig_resources)
     end
 
+    def generate_questionnaire_usage
+      config = Registry.get(:config_keeper)
+      return unless config.questionnaire_usage_tracing?
+
+      groups = ig_metadata.ordered_groups.compact.reject do |group|
+        config.exclude_resource?(group.profile_url, group.resource)
+      end
+      self.questionnaire_usage = QuestionnaireUsage.descriptions(ig_resources:, groups:)
+    end
+
     def generate_groups
-      GroupGenerator.generate(ig_metadata, base_output_dir)
+      GroupGenerator.generate(ig_metadata, base_output_dir, questionnaire_usage || {})
     end
 
     def generate_suites

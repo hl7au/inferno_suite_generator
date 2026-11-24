@@ -52,13 +52,14 @@ module InfernoSuiteGenerator
 
     def test_generate_traces_after_patch_tests_and_passes_result_to_groups
       generator = generator_with(tracing: true)
-      steps = []
-      (STEPS_BEFORE + STEPS_AFTER).each { |step| generator.define_singleton_method(step) { steps << step } }
+      steps = record_steps(generator)
       group_args = nil
 
-      GroupGenerator.stub(:generate, ->(*args) { group_args = args; steps << :generate_groups }) do
-        record_descriptions { generator.generate }
+      stub = lambda do |*args|
+        group_args = args
+        steps << :generate_groups
       end
+      GroupGenerator.stub(:generate, stub) { record_descriptions { generator.generate } }
 
       assert_equal STEPS_BEFORE + %i[generate_groups] + STEPS_AFTER, steps
       assert_equal [{ @kept => { group: "text" } }], group_args.drop(2)
@@ -85,6 +86,12 @@ module InfernoSuiteGenerator
       Generator.new(@dir).tap do |generator|
         generator.ig_resources = :resources
         generator.ig_metadata = FakeIGMetadata.new([@skipped, nil, @kept], "v1")
+      end
+    end
+
+    def record_steps(generator)
+      [].tap do |steps|
+        (STEPS_BEFORE + STEPS_AFTER).each { |step| generator.define_singleton_method(step) { steps << step } }
       end
     end
 

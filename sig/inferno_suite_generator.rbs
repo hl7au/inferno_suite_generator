@@ -21,6 +21,10 @@ module InfernoSuiteGenerator
   end
 
   class Generator
+    attr_accessor questionnaire_usage: Hash[untyped, Hash[String | Symbol, String]]?
+
+    def generate_questionnaire_usage: () -> Hash[untyped, Hash[String | Symbol, String]]?
+
     class GeneratorConfigKeeper
       include Getters
       include Extractors
