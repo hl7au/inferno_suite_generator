@@ -61,6 +61,15 @@ module InfernoSuiteGenerator
       assert_equal section(UPDATE_INTRO, PATCH_BLOCK), entry["patient_patch"]
     end
 
+    def test_patch_template_without_a_type_is_logged_and_skipped
+      patient = patient_group(%w[patient_patch patch])
+      resources = ig(template_form([template("#name-patch", patch_url: "%patient.id")], [], [name_patch("name")]))
+
+      assert_equal({}, describe(resources, patient))
+      assert_equal "Questionnaire usage tracing: skipping Vitals form templateExtract #name-patch on root: " \
+                   "no resource type in its patch path or request URL\n", @log
+    end
+
     def test_missing_contained_resource_is_logged_and_the_rest_is_traced
       group = create_group
       entry = describe(obs_ig(create_form("#missing")), group).fetch(group)

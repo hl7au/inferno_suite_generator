@@ -30,18 +30,18 @@ module InfernoSuiteGenerator
         parts = QuestionnaireUsage.list(extension, "extension")
         ref = QuestionnaireUsage.text(parts.find { |part| part["url"] == "template" }, "valueReference", "reference")
         resource = site.contained[ref]
-        resource ? build(site, ref, resource, parts) : skip(site, ref)
+        resource ? build(site, ref, resource, parts) : skip(site, ref, "no contained resource #{ref}")
       end
 
       # A PatchRequestUrl sub-extension makes it a FHIRPath Patch; none without a type.
       def self.build(site, ref, resource, parts)
         patch = parts.find { |part| part["url"].to_s.end_with?(PATCH_URL) }
         template = patch ? PatchTemplate.new(site, ref, resource, patch) : CreateTemplate.new(site, ref, resource)
-        template if template.type
+        template.type ? template : skip(site, ref, template.untyped)
       end
 
-      def self.skip(site, ref)
-        QuestionnaireUsage.log("skipping #{site.context(ref)}: no contained resource #{ref}")
+      def self.skip(site, ref, reason)
+        QuestionnaireUsage.log("skipping #{site.context(ref)}: #{reason}")
         nil
       end
 
@@ -73,6 +73,8 @@ module InfernoSuiteGenerator
     class CreateTemplate < Template
       def type = QuestionnaireUsage.text(@resource, "resourceType")
 
+      def untyped = "the contained resource has no resourceType"
+
       def codes
         @codes ||= Codes.from_resource(@resource)
       end
@@ -100,6 +102,8 @@ module InfernoSuiteGenerator
       def type
         @type ||= [path_type, @request_url.to_s[REQUEST_TYPE, 1]].find { |name| FHIR::RESOURCES.include?(name) }
       end
+
+      def untyped = "no resource type in its patch path or request URL"
 
       def codes = nil
 
