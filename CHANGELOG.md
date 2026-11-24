@@ -11,12 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `suite.validation_message_overrides` configuration option to change the severity of FHIR validator messages matched by regex (optionally narrowed by `from`, `location` and `message_id`). Implemented by `InfernoSuiteGenerator::ValidationMessageOverrides`, which generated suites extend their default validator with.
 - Added `suite.groups_order` configuration option to control the order of `groups` in the generated `metadata.yml`. Profiles listed in `groups_order` are placed first in the given order, with any remaining profiles appended afterward in their existing relative order.
+- Added `configs.generic.questionnaire_usage_tracing` configuration option. When `true`, the generator traces the IG's SDC `Questionnaire` resources (launch contexts, `x-fhir-query` variables, `_include`s and `templateExtract` templates) and appends a "Used in questionnaires" section to the descriptions of the tests that make the same requests, the Must Support test and the group. Implemented by `InfernoSuiteGenerator::QuestionnaireUsage.descriptions` and run by `Generator#generate_questionnaire_usage`; `GroupGenerator.generate` takes the result as an optional third argument. See `documentation/questionnaire_usage_tracing.md`.
+- Added test kind recording: `GroupMetadata#add_test` accepts `kind:` and details, every built-in generator records its kind (with `search_names`, `include_targets` or `option` details through an overridable `test_details` hook), and `GroupMetadata#test_kind` and `GroupMetadata#find_test(kind, **details)` look tests up by them. Kinds and details stay in memory and never appear in `metadata.yml`.
 - Added shared `bin/hot-reload` dev-tooling asset and `InfernoSuiteGenerator::DevTools::HotReloadInstaller` to install/update it in a consumer test kit, replacing the copy-pasted watcher script previously maintained separately in each kit repo.
 
 ### Changed
 
 - Tightened the `inferno_core` dependency to `~> 1.4`, `>= 1.4.1`: validation message overrides rely on the validator issue pipeline introduced in the 1.4 series.
 - Relaxed `required_ruby_version` from `= 3.3.6` to `>= 3.3.6, < 3.4` so consumers can run any Ruby 3.3 patch release. Development, CI and the Docker image now use Ruby 3.3.12.
+
+### Fixed
+
+- Fixed `GeneratorConfigKeeper` merging its config files into a shared mutable constant, which made a second keeper in the same process inherit the first keeper's config. Each keeper now merges into its own hash.
 
 ## [0.2.0] - 2026-07-07
 

@@ -17,10 +17,17 @@ module InfernoSuiteGenerator
   end
 
   module QuestionnaireUsage
-    def self.descriptions: (ig_resources: untyped, groups: Array[untyped]) -> Hash[untyped, Hash[String | Symbol, String]]
+    def self.descriptions: (ig_resources: untyped, groups: Array[Generator::GroupMetadata]) -> Hash[Generator::GroupMetadata, Hash[String | Symbol, String]]
   end
 
   class Generator
+    attr_accessor questionnaire_usage: Hash[GroupMetadata, Hash[String | Symbol, String]]?
+
+    def generate_questionnaire_usage: () -> Hash[GroupMetadata, Hash[String | Symbol, String]]?
+
+    class GroupMetadata
+    end
+
     class GeneratorConfigKeeper
       include Getters
       include Extractors

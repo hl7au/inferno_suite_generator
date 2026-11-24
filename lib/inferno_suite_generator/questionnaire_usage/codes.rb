@@ -49,17 +49,19 @@ module InfernoSuiteGenerator
       # A create template's code.coding and category.coding, whether category is one concept or a list.
       def self.from_resource(resource)
         concepts = { "code" => [resource["code"]], "category" => Array.wrap(resource["category"]).grep(Hash) }
-        concepts.transform_values { |list| pairs(list.flat_map { |concept| codings(concept) }) }
+        concepts.transform_values { |list| pairs(all_codings(list)) }
                 .select { |_param, codes| codes.any? }
       end
 
       # pattern/fixed CodeableConcept and Coding.
       def self.concept_codes(element)
-        pairs(element.values_at(*CONCEPTS).flat_map { |concept| codings(concept) } +
+        pairs(all_codings(element.values_at(*CONCEPTS)) +
               element.values_at(*CODINGS).grep(Hash))
       end
 
       def self.codings(concept) = QuestionnaireUsage.list(concept, "coding")
+
+      def self.all_codings(concepts) = concepts.flat_map { |concept| codings(concept) }
 
       def self.pairs(codings) = codings.map { |coding| coding.values_at("system", "code") }.select(&:last)
 
