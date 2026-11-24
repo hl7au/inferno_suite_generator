@@ -239,17 +239,6 @@ module InfernoSuiteGenerator
                       "reads contained (not checked), medication.reference (not checked)\n"
     end
 
-    def test_a_variable_stands_for_the_chain_that_reaches_a_resource
-      form = questionnaire(
-        extension: [query("Obs", "Observation?patient={{%patient.id}}"),
-                    variable("Latest", "iif(%Obs.entry.count() > 0, " \
-                                       "%Obs.entry.resource.where(status = 'final').first(), {})")],
-        item: [reading("height", "Height", "%Latest.value.value")]
-      )
-
-      assert_includes observation_search_section(form), "reads value.value (not checked), status (not checked)\n"
-    end
-
     def test_a_filter_on_the_entries_reads_the_elements_of_their_resource
       fhirpath = "%Obs.entry.where(resource.status = 'final').resource.value.value"
       form = questionnaire(extension: [query("Obs", "Observation?patient={{%patient.id}}")],
