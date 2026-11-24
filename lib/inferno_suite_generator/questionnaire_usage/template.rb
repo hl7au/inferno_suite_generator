@@ -82,7 +82,7 @@ module InfernoSuiteGenerator
       end
     end
 
-    # A template that creates the contained resource. Matched by its code.coding and category[].coding too.
+    # A template that creates the contained resource. Matched by its code and category codings too.
     class CreateTemplate < Template
       def type = QuestionnaireUsage.text(@resource, "resourceType")
 
