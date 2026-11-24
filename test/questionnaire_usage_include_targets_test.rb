@@ -64,7 +64,7 @@ module InfernoSuiteGenerator
       ["MedicationRequest", "MedicationRequest:", "MedicationRequest::Medication"].each do |value|
         result = meds_result([mr_group, med_group], meds_query("MedicationRequest?patient=x&_include=#{value}"))
 
-        assert_equal logged("unresolved Meds form query Meds include #{value}: no search parameter"), @log.lines
+        assert_equal logged("unresolved Meds form query Meds include #{value}: no target type"), @log.lines
         assert_empty result
       end
     end
