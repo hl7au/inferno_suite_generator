@@ -230,13 +230,13 @@ module InfernoSuiteGenerator
       form = questionnaire(
         extension: [query("Meds", "MedicationStatement?patient={{%patient.id}}"),
                     variable("Contained", "%Meds.entry.resource.contained.ofType(Medication)" \
-                                          ".where(id in %Meds.entry.resource.medication.select(reference))")],
+                                          ".where(id in %Meds.entry.resource.medication.reference.replace('#', ''))")],
         item: [reading("med", "Medication", "%Contained.code")]
       )
       group = group("meds", "MedicationStatement", { search: { search_names: %w[patient] } })
 
       assert_includes section(form, group, :search),
-                      "reads contained (not checked), medication (not checked), medication.reference (not checked)"
+                      "reads contained (not checked), medication.reference (not checked)\n"
     end
 
     def test_a_variable_stands_for_the_chain_that_reaches_a_resource

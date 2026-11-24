@@ -18,7 +18,9 @@ module InfernoSuiteGenerator
                      end
                      .each do |group|
                        # Set after new, so a kit subclass can keep a three-argument initialize.
-                       new(group, base_output_dir, ig_metadata).tap { |one| one.descriptions = descriptions }.generate
+                       generator = new(group, base_output_dir, ig_metadata)
+                       generator.descriptions = descriptions
+                       generator.generate
                      end
         end
       end
