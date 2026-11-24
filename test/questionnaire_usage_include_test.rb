@@ -24,6 +24,22 @@ module InfernoSuiteGenerator
                    result[mr]["mr_include"]
     end
 
+    def test_include_written_twice_that_no_item_reads_is_named_once
+      text = "#{MEDS_QUERY}&_include=#{INCLUDE}"
+
+      assert_equal query_lines(text, "    - A search by patient\n", NO_READS), not_tested(meds_entry(mr_group, meds_query(text), []))
+    end
+
+    def test_includes_of_the_same_parameter_and_target_are_one_source
+      text = "MedicationRequest?patient=x&_include=#{INCLUDE}&_include=#{INCLUDE}:Medication"
+      mr = mr_group
+
+      assert_equal section(INCLUDE_INTRO, "- **Meds form**\n#{include_heading(text)}#{MED_ITEMS.chomp}"),
+                   meds_result([mr, med_group], meds_query(text))[mr]["mr_include"]
+      assert_equal query_lines(text, "    - A search by patient\n", no_reads(INCLUDE, "#{INCLUDE}:Medication")),
+                   not_tested(meds_entry(mr_group, meds_query(text), []))
+    end
+
     def test_both_summaries_name_the_searching_group_and_it_shows_the_no_reads_line
       mr = mr_group
       med = med_group

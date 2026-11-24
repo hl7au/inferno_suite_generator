@@ -161,6 +161,12 @@ module InfernoSuiteGenerator
         Placement.new(self, group, group.find_test("read"))
       end
 
+      def includes
+        @includes ||= Include.read(self, @request.params)
+      end
+
+      def include_values = []
+
       private
 
       def paths(chain) = chain.paths_for(type)

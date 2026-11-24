@@ -7,11 +7,19 @@ module InfernoSuiteGenerator
     class Include
       PARAM = "_include"
 
-      # The include sources of the query's [name, value] params, one per target type; logs the untraced ones.
-      # The same include written twice is one.
+      # The include sources of the query's [name, value] params, one per parameter and target type; logs the
+      # untraced ones.
       def self.all(query, params)
-        params.uniq.select { |name, _value| name.split(":").first == PARAM }.flat_map { |param| of(query, *param) }
+        written(params).flat_map { |param| of(query, *param) }.uniq { |include| [include.param, include.type] }
       end
+
+      # A read by id takes no _include: its includes are logged, not traced.
+      def self.read(query, params)
+        written(params).each { |name, value| skip(query, name, value, "a read by id takes no _include") }
+        []
+      end
+
+      def self.written(params) = params.uniq.select { |name, _value| name.split(":").first == PARAM }
 
       # The values of the query's own _include params that name a parameter, resolved or not.
       def self.values(query, params)
@@ -22,14 +30,13 @@ module InfernoSuiteGenerator
       def self.own?(query, name, value) = [name, value.split(":").first] == [PARAM, query.type]
 
       def self.of(query, name, value)
-        return skip(query, name, value) unless own?(query, name, value)
+        return skip(query, name, value, "only _include of #{query.type} is traced") unless own?(query, name, value)
 
         targets(query, value).map { |type| new(query, value, type) }
       end
 
-      def self.skip(query, name, value)
-        QuestionnaireUsage.log("skipping #{name}=#{value} in #{query.context}: " \
-                               "only _include of #{query.type} is traced")
+      def self.skip(query, name, value, reason)
+        QuestionnaireUsage.log("skipping #{name}=#{value} in #{query.context}: #{reason}")
         []
       end
 
@@ -37,9 +44,15 @@ module InfernoSuiteGenerator
       # None without a parameter part.
       def self.targets(query, value)
         _type, param, target = value.split(":", 3)
-        types = param.present? ? found_targets(query, param, target) : []
-        QuestionnaireUsage.log("unresolved #{query.context} include #{value}: no target type") if types.empty?
-        types.uniq
+        return unresolved(query, value, "no search parameter") if param.blank?
+
+        types = found_targets(query, param, target).uniq
+        types.empty? ? unresolved(query, value, "no target type") : types
+      end
+
+      def self.unresolved(query, value, reason)
+        QuestionnaireUsage.log("unresolved #{query.context} include #{value}: #{reason}")
+        []
       end
 
       def self.found_targets(query, param, target)
@@ -70,6 +83,8 @@ module InfernoSuiteGenerator
       end
 
       def form = query.form
+
+      def param = value.split(":")[1]
 
       def codes = nil
 

@@ -61,11 +61,35 @@ module InfernoSuiteGenerator
     end
 
     def test_include_without_a_parameter_part_is_unresolved
-      text = "MedicationRequest?patient=x&_include=MedicationRequest"
-      result = meds_result([mr_group, med_group], meds_query(text))
+      ["MedicationRequest", "MedicationRequest:", "MedicationRequest::Medication"].each do |value|
+        result = meds_result([mr_group, med_group], meds_query("MedicationRequest?patient=x&_include=#{value}"))
 
-      assert_equal logged("unresolved Meds form query Meds include MedicationRequest: no target type"), @log.lines
-      assert_empty result
+        assert_equal logged("unresolved Meds form query Meds include #{value}: no search parameter"), @log.lines
+        assert_empty result
+      end
+    end
+
+    def test_include_of_the_query_own_type_has_no_uses_of_its_own
+      text = "MedicationRequest?patient=x&_include=MedicationRequest:based-on:MedicationRequest"
+      items = [item("status", "Status", "%Meds.entry.resource.ofType(MedicationRequest).status")]
+      mr = mr_group.tap { |group| add_search(group, %w[patient]) }
+      result = meds_result([mr, med_group], meds_query(text), items)
+
+      refute_includes result.values.flat_map(&:values).join, "fetches MedicationRequest resources through _include="
+      assert_includes result.fetch(mr)["obs_search_patient"],
+                      "  - **Query Meds**: searches MedicationRequest resources\n    - Request: #{text}\n" \
+                      "    - **Status**: pre-fills the answer; reads status (not checked)"
+    end
+
+    def test_read_query_include_is_not_traced
+      text = "MedicationRequest/1?_include=#{INCLUDE}"
+      mr = mr_group
+      result = meds_result([mr, med_group], meds_query(text))
+
+      assert_equal logged("skipping _include=#{INCLUDE} in Meds form query Meds: a read by id takes no _include"),
+                   @log.lines
+      refute_includes result.values.flat_map(&:values).join, "through _include"
+      refute result.fetch(mr, {}).key?("mr_include")
     end
 
     def test_target_is_inferred_from_the_type_the_form_picks
