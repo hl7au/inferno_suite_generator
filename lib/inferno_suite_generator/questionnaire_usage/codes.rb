@@ -46,12 +46,22 @@ module InfernoSuiteGenerator
         end
       end
 
+      # A create template's code.coding and category[].coding.
+      def self.from_resource(resource)
+        concepts = { "code" => [resource["code"]], "category" => QuestionnaireUsage.list(resource, "category") }
+        concepts.transform_values { |list| pairs(list.flat_map { |concept| codings(concept) }) }
+                .select { |_param, codes| codes.any? }
+      end
+
       # pattern/fixed CodeableConcept and Coding.
       def self.concept_codes(element)
-        codings = element.values_at(*CONCEPTS).flat_map { |concept| QuestionnaireUsage.list(concept, "coding") } +
-                  element.values_at(*CODINGS).grep(Hash)
-        codings.map { |coding| coding.values_at("system", "code") }.select(&:last)
+        pairs(element.values_at(*CONCEPTS).flat_map { |concept| codings(concept) } +
+              element.values_at(*CODINGS).grep(Hash))
       end
+
+      def self.codings(concept) = QuestionnaireUsage.list(concept, "coding")
+
+      def self.pairs(codings) = codings.map { |coding| coding.values_at("system", "code") }.select(&:last)
 
       # fixedCode/patternCode on a coding.code slice element, with its sibling system's fixedUri/patternUri.
       def self.slice_code(element, elements)

@@ -121,13 +121,13 @@ module InfernoSuiteGenerator
         @title = "#{base_title}, version #{version}" if version
       end
 
-      # Queries, each followed by its includes, then launch contexts, each in document order; templates come
-      # after them (§3.5 order).
+      # Queries, each followed by its includes, then launch contexts, then templates, each in document order.
       def sources
         @sources ||= [*Query.all(self, @data).flat_map { |query| [query, *query.includes] },
                       *QuestionnaireUsage.list(@data, "extension").flat_map do |extension|
                         LaunchContext.from(self, extension)
-                      end]
+                      end,
+                      *Template.all(self, @data)]
       end
 
       # Each distinct expression is parsed once per form.

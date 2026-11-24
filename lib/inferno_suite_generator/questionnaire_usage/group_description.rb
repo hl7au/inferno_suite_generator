@@ -17,6 +17,9 @@ module InfernoSuiteGenerator
         "include" => "These questionnaires in the IG fetch %<resource>s resources through this search's " \
                      "_include. #{reads} Elements marked (not checked) are neither Must Support nor required by " \
                      "any %<resource>s profile in this suite, so no test checks them.",
+        "create" => "These questionnaires in the IG create %<resource>s resources from their answers.",
+        "patch" => "These questionnaires in the IG update existing %<resource>s resources from their answers.",
+        "update" => "These questionnaires in the IG update existing %<resource>s resources from their answers.",
         "must_support" => "Items in these questionnaires read elements of %<resource>s that this group's tests " \
                           "check. #{reads}",
         group: "These questionnaires in the IG read or create %<resource>s resources. The tests that make the " \
