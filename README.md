@@ -361,6 +361,7 @@ bin/setup
 This installs dependencies and prepares the project. You can then use:
 
 - `bin/console` – interactive Ruby console with the gem loaded
+- `bundle exec rake` – runs the tests, RuboCop and Reek (`rake test`, `rake rubocop` and `rake reek` run one each)
 
 ### Ruby and dependencies
 
