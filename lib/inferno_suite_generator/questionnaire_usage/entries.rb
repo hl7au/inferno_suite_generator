@@ -6,7 +6,7 @@ module InfernoSuiteGenerator
     # resource. Only entry … resource reads elements, so %q.total and %q.entry.count() read none.
     class Entries
       PICKS = %w[where first last tail skip take single].freeze
-      IS_TYPE = /\Aresource\.is\((\w+)\)\z/
+      IS_TYPE = /\Aresource\.is\((?:FHIR\.)?(\w+)\)\z/
 
       def self.member?(step, name) = step.kind == :member && step.name == name
 
@@ -20,7 +20,7 @@ module InfernoSuiteGenerator
 
       def self.condition_type(condition)
         left, right = condition.fetch("children", [])
-        return right["text"] if condition["type"] == "TypeExpression" && left["text"] == "resource"
+        return bare(right["text"]) if condition["type"] == "TypeExpression" && left["text"] == "resource"
 
         condition["text"].to_s[IS_TYPE, 1]
       end
@@ -34,7 +34,20 @@ module InfernoSuiteGenerator
       # T for ofType(T).
       def self.of_type(step)
         params = step.params
-        params.first["text"] if step.function?(["ofType"]) && params.size == 1
+        bare(params.first["text"]) if step.function?(["ofType"]) && params.size == 1
+      end
+
+      # Observation for FHIR.Observation.
+      def self.bare(type) = type.to_s.delete_prefix("FHIR.")
+
+      # Paths the arguments of entry picks read on the resource, such as status for where(resource.status = 'x').
+      def self.filter_paths(picks)
+        picks.flat_map(&:params).flat_map { |param| Chain.relative(param) }.flat_map { |chain| resource_paths(chain) }
+      end
+
+      def self.resource_paths(chain)
+        first, *rest = chain.steps
+        member?(first, "resource") ? Chain::Reading.new.paths(rest) : []
       end
 
       def initialize(steps)
@@ -50,7 +63,8 @@ module InfernoSuiteGenerator
         return [] unless @picks
         return unless [nil, type].include?(picked_type)
 
-        @resource ? Chain::Reading.new.paths(@read) : []
+        filtered = Entries.filter_paths(@picks)
+        @resource ? (Chain::Reading.new.paths(@read) + filtered).uniq : filtered
       end
 
       private

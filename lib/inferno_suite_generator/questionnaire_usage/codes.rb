@@ -8,14 +8,17 @@ module InfernoSuiteGenerator
       CONCEPTS = %w[patternCodeableConcept fixedCodeableConcept].freeze
       CODINGS = %w[patternCoding fixedCoding].freeze
 
-      # A comma means OR; a value with a {{…}} template is ignored.
+      # Only code= and category= without a modifier; a comma means OR; a value with a {{…}} template is ignored.
       def self.from_query(params)
         params.select { |name, value| PARAMS.include?(name) && !value.include?("{{") }
               .flat_map { |name, value| tokens(name, value) }
               .group_by(&:first).transform_values { |pairs| pairs.map(&:last) }
       end
 
-      def self.tokens(name, value) = value.split(",").map { |token| [name, coding(token)] }
+      # A token without a code (system|) is ignored.
+      def self.tokens(name, value)
+        value.split(",").map { |token| [name, coding(token)] }.reject { |_name, code| code.last.to_s.empty? }
+      end
 
       # system|code, |code or code.
       def self.coding(token)
@@ -132,10 +135,10 @@ module InfernoSuiteGenerator
 
       def matching(codes, groups) = groups.select { |group| Codes.matches?(codes, fixed(group)) }
 
-      # The only group fits unless the source and profile both give a parameter with no common code.
+      # The only group fits unless a parameter both give has no common code.
       def only(source, codes, group)
         fixed = fixed(group)
-        return [group] if Codes.shared(codes, fixed).empty? || Codes.matches?(codes, fixed)
+        return [group] if Codes.shared(codes, fixed).all? { |param| Codes.overlap?(codes[param], fixed[param]) }
 
         Matcher.unresolved(source, "the #{source.type} profile fixes #{Codes.text(fixed)}, not #{Codes.text(codes)}")
       end
