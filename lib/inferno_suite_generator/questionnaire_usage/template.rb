@@ -19,11 +19,10 @@ module InfernoSuiteGenerator
       # The templates on the root, then on every item, in document order.
       def self.all(form, data)
         resources = contained(data)
-        [nil, *items(data)].flat_map do |item|
-          site = Site.new(form, resources, item)
-          QuestionnaireUsage.list(item || data, "extension").filter_map { |extension| from(site, extension) }
-        end
+        [nil, *items(data)].flat_map { |item| at(Site.new(form, resources, item), item || data) }
       end
+
+      def self.at(site, node) = QuestionnaireUsage.list(node, "extension").filter_map { |ext| from(site, ext) }
 
       # The contained resources by #id; one without an id cannot be referenced.
       def self.contained(data)
@@ -39,29 +38,34 @@ module InfernoSuiteGenerator
         return unless extension["url"].to_s.end_with?(URL)
 
         parts = QuestionnaireUsage.list(extension, "extension")
-        ref = QuestionnaireUsage.text(parts.find { |part| part["url"] == "template" }, "valueReference", "reference")
-        return skip(site, nil, "no template reference") unless ref
-
-        resource = site.contained[ref]
-        resource ? build(site, ref, resource, parts) : skip(site, ref, "no contained resource #{ref}")
+        ref = reference(parts)
+        ref ? build(site, ref, parts) : skip(site.context(nil), "no template reference")
       end
 
-      # A PatchRequestUrl sub-extension makes it a FHIRPath Patch; none without a type.
-      def self.build(site, ref, resource, parts)
+      def self.reference(parts)
+        QuestionnaireUsage.text(parts.find { |part| part["url"] == "template" }, "valueReference", "reference")
+      end
+
+      # A PatchRequestUrl sub-extension makes it a FHIRPath Patch.
+      def self.build(site, ref, parts)
+        return skip(site.context(ref), "no contained resource #{ref}") unless site.contained[ref]
+
         patch = parts.find { |part| part["url"].to_s.end_with?(PATCH_URL) }
-        template = patch ? PatchTemplate.new(site, ref, resource, patch) : CreateTemplate.new(site, ref, resource)
-        template.type ? template : skip(site, ref, template.untyped)
+        typed(patch ? PatchTemplate.new(site, ref, patch) : CreateTemplate.new(site, ref))
       end
 
-      def self.skip(site, ref, reason)
-        QuestionnaireUsage.log("skipping #{site.context(ref)}: #{reason}")
+      # A template without a type is skipped.
+      def self.typed(template) = template.type ? template : skip(template.context, template.untyped)
+
+      def self.skip(context, reason)
+        QuestionnaireUsage.log("skipping #{context}: #{reason}")
         nil
       end
 
-      def initialize(site, ref, resource)
+      def initialize(site, ref)
         @site = site
         @ref = ref
-        @resource = resource
+        @resource = site.contained[ref]
       end
 
       def form = @site.form
@@ -80,16 +84,20 @@ module InfernoSuiteGenerator
         item = @site.item
         @uses ||= item ? [Use.new(Form.label(item)).tap { |use| use.add(Form.action(URL), []) }] : []
       end
+
+      private
+
+      attr_reader :resource
     end
 
     # A template that creates the contained resource. Matched by its code and category codings too.
     class CreateTemplate < Template
-      def type = QuestionnaireUsage.text(@resource, "resourceType")
+      def type = QuestionnaireUsage.text(resource, "resourceType")
 
       def untyped = "the contained resource has no resourceType"
 
       def codes
-        @codes ||= Codes.from_resource(@resource)
+        @codes ||= Codes.from_resource(resource)
       end
 
       def heading
@@ -105,8 +113,8 @@ module InfernoSuiteGenerator
     class PatchTemplate < Template
       REQUEST_TYPE = %r{\A'(\w+)/}
 
-      def initialize(site, ref, resource, part)
-        super(site, ref, resource)
+      def initialize(site, ref, part)
+        super(site, ref)
         @request_url = QuestionnaireUsage.text(part, "valueString")
       end
 
@@ -122,6 +130,7 @@ module InfernoSuiteGenerator
       def heading = "**Extraction template #{id}**: updates an existing #{type} with a FHIRPath Patch"
 
       # An update test that creates a resource is never used.
+      # :reek:FeatureEnvy
       def placement(group, _groups)
         Placement.new(self, group, group.find_test("patch") || group.find_test("update", option: "update"))
       end
@@ -129,7 +138,7 @@ module InfernoSuiteGenerator
       private
 
       def path_type
-        operation = QuestionnaireUsage.list(@resource, "parameter").find { |param| param["name"] == "operation" }
+        operation = QuestionnaireUsage.list(resource, "parameter").find { |param| param["name"] == "operation" }
         path = QuestionnaireUsage.list(operation, "part").find { |part| part["name"] == "path" }
         QuestionnaireUsage.text(path, "valueString").to_s.split(".").first
       end
