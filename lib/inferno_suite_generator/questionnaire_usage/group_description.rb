@@ -55,14 +55,17 @@ module InfernoSuiteGenerator
       end
 
       def self.item_line(source, use, trace)
-        reads = use.paths.map { |path| trace.by_source?(source, path) ? path : "#{path} (not checked)" }
+        reads = use.paths.map do |path|
+          label = trace.label(source, path)
+          trace.by_source?(source, path) ? label : "#{label} (not checked)"
+        end
         "**#{use.label}**: #{use.actions.join(", ")}#{"; reads #{reads.join(", ")}" unless reads.empty?}"
       end
 
       # One line per element and form, with the labels of the items that read it.
-      def self.element_list(reads)
+      def self.element_list(reads, trace)
         rows = reads.group_by { |read| [read.form, read.path] }.values.map { |same| element_row(same) }
-        by_form(rows) { |row| "  - **#{row.path}**: #{row.label}" }
+        by_form(rows) { |row| "  - **#{trace.label(row.source, row.path)}**: #{row.label}" }
       end
 
       def self.element_row(same)
@@ -114,7 +117,7 @@ module InfernoSuiteGenerator
         return {} if checked.empty?
 
         intro = format(Markdown::INTROS["must_support"], resource: @group.resource)
-        { must_support_test[:id].to_s => Markdown.section(intro, Markdown.element_list(checked)) }
+        { must_support_test[:id].to_s => Markdown.section(intro, Markdown.element_list(checked, @trace)) }
       end
 
       def reads = @fitting.flat_map(&:reads)
@@ -131,7 +134,7 @@ module InfernoSuiteGenerator
       def not_tested = Markdown.block(:not_tested, Markdown.source_list(@fitting.reject(&:test), @trace))
 
       def not_checked
-        Markdown.block(:not_checked, Markdown.element_list(reads.reject { |read| read.checked_in?(@trace) }))
+        Markdown.block(:not_checked, Markdown.element_list(reads.reject { |read| read.checked_in?(@trace) }, @trace))
       end
 
       def summary_line(form)

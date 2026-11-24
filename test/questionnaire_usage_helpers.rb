@@ -48,6 +48,13 @@ module QuestionnaireUsageHelpers
     { "url" => "#{SDC}#{kind}", "valueExpression" => { "language" => "text/fhirpath", "expression" => text } }
   end
 
+  def variable(name, text)
+    { "url" => "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression" => { "name" => name, "language" => "text/fhirpath", "expression" => text } }
+  end
+
+  def item_lines(markdown) = markdown.lines.grep(/^    - /)
+
   def item(link_id, text, *expressions)
     { "linkId" => link_id, "text" => text, "type" => "string",
       "extension" => expressions.map { |entry| entry.is_a?(Hash) ? entry : expression(entry) } }.compact
@@ -74,10 +81,10 @@ module QuestionnaireUsageHelpers
     end
   end
 
-  def group(resource = "Patient", tests: %w[read must_support], must_support: ["name.family"])
+  def group(resource = "Patient", tests: %w[read must_support], must_support: ["name.family"], extensions: [])
     GroupMetadata.new(
       resource:, profile_name: "#{resource} Profile", title: "#{resource} Tests", searches: [],
-      must_supports: { extensions: [], slices: [], elements: must_support.map { |path| { path: } } },
+      must_supports: { extensions:, slices: [], elements: must_support.map { |path| { path: } } },
       mandatory_elements: ["#{resource}.identifier"]
     ).tap do |metadata|
       tests.each { |kind| metadata.add_test(id: "#{resource.downcase}_#{kind}", file_name: "#{kind}.rb", kind:) }

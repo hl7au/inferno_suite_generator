@@ -17,10 +17,10 @@ module InfernoSuiteGenerator
         @paths |= paths
       end
 
-      # Merges [key, label, action, text, chain] readings per item key; the block gives a chain's paths or nil.
+      # Merges [[key, label, action], chain] readings per item key; the block gives a chain's paths or nil.
       def self.merge(readings)
         merged = {}
-        readings.each do |key, label, action, _text, chain|
+        readings.each do |(key, label, action), chain|
           paths = yield(chain)
           (merged[key] ||= new(label)).add(action, paths) if paths
         end
@@ -39,10 +39,11 @@ module InfernoSuiteGenerator
       def checked_in?(trace) = trace.by_source?(source, path)
     end
 
-    # The form root or one item, with the [action, FHIRPath text] pairs on its extensions.
-    Node = Struct.new(:key, :label, :expressions) do
-      def entries
-        expressions.map { |action, text| [key, label, action, text] }
+    # The form root or one item, with the [action, FHIRPath text] pairs on its extensions and the
+    # variables visible on it.
+    Node = Struct.new(:key, :label, :expressions, :scope) do
+      def readings
+        expressions.flat_map { |action, text| [[key, label, action]].product(scope.chains(text)) }
       end
     end
 
@@ -60,6 +61,7 @@ module InfernoSuiteGenerator
         "templateExtract" => "its answers fill the template"
       }.freeze
       MARKDOWN = /[*_`\[\]]/
+      ASSEMBLED = "/sdc-questionnaire-assembleContext"
 
       attr_reader :title
 
@@ -118,6 +120,8 @@ module InfernoSuiteGenerator
 
       # Launch contexts; later slices add queries before and templates after them (§3.5 order).
       def sources
+        # Reading every chain logs untraced variables and assembled-in names, even when no source is read.
+        readings
         QuestionnaireUsage.list(@data, "extension").flat_map { |extension| LaunchContext.from(self, extension) }
       end
 
@@ -135,22 +139,38 @@ module InfernoSuiteGenerator
 
       def url = field("url")
 
-      # [key, label, action, text, chain] for every chain, grouped by the name the chain starts at.
+      # [[key, label, action], chain] for every chain, grouped by the name the chain starts at.
       def readings
-        @readings ||= nodes.flat_map(&:entries).flat_map { |entry| with_chains(entry) }
-                           .group_by { |reading| reading.last.name }
+        @readings ||= nodes.flat_map(&:readings).group_by { |reading| reading.last.name }
+                           .tap { |by_name| log_assembled(by_name.keys) }
       end
 
-      def with_chains(entry) = chains(entry.last).map { |chain| [*entry, chain] }
-
+      # The root and every item, each with the variables visible on it.
       def nodes
-        [Node.new(:root, "The whole form", Form.expressions(@data)), *items(@data)]
+        scope = Scope.new(self).inner(:root, Scope.definitions(@data))
+        [Node.new(:root, "The whole form", Form.expressions(@data), scope), *items(@data, scope)]
       end
 
-      def items(parent)
+      def items(parent, outer)
         QuestionnaireUsage.list(parent, "item").flat_map do |item|
-          [Node.new(item["linkId"], Form.label(item), Form.expressions(item)), *items(item)]
+          key = item["linkId"]
+          scope = outer.inner(key, Scope.definitions(item))
+          [Node.new(key, Form.label(item), Form.expressions(item), scope), *items(item, scope)]
         end
+      end
+
+      def assembled
+        QuestionnaireUsage.list(@data, "extension").select { |extension| extension["url"].to_s.end_with?(ASSEMBLED) }
+                          .filter_map { |extension| QuestionnaireUsage.text(extension, "valueString") }
+      end
+
+      # A module form reads names that only the form it is assembled into defines.
+      def log_assembled(names)
+        used = names & assembled
+        return if used.empty?
+
+        QuestionnaireUsage.log("#{title} reads #{used.join(", ")} from the form it is assembled into: " \
+                               "trace the assembled form for their item uses")
       end
     end
   end

@@ -2,6 +2,7 @@
 
 require "fhirpath"
 require_relative "questionnaire_usage/chain"
+require_relative "questionnaire_usage/scope"
 require_relative "questionnaire_usage/form"
 require_relative "questionnaire_usage/launch_context"
 require_relative "questionnaire_usage/checked_elements"

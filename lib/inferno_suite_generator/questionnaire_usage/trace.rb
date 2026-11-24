@@ -22,11 +22,17 @@ module InfernoSuiteGenerator
 
       def by_source?(source, path) = @by_source[[source, path]]
 
+      # Extensions are shown by the slice name any group the source fits gives them.
+      def label(source, path)
+        slices = groups(source).map { |group| @profiles[group].slices }.reverse.reduce({}, :merge)
+        CheckedElements.label(path, slices)
+      end
+
       private
 
-      def source_checks?(source, path)
-        @placements.any? { |placement| placement.source.equal?(source) && by_group?(placement.group, path) }
-      end
+      def groups(source) = @placements.select { |placement| placement.source.equal?(source) }.map(&:group)
+
+      def source_checks?(source, path) = groups(source).any? { |group| by_group?(group, path) }
     end
   end
 end
