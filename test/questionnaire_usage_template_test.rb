@@ -43,7 +43,7 @@ module InfernoSuiteGenerator
       outer = { "linkId" => "vitals", "text" => "Vitals", "type" => "group", "item" => [weight_item] }
 
       assert_includes describe(obs_ig(template_form([], [outer], [observation("weight")])), group)
-        .fetch(group)["obs_create"],
+        .dig(group, "obs_create"),
                       "  - **Extraction template weight**: creates a new Observation from the answers\n    " \
                       "- **Body weight**: its answers fill the template"
     end
