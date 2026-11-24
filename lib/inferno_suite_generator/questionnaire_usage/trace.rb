@@ -7,12 +7,12 @@ module InfernoSuiteGenerator
     class Trace
       def initialize(placements)
         @placements = placements
-        @by_group = placements.group_by(&:group)
         @profiles = Hash.new { |cache, group| cache[group] = CheckedElements.new(group) }
         @by_source = Hash.new { |cache, key| cache[key] = source_checks?(*key) }
+        @labels = {}
       end
 
-      def fitting(group) = @by_group.fetch(group, [])
+      def fitting(group) = @placements.select { |placement| placement.group.equal?(group) }
 
       def listed(group)
         @placements.select { |placement| placement.listed_in?(group) }
@@ -23,12 +23,12 @@ module InfernoSuiteGenerator
       def by_source?(source, path) = @by_source[[source, path]]
 
       # Extensions are shown by the slice name any group the source fits gives them.
-      def label(source, path)
-        slices = groups(source).map { |group| @profiles[group].slices }.reverse.reduce({}, :merge)
-        CheckedElements.label(path, slices)
-      end
+      def label(source, path) = @labels[[source, path]] ||= CheckedElements.label(path, source_slices(source))
 
       private
+
+      # The first fitting group's slice name wins.
+      def source_slices(source) = groups(source).map { |group| @profiles[group].slices }.reverse.reduce({}, :merge)
 
       def groups(source) = @placements.select { |placement| placement.source.equal?(source) }.map(&:group)
 

@@ -69,7 +69,7 @@ module InfernoSuiteGenerator
       def self.load(ig_resources)
         forms = ig_resources.get_resources_by_type("Questionnaire").map { |resource| new(resource.to_hash) }.uniq(&:key)
         repeated = forms.map(&:base_title).tally
-        forms.each { |form| form.show_version if repeated[form.base_title] > 1 }
+        forms.each { |form| form.show_version if repeated[form.base_title] > 1 }.each(&:read_expressions)
       end
 
       def self.action(url)
@@ -120,8 +120,6 @@ module InfernoSuiteGenerator
 
       # Launch contexts; later slices add queries before and templates after them (§3.5 order).
       def sources
-        # Reading every chain logs untraced variables and assembled-in names, even when no source is read.
-        readings
         QuestionnaireUsage.list(@data, "extension").flat_map { |extension| LaunchContext.from(self, extension) }
       end
 
@@ -129,6 +127,9 @@ module InfernoSuiteGenerator
       def chains(text)
         @chains[text] ||= Chain.parse(text)
       end
+
+      # Parses and resolves every expression once, logging untraced variables and assembled-in names.
+      def read_expressions = readings
 
       # The uses of %name merged per item; the block gives a chain's paths, or nil when it is not a use.
       def uses(name, &) = Use.merge(readings.fetch(name, []), &)

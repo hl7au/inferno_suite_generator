@@ -28,8 +28,7 @@ module InfernoSuiteGenerator
 
         # The element a member step or extension('<url>') reads; resourceType is not an element.
         def elements
-          url = literal if function?(EXTENSIONS)
-          return ["#{name}[url=#{url}]"] if url
+          return [literal&.then { |url| "#{name}[url=#{url}]" } || name] if function?(EXTENSIONS)
 
           kind == :member && name != "resourceType" ? [name] : []
         end
@@ -150,8 +149,8 @@ module InfernoSuiteGenerator
 
       def as_whole = Whole.new(name, steps)
 
-      # This chain followed by the steps of a chain that reads it through a variable.
-      def append(chain) = chain.class.new(name, steps + chain.steps)
+      # The chain that reads this one through a variable, started here instead.
+      def append(chain) = chain.dup.rebase(name, steps + chain.steps)
 
       def arguments
         steps.flat_map(&:params)
@@ -170,6 +169,14 @@ module InfernoSuiteGenerator
       # The paths the chain reads on a resource of the given type, or nil when it picks another type.
       def paths_for(type)
         paths if [nil, type].include?(picked_type)
+      end
+
+      protected
+
+      def rebase(name, steps)
+        @name = name
+        @steps = steps
+        self
       end
     end
 

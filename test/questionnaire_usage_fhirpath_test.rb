@@ -53,6 +53,21 @@ module InfernoSuiteGenerator
                    "it uses Second, Third, defined after it\n", @log
     end
 
+    def test_forward_reference_to_a_name_an_outer_node_defines_reads_the_outer_variable
+      root = [launch("patient", "Patient"), variable("Name", "%patient.name")]
+      items = [item("a", "A", variable("First", "%Name.family"), variable("Name", "%patient.address"), "%First",
+                    "%Name.city")]
+
+      assert_equal [prefill("A", "name.family", *unchecked("address.city"))], read_lines(items, root:)
+      assert_empty @log
+    end
+
+    def test_extension_without_a_literal_url_reads_the_extension_element
+      items = [item("a", "A", "%patient.extension(%url).value", "%patient.modifierExtension().exists()")]
+
+      assert_equal [prefill("A", *unchecked("extension.value", "modifierExtension"))], read_lines(items)
+    end
+
     def test_where_arguments_read_paths_relative_to_the_filtered_element
       items = [item("this", "This", "%patient.name.where($this.use = 'official').family"),
                item("bare", "Bare", "%patient.telecom.where(system = 'phone' and resourceType = 'ContactPoint').value")]

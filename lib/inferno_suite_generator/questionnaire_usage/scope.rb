@@ -29,6 +29,7 @@ module InfernoSuiteGenerator
         return self if definitions.empty?
 
         (name, text), *later = definitions
+        # A later name an outer node also defines is not untraced: until it is defined here, the outer one applies.
         early = @form.chains(text).map(&:name).uniq & (later.map(&:first) - @bindings.keys)
         bind(name, early.empty? ? chains(text) : untraced(name, key, early)).inner(key, later)
       end
