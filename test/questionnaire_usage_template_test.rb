@@ -30,6 +30,25 @@ module InfernoSuiteGenerator
       assert_includes result[weight]["obs_create"], "creates a new Observation with code #{LOINC}|29463-7 from"
     end
 
+    def test_create_template_goes_to_the_profile_whose_fixed_category_overlaps
+      assert_equal({ "#{CATEGORY_URL}two" => ["create_two", :group] },
+                   category_entries("Observation", [concept("two")]))
+    end
+
+    def test_create_template_with_a_single_category_goes_to_the_profile_whose_fixed_category_overlaps
+      assert_equal({ "#{CATEGORY_URL}two" => ["create_two", :group] }, category_entries("Procedure", concept("two")))
+    end
+
+    def test_template_on_a_nested_item_is_used_by_that_item
+      group = create_group
+      outer = { "linkId" => "vitals", "text" => "Vitals", "type" => "group", "item" => [weight_item] }
+
+      assert_includes describe(obs_ig(template_form([], [outer], [observation("weight")])), group)
+        .dig(group, "obs_create"),
+                      "  - **Extraction template weight**: creates a new Observation from the answers\n    " \
+                      "- **Body weight**: its answers fill the template"
+    end
+
     def test_patch_template_goes_to_the_patch_test
       patient = patient_group(["patient_update", "update", { option: "update" }], %w[patient_patch patch])
 
@@ -52,6 +71,13 @@ module InfernoSuiteGenerator
 
       assert_equal %i[group], entry.keys
       assert_includes entry[:group], "- **Vitals form**: no test in this group makes its requests\n"
+      assert_includes entry[:group], "#{NOT_TESTED}\n\n#{PATCH_BLOCK}\n"
+    end
+
+    def test_patch_template_never_goes_to_an_update_test_without_an_option
+      entry = patch_entry(patient_group(%w[patient_update update]))
+
+      assert_equal %i[group], entry.keys
       assert_includes entry[:group], "#{NOT_TESTED}\n\n#{PATCH_BLOCK}\n"
     end
 

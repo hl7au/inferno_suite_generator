@@ -10,16 +10,27 @@ module InfernoSuiteGenerator
 
       # Where a templateExtract sits: its form, the form's contained resources by #id, its item (nil on the root).
       Site = Struct.new(:form, :contained, :item) do
-        def context(ref) = "#{form.title} templateExtract #{ref} on #{item ? item["linkId"] : "root"}"
+        def context(ref)
+          [form.title, "templateExtract", ref, "on", QuestionnaireUsage.node_label(item ? item["linkId"] : :root)]
+            .compact.join(" ")
+        end
       end
 
       # The templates on the root, then on every item, in document order.
       def self.all(form, data)
-        contained = QuestionnaireUsage.list(data, "contained").to_h { |resource| ["##{resource["id"]}", resource] }
+        resources = contained(data)
         [nil, *items(data)].flat_map do |item|
-          site = Site.new(form, contained, item)
+          site = Site.new(form, resources, item)
           QuestionnaireUsage.list(item || data, "extension").filter_map { |extension| from(site, extension) }
         end
+      end
+
+      # The contained resources by #id; one without an id cannot be referenced.
+      def self.contained(data)
+        QuestionnaireUsage.list(data, "contained").filter_map do |resource|
+          id = QuestionnaireUsage.text(resource, "id")
+          ["##{id}", resource] if id
+        end.to_h
       end
 
       def self.items(node) = QuestionnaireUsage.list(node, "item").flat_map { |item| [item, *items(item)] }
@@ -29,6 +40,8 @@ module InfernoSuiteGenerator
 
         parts = QuestionnaireUsage.list(extension, "extension")
         ref = QuestionnaireUsage.text(parts.find { |part| part["url"] == "template" }, "valueReference", "reference")
+        return skip(site, nil, "no template reference") unless ref
+
         resource = site.contained[ref]
         resource ? build(site, ref, resource, parts) : skip(site, ref, "no contained resource #{ref}")
       end
@@ -69,7 +82,7 @@ module InfernoSuiteGenerator
       end
     end
 
-    # A template that creates the contained resource. Matched by its code.coding and category[].coding too.
+    # A template that creates the contained resource. Matched by its code and category codings too.
     class CreateTemplate < Template
       def type = QuestionnaireUsage.text(@resource, "resourceType")
 
@@ -94,8 +107,7 @@ module InfernoSuiteGenerator
 
       def initialize(site, ref, resource, part)
         super(site, ref, resource)
-        @request_url = QuestionnaireUsage.text(part, "valueString") ||
-                       QuestionnaireUsage.text(part, "valueExpression", "expression")
+        @request_url = QuestionnaireUsage.text(part, "valueString")
       end
 
       # The first segment of the first operation's path, else a leading 'Type/ in the request URL.

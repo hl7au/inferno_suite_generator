@@ -59,7 +59,7 @@ module InfernoSuiteGenerator
       end
 
       def untraced(name, key, early)
-        QuestionnaireUsage.log("untraced #{@form.title} variable #{name} on #{key == :root ? "root" : key}: " \
+        QuestionnaireUsage.log("untraced #{@form.title} variable #{name} on #{QuestionnaireUsage.node_label(key)}: " \
                                "it uses #{early.join(", ")}, defined after it")
         []
       end
