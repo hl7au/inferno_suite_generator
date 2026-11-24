@@ -16,6 +16,9 @@ module QuestionnaireUsageTemplateHelpers
   PATCH_BLOCK = "- **Vitals form**\n  - **Extraction template name-patch**: updates an existing Patient with a " \
                 "FHIRPath Patch\n#{WHOLE_FORM}".freeze
 
+  CATEGORY = "http://example.org/CodeSystem/category"
+  CATEGORY_URL = "http://example.org/StructureDefinition/category-"
+
   def template(ref, patch_url: nil)
     parts = [{ "url" => "template", "valueReference" => { "reference" => ref } },
              ({ "url" => PATCH_URL, "valueString" => patch_url } if patch_url)].compact
@@ -62,6 +65,36 @@ module QuestionnaireUsageTemplateHelpers
     describe(ig(template_form([template("#name-patch", patch_url: request_url)], [], [patch])), patient)
       .fetch(patient)
   end
+
+  def templates(*parts) = { "url" => "#{SDC}templateExtract", "extension" => parts }
+
+  def concept(code) = { "coding" => [{ "system" => CATEGORY, "code" => code }] }
+
+  # A profile of the type fixing category to the code.
+  def category_profile(type, code)
+    element = { "id" => "#{type}.category", "path" => "#{type}.category", "patternCodeableConcept" => concept(code) }
+    FHIR::StructureDefinition.new("resourceType" => "StructureDefinition", "url" => "#{CATEGORY_URL}#{code}",
+                                  "type" => type, "snapshot" => { "element" => [element] })
+  end
+
+  def category_group(type, code)
+    GroupMetadata.new(resource: type, profile_url: "#{CATEGORY_URL}#{code}", profile_name: "#{type} #{code}",
+                      title: "#{type} #{code}", searches: [], mandatory_elements: [],
+                      must_supports: { extensions: [], slices: [], elements: [] }).tap do |group|
+      group.add_test(id: "create_#{code}", file_name: "c.rb", kind: "create")
+    end
+  end
+
+  # The groups of the type whose profiles fix category one and two that a root template creating the type with
+  # this category is described in.
+  def category_groups(type, category)
+    groups = %w[one two].map { |code| category_group(type, code) }
+    form = template_form([template("#new")], [], [{ "resourceType" => type, "id" => "new", "category" => category }])
+    resources = ig(form).tap { |ig| %w[one two].each { |code| ig.add(category_profile(type, code)) } }
+    describe(resources, *groups).keys.map(&:profile_url)
+  end
+
+  def skipped(line) = "Questionnaire usage tracing: skipping Vitals form templateExtract #{line}\n"
 
   # Root extensions in reverse source order: a template, a launch context, then a query with an _include.
   def meds_form_with_all_sources

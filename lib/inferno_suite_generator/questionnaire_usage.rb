@@ -52,6 +52,9 @@ module InfernoSuiteGenerator
       puts "Questionnaire usage tracing: #{message}"
     end
 
+    # The node a log line names: :root, or an item's linkId (nil when it has none).
+    def self.node_label(key) = key == :root ? "root" : (key.presence || "an item without linkId")
+
     # The string at hash[key][key2]…, or nil when it is absent, empty or not a string.
     def self.text(hash, *keys)
       value = dig(hash, keys)

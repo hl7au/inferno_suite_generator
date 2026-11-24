@@ -46,9 +46,9 @@ module InfernoSuiteGenerator
         end
       end
 
-      # A create template's code.coding and category[].coding.
+      # A create template's code.coding and category.coding, whether category is one concept or a list.
       def self.from_resource(resource)
-        concepts = { "code" => [resource["code"]], "category" => QuestionnaireUsage.list(resource, "category") }
+        concepts = { "code" => [resource["code"]], "category" => Array.wrap(resource["category"]).grep(Hash) }
         concepts.transform_values { |list| pairs(list.flat_map { |concept| codings(concept) }) }
                 .select { |_param, codes| codes.any? }
       end
