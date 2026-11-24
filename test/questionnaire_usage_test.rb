@@ -3,6 +3,7 @@
 require_relative "test_helper"
 require_relative "generator_fixtures"
 require "tmpdir"
+require "minitest/mock"
 require "inferno_suite_generator"
 
 module InfernoSuiteGenerator
@@ -238,6 +239,25 @@ module InfernoSuiteGenerator
                       "reads contained (not checked), medication (not checked), medication.reference (not checked)"
     end
 
+    def test_a_variable_stands_for_the_chain_that_reaches_a_resource
+      form = questionnaire(
+        extension: [query("Obs", "Observation?patient={{%patient.id}}"),
+                    variable("Latest", "iif(%Obs.entry.count() > 0, " \
+                                       "%Obs.entry.resource.where(status = 'final').first(), {})")],
+        item: [reading("height", "Height", "%Latest.value.value")]
+      )
+
+      assert_includes observation_search_section(form), "reads value.value (not checked), status (not checked)\n"
+    end
+
+    def test_a_filter_on_the_entries_reads_the_elements_of_their_resource
+      fhirpath = "%Obs.entry.where(resource.status = 'final').resource.value.value"
+      form = questionnaire(extension: [query("Obs", "Observation?patient={{%patient.id}}")],
+                           item: [reading("height", "Height", fhirpath)])
+
+      assert_includes observation_search_section(form), "reads value.value (not checked), status (not checked)\n"
+    end
+
     def test_a_filter_that_names_an_extension_by_url_still_reads_the_rest_of_its_condition
       fhirpath = "%patient.extension.where(exists(url='http://example.org/pronouns') and " \
                  "extension.where(url='period').value.end.empty()).extension.where(url='value').value"
@@ -284,6 +304,10 @@ module InfernoSuiteGenerator
     end
 
     private
+
+    def observation_search_section(form)
+      section(form, group("obs", "Observation", { search: { search_names: %w[patient] } }), :search)
+    end
 
     # The section of the include test a PractitionerRole group has for its Locations.
     def include_section(form)
@@ -434,9 +458,30 @@ module InfernoSuiteGenerator
         end
       end
 
-      with_config_keeper { subclass.generate(build_ig_metadata(groups: [group]), @dir) }
+      added = { group => { group: "Usage" } }
 
-      assert_path_exists File.join(@dir, "patient_group.rb")
+      with_config_keeper { subclass.generate(build_ig_metadata(groups: [group]), @dir, added) }
+
+      assert_includes File.read(File.join(@dir, "patient_group.rb")), "Usage"
+    end
+
+    def test_tracing_runs_over_the_groups_in_the_order_their_files_are_written
+      groups = [group("height", "Observation"), patient_group]
+      generator = Generator.new(nil)
+      generator.ig_metadata = build_ig_metadata(groups:)
+      traced = nil
+
+      with_config_keeper({ "configs" => { "generic" => { "questionnaire_usage_tracing" => true } } }) do
+        QuestionnaireUsage.stub(:descriptions, ->(**given) { traced = given[:groups] }) do
+          generator.generate_questionnaire_usage
+        end
+      end
+
+      assert_equal groups.reverse, traced
+    end
+
+    def test_recorded_test_kinds_are_read_only_through_test_kind
+      refute_respond_to patient_group, :test_kinds
     end
 
     def test_added_text_is_escaped_so_the_group_file_stays_valid_ruby

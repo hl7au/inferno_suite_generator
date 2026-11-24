@@ -26,28 +26,12 @@ module InfernoSuiteGenerator
       assert_equal [kept], calls.first[:groups]
     end
 
-    def test_runs_over_the_groups_in_the_order_the_group_files_are_written
-      first = build_group_metadata(name: "first", profile_url: "http://example.org/first")
-      second = build_group_metadata(name: "second", profile_url: "http://example.org/second")
-      generator = Generator.new(nil)
-      generator.ig_metadata = build_ig_metadata(groups: [second, first])
-      generator.ig_metadata.stub(:ordered_groups, [first, nil, second]) do
-        calls = traced(generator, { "generic" => { "questionnaire_usage_tracing" => true } })
-
-        assert_equal [first, second], calls.first[:groups]
-      end
-    end
-
     private
 
     def run_with(configs:, groups: [])
+      calls = []
       generator = Generator.new(nil)
       generator.ig_metadata = build_ig_metadata(groups:)
-      traced(generator, configs)
-    end
-
-    def traced(generator, configs)
-      calls = []
       with_config_keeper({ "configs" => configs }) do
         QuestionnaireUsage.stub(:descriptions, ->(**args) { calls << args }) { generator.generate_questionnaire_usage }
       end

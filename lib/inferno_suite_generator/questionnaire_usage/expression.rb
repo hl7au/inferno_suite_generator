@@ -4,11 +4,9 @@ require "fhirpath"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Where a FHIRPath value came from in what a source returns. `shape` is `:bundle` for a search's Bundle,
-    # `:entries` for Bundle entries, else `:resource`. `type` is the resource type, when a filter picked one.
-    # `path` is the value's element path: "" at the resource itself, nil once it is no longer one of its elements.
-    # `carried` is the element paths read to get the value, apart from `path`: what its filters read, and the
-    # path it left the resource's elements at. Every chain from the value reads them too.
+    # Where a FHIRPath value came from: `shape` is `:bundle`, `:entries` or `:resource`; `type` is the resource type
+    # a filter picked; `path` is its element path, "" at the resource and nil once it is no longer an element.
+    # `carried` is the other element paths read to get it, like a filter's: every chain from the value reads them.
     Origin = Data.define(:shape, :type, :path, :carried) do
       def self.bundle = new(shape: :bundle, type: nil, path: "")
       def self.resource = new(shape: :resource, type: nil, path: "")
@@ -225,6 +223,8 @@ module InfernoSuiteGenerator
         picks = steps.take_while { |step| step[:kind] != :member }
         rest = steps.drop(picks.size)
         filter_type = picks.filter_map { |step| entry_filter_type(step) }.last
+        @criteria.concat(picks.flat_map { |step| step[:args] }.flat_map { |arg| criteria_paths(arg) }
+                              .filter_map { |path| path[/\Aresource\.(.+)/, 1] })
         return read_resource(rest.drop(1), filter_type) if member?(rest.first, "resource")
         return leave unless rest.empty? && picks.all? { |step| pick?(step) }
 

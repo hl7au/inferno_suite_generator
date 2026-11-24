@@ -11,14 +11,15 @@ module InfernoSuiteGenerator
       class << self
         # descriptions: Markdown to append, as { group_metadata => { test id or :group => text } }.
         def generate(ig_metadata, base_output_dir, descriptions = {})
-          # A kit subclass may keep a three-argument initialize, so descriptions are passed only when there are some.
-          added = descriptions.empty? ? [] : [descriptions]
           ig_metadata.ordered_groups
                      .compact
                      .reject do |group|
                        Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
                      end
-                     .each { |group| new(group, base_output_dir, ig_metadata, *added).generate }
+                     .each do |group|
+                       # Set after new, so a kit subclass can keep a three-argument initialize.
+                       new(group, base_output_dir, ig_metadata).tap { |one| one.descriptions = descriptions }.generate
+                     end
         end
       end
 
@@ -26,11 +27,11 @@ module InfernoSuiteGenerator
 
       self.template_type = TEMPLATE_TYPES[:GROUP]
 
-      def initialize(group_metadata, base_output_dir, ig_metadata, descriptions = {})
+      def initialize(group_metadata, base_output_dir, ig_metadata)
         self.group_metadata = group_metadata
         self.base_output_dir = base_output_dir
         self.ig_metadata = ig_metadata
-        self.descriptions = descriptions
+        self.descriptions = {}
       end
 
       def base_metadata_file_name

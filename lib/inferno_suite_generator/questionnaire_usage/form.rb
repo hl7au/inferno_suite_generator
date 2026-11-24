@@ -140,11 +140,12 @@ module InfernoSuiteGenerator
         read.origin.with(carried: (read.origin.carried + others).uniq)
       end
 
-      # The read a variable stands for: the first that counts. A variable that picks several types, like
-      # `where(intent = 'order' or resourceType = 'Medication')`, reads the resource untyped, which `accept` may
-      # reject; it still stands for the resource, so typed chains from it count.
+      # The read a variable stands for: the first that counts, one still at an element before one that left. A
+      # variable that picks several types, like `where(intent = 'order' or resourceType = 'Medication')`, reads the
+      # resource untyped, which `accept` may reject; it still stands for the resource, so typed chains from it count.
       def variable_read(reads, accept)
-        reads.find { |read| accept.call(read.origin.type) } ||
+        counted = reads.select { |read| accept.call(read.origin.type) }
+        counted.find { |read| read.origin.path } || counted.first ||
           (reads.find { |read| read.origin.type.nil? && read.origin.path == "" } unless accept.call(nil))
       end
 
