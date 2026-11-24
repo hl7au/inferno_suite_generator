@@ -86,8 +86,6 @@ module InfernoSuiteGenerator
 
       def details(_group) = ["Request: #{query.text}"]
 
-      def unused_lines = []
-
       def placement(group, groups)
         Placement.new(self, group, *Include.include_test(query, [group.resource], groups))
       end
