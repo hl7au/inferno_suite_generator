@@ -77,8 +77,8 @@ module InfernoSuiteGenerator
 
       refute_includes result.values.flat_map(&:values).join, "fetches MedicationRequest resources through _include="
       assert_includes result.fetch(mr)["obs_search_patient"],
-                      "  - **Query Meds**: searches MedicationRequest resources\n    - Request: #{text}\n" \
-                      "    - **Status**: pre-fills the answer; reads status (not checked)"
+                      "  - **Query Meds**: searches MedicationRequest resources\n    - Request: #{text}\n    " \
+                      "- **Status**: pre-fills the answer; reads status (not checked)"
     end
 
     def test_read_query_include_is_not_traced

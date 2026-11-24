@@ -15,7 +15,7 @@ module InfernoSuiteGenerator
 
       # A read by id takes no _include: its includes are logged, not traced.
       def self.read(query, params)
-        written(params).each { |name, value| skip(query, name, value, "a read by id takes no _include") }
+        written(params).each { |name, value| skip(query, "#{name}=#{value}", "a read by id takes no _include") }
         []
       end
 
@@ -30,13 +30,14 @@ module InfernoSuiteGenerator
       def self.own?(query, name, value) = [name, value.split(":").first] == [PARAM, query.type]
 
       def self.of(query, name, value)
-        return skip(query, name, value, "only _include of #{query.type} is traced") unless own?(query, name, value)
+        reason = "only _include of #{query.type} is traced"
+        return skip(query, "#{name}=#{value}", reason) unless own?(query, name, value)
 
         targets(query, value).map { |type| new(query, value, type) }
       end
 
-      def self.skip(query, name, value, reason)
-        QuestionnaireUsage.log("skipping #{name}=#{value} in #{query.context}: #{reason}")
+      def self.skip(query, param, reason)
+        QuestionnaireUsage.log("skipping #{param} in #{query.context}: #{reason}")
         []
       end
 
