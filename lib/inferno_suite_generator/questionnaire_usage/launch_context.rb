@@ -17,7 +17,7 @@ module InfernoSuiteGenerator
       end
 
       # Lines between the heading and the item lines; a source no test lists also compares to the group.
-      def details(untested) = source.details(untested ? group : nil)
+      def details = source.details(test ? nil : group)
 
       def intro = format(Markdown::INTROS.fetch(test[:kind]), resource: group.resource)
 

@@ -120,8 +120,9 @@ module InfernoSuiteGenerator
 
       # Queries, then launch contexts, each in document order; templates come after them (§3.5 order).
       def sources
-        @sources ||= [*queries,
-                      *QuestionnaireUsage.list(@data, "extension").flat_map { |extension| LaunchContext.from(self, extension) }]
+        @sources ||= [*Query.all(self, @data), *QuestionnaireUsage.list(@data, "extension").flat_map do |extension|
+          LaunchContext.from(self, extension)
+        end]
       end
 
       # Each distinct expression is parsed once per form.
@@ -140,15 +141,6 @@ module InfernoSuiteGenerator
       def field(name) = QuestionnaireUsage.text(@data, name)
 
       def url = field("url")
-
-      def queries
-        data_nodes.flat_map do |node|
-          QuestionnaireUsage.list(node, "extension").filter_map { |extension| Query.from(self, extension) }
-        end
-      end
-
-      # The root and every item's data, in document order.
-      def data_nodes(node = @data) = [node, *QuestionnaireUsage.list(node, "item").flat_map { |item| data_nodes(item) }]
 
       # [[key, label, action], chain] for every chain, grouped by the name the chain starts at.
       def readings

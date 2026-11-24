@@ -11,9 +11,11 @@ module InfernoSuiteGenerator
       # A comma means OR; a value with a {{…}} template is ignored.
       def self.from_query(params)
         params.select { |name, value| PARAMS.include?(name) && !value.include?("{{") }
-              .flat_map { |name, value| value.split(",").map { |token| [name, coding(token)] } }
+              .flat_map { |name, value| tokens(name, value) }
               .group_by(&:first).transform_values { |pairs| pairs.map(&:last) }
       end
+
+      def self.tokens(name, value) = value.split(",").map { |token| [name, coding(token)] }
 
       # system|code, |code or code.
       def self.coding(token)
@@ -21,99 +23,121 @@ module InfernoSuiteGenerator
         [system.to_s.empty? ? nil : system, code]
       end
 
-      # The codes a profile snapshot fixes under <Type>.code and <Type>.category.
-      def self.from_profile(profile, type)
-        hash = profile&.to_hash
-        elements = QuestionnaireUsage.list(QuestionnaireUsage.dig(hash, ["snapshot"]), "element")
-        by_id = elements.to_h { |element| [element["id"], element] }
-        PARAMS.to_h { |param| [param, elements.flat_map { |element| fixed(element, "#{type}.#{param}", by_id) }] }
-              .reject { |_param, codes| codes.empty? }
+      # The codes a profile's snapshot fixes under <Type>.code and <Type>.category ({} without a profile).
+      def self.from_profile(profile)
+        hash = profile ? profile.to_hash : {}
+        PARAMS.to_h { |param| [param, param_codes(hash, param)] }.select { |_param, codes| codes.any? }
       end
 
-      def self.fixed(element, base, by_id)
+      def self.param_codes(profile, param)
+        elements = QuestionnaireUsage.list(profile["snapshot"], "element")
+        base = "#{profile["type"]}.#{param}"
+        elements.flat_map { |element| element_codes(element, base, elements) }
+      end
+
+      def self.element_codes(element, base, elements)
         case element["path"]
         when base, "#{base}.coding" then concept_codes(element)
-        when "#{base}.coding.code" then slice_code(element, by_id)
+        when "#{base}.coding.code" then slice_code(element, elements)
         else []
         end
       end
 
+      # pattern/fixed CodeableConcept and Coding.
       def self.concept_codes(element)
-        codings = CONCEPTS.flat_map { |key| QuestionnaireUsage.list(element[key], "coding") } +
-                  CODINGS.filter_map { |key| element[key] }.grep(Hash)
-        codings.filter_map { |coding| [coding["system"], coding["code"]] if coding["code"] }
+        codings = element.values_at(*CONCEPTS).flat_map { |concept| QuestionnaireUsage.list(concept, "coding") } +
+                  element.values_at(*CODINGS).grep(Hash)
+        codings.map { |coding| coding.values_at("system", "code") }.select(&:last)
       end
 
       # fixedCode/patternCode on a coding.code slice element, with its sibling system's fixedUri/patternUri.
-      def self.slice_code(element, by_id)
+      def self.slice_code(element, elements)
         code = element["fixedCode"] || element["patternCode"]
-        sibling = by_id[element["id"].to_s.sub(/\.code\z/, ".system")] || {}
-        code ? [[sibling["fixedUri"] || sibling["patternUri"], code]] : []
+        code ? [[sibling_system(element, elements), code]] : []
       end
 
+      def self.sibling_system(element, elements)
+        system_id = element["id"].to_s.sub(/\.code\z/, ".system")
+        sibling = elements.find { |other| other["id"] == system_id } || {}
+        sibling["fixedUri"] || sibling["patternUri"]
+      end
+
+      # Equal codes, and equal systems unless either is missing.
       def self.same?(one, other)
-        (one_system, one_code), (other_system, other_code) = one, other
-        one_code == other_code && (one_system.nil? || other_system.nil? || one_system == other_system)
+        one.last == other.last && [one.first, other.first].compact.uniq.size < 2
       end
 
-      def self.overlap?(source, fixed, param)
-        source[param].any? { |code| fixed[param].any? { |other| same?(code, other) } }
-      end
+      def self.overlap?(codes, others) = codes.product(others).any? { |pair| same?(*pair) }
 
       def self.shared(source, fixed) = source.keys & fixed.keys
 
-      # A shared parameter with a common code.
-      def self.matches?(source, fixed) = shared(source, fixed).any? { |param| overlap?(source, fixed, param) }
+      # A parameter both give with a common code.
+      def self.matches?(source, fixed)
+        shared(source, fixed).any? { |param| overlap?(source[param], fixed[param]) }
+      end
 
       # code=system|code,code, category=… or (no codes).
       def self.text(codes)
         return "(no codes)" if codes.empty?
 
-        codes.map { |param, list| "#{param}=#{list.map { |code| code.compact.join("|") }.join(",")}" }.join(", ")
+        codes.map { |param, list| "#{param}=#{list_text(list)}" }.join(", ")
       end
+
+      def self.list_text(list) = list.map { |code| code.compact.join("|") }.join(",")
     end
 
-    # Matches a source to the groups of its type, by the code and category their profiles fix (§3.6).
-    # Each profile's fixed codes are read once.
+    # Matches a source to the groups of its type by the code and category their profiles fix (§3.6), for
+    # search queries and create templates. Each profile's fixed codes are read once.
     class Matcher
-      def initialize(ig_resources)
-        @ig_resources = ig_resources
-        @fixed = Hash.new { |cache, group| cache[group] = fixed(group) }.compare_by_identity
+      def self.of_type(source, groups)
+        type = source.type
+        typed = groups.select { |group| group.resource == type }
+        QuestionnaireUsage.log("untraced #{source.context}: no group for #{type}") if typed.empty?
+        typed
       end
 
-      # The groups of the source's type it fits; a source without codes fits them all.
-      def fits(source, groups)
-        codes = source.codes
-        return groups unless codes && groups.any?
+      def self.unresolved(source, reason)
+        QuestionnaireUsage.log("unresolved #{source.context}: #{reason}")
+        []
+      end
 
-        groups.one? ? only(source, codes, groups) : several(source, codes, groups)
+      # Several matching profiles are all kept.
+      def self.pick(source, codes, matching)
+        return unresolved(source, "no #{source.type} profile matches #{Codes.text(codes)}") if matching.empty?
+
+        urls = matching.map(&:profile_url)
+        QuestionnaireUsage.log("#{source.context} matches several profiles: #{urls.join(", ")}") if urls.size > 1
+        matching
+      end
+
+      def initialize(ig_resources)
+        @fixed = Hash.new { |cache, url| cache[url] = Codes.from_profile(ig_resources.profile_by_url(url)) }
+      end
+
+      # The groups the source fits: those of its type, by codes too when the source has them.
+      def fits(source, groups)
+        typed = Matcher.of_type(source, groups)
+        codes = source.codes
+        codes && typed.any? ? by_codes(source, codes, typed) : typed
       end
 
       private
 
-      def fixed(group) = Codes.from_profile(@ig_resources.profile_by_url(group.profile_url), group.resource)
+      def fixed(group) = @fixed[group.profile_url]
 
-      # One group fits unless a parameter both give has no common code.
-      def only(source, codes, groups)
-        fixed = @fixed[groups.first]
-        return groups if Codes.shared(codes, fixed).empty? || Codes.matches?(codes, fixed)
-
-        unresolved(source, "the #{source.type} profile fixes #{Codes.text(fixed)}, not #{Codes.text(codes)}")
+      def by_codes(source, codes, groups)
+        first, *rest = groups
+        rest.empty? ? only(source, codes, first) : Matcher.pick(source, codes, matching(codes, groups))
       end
 
-      def several(source, codes, groups)
-        matching = groups.select { |group| Codes.matches?(codes, @fixed[group]) }
-        return unresolved(source, "no #{source.type} profile matches #{Codes.text(codes)}") if matching.empty?
+      def matching(codes, groups) = groups.select { |group| Codes.matches?(codes, fixed(group)) }
 
-        if matching.size > 1
-          QuestionnaireUsage.log("#{source.context} matches several profiles: #{matching.map(&:profile_url).join(", ")}")
-        end
-        matching
-      end
+      # The only group fits unless the source and profile both give a parameter with no common code.
+      def only(source, codes, group)
+        fixed = fixed(group)
+        return [group] if Codes.shared(codes, fixed).empty? || Codes.matches?(codes, fixed)
 
-      def unresolved(source, reason)
-        QuestionnaireUsage.log("unresolved #{source.context}: #{reason}")
-        []
+        Matcher.unresolved(source, "the #{source.type} profile fixes #{Codes.text(fixed)}, not #{Codes.text(codes)}")
       end
     end
   end

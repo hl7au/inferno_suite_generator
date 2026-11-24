@@ -7,6 +7,7 @@ require_relative "questionnaire_usage/form"
 require_relative "questionnaire_usage/launch_context"
 require_relative "questionnaire_usage/codes"
 require_relative "questionnaire_usage/query"
+require_relative "questionnaire_usage/entries"
 require_relative "questionnaire_usage/checked_elements"
 require_relative "questionnaire_usage/trace"
 require_relative "questionnaire_usage/group_description"
@@ -38,9 +39,7 @@ module InfernoSuiteGenerator
     end
 
     def self.place(source, groups, matcher)
-      typed = groups.select { |group| group.resource == source.type }
-      log("untraced #{source.context}: no group for #{source.type}") if typed.empty?
-      matcher.fits(source, typed).map { |group| source.placement(group) }
+      matcher.fits(source, groups).map { |group| source.placement(group) }
     end
 
     def self.recorded?(group)

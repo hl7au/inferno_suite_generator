@@ -44,18 +44,20 @@ module InfernoSuiteGenerator
         init.empty? ? "#{last} test" : "#{init.join(", ")} and #{last} tests"
       end
 
-      # untested: the sources no test of the group lists, which also compare to the group's searches.
-      def self.source_list(placements, trace, untested: false)
-        by_form(placements) { |placement| source_lines(placement, trace, untested) }
+      def self.source_list(placements, trace)
+        by_form(placements) { |placement| source_lines(placement, trace) }
       end
 
-      def self.source_lines(placement, trace, untested)
+      def self.source_lines(placement, trace)
         source = placement.source
+        ["  - #{source.heading}", *[*placement.details, *item_lines(source, trace)].map { |line| "    - #{line}" }]
+      end
+
+      def self.item_lines(source, trace)
         uses = source.uses
         rest = uses.size - ITEM_CAP
-        lines = [*placement.details(untested), *uses.first(ITEM_CAP).map { |use| item_line(source, use, trace) },
-                 *("and #{rest} more items" if rest.positive?)]
-        ["  - #{source.heading}", *lines.map { |line| "    - #{line}" }]
+        lines = uses.first(ITEM_CAP).map { |use| item_line(source, use, trace) }
+        [*lines, *("and #{rest} more items" if rest.positive?)]
       end
 
       def self.item_line(source, use, trace)
@@ -135,9 +137,7 @@ module InfernoSuiteGenerator
         @fitting.map { |placement| placement.source.form }.uniq.map { |form| summary_line(form) }.join("\n")
       end
 
-      def not_tested
-        Markdown.block(:not_tested, Markdown.source_list(@fitting.reject(&:test), @trace, untested: true))
-      end
+      def not_tested = Markdown.block(:not_tested, Markdown.source_list(@fitting.reject(&:test), @trace))
 
       def not_checked
         Markdown.block(:not_checked, Markdown.element_list(reads.reject { |read| read.checked_in?(@trace) }, @trace))
