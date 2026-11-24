@@ -63,11 +63,13 @@ module InfernoSuiteGenerator
       MARKDOWN = /[*_`\[\]]/
       ASSEMBLED = "/sdc-questionnaire-assembleContext"
 
-      attr_reader :title
+      attr_reader :title, :ig_resources
 
       # The IG's forms, one per (url, id-when-no-url, version), same titles told apart by version.
       def self.load(ig_resources)
-        forms = ig_resources.get_resources_by_type("Questionnaire").map { |resource| new(resource.to_hash) }.uniq(&:key)
+        forms = ig_resources.get_resources_by_type("Questionnaire").map do |resource|
+          new(resource.to_hash, ig_resources)
+        end.uniq(&:key)
         repeated = forms.map(&:base_title).tally
         forms.each { |form| form.show_version if repeated[form.base_title] > 1 }.each(&:read_expressions)
       end
@@ -103,8 +105,9 @@ module InfernoSuiteGenerator
         text.gsub(MARKDOWN) { |char| "\\#{char}" }
       end
 
-      def initialize(data)
+      def initialize(data, ig_resources)
         @data = data
+        @ig_resources = ig_resources
         @title = base_title
         @chains = {}
       end
@@ -118,11 +121,13 @@ module InfernoSuiteGenerator
         @title = "#{base_title}, version #{version}" if version
       end
 
-      # Queries, then launch contexts, each in document order; templates come after them (§3.5 order).
+      # Queries, each followed by its includes, then launch contexts, each in document order; templates come
+      # after them (§3.5 order).
       def sources
-        @sources ||= [*Query.all(self, @data), *QuestionnaireUsage.list(@data, "extension").flat_map do |extension|
-          LaunchContext.from(self, extension)
-        end]
+        @sources ||= [*Query.all(self, @data).flat_map { |query| [query, *query.includes] },
+                      *QuestionnaireUsage.list(@data, "extension").flat_map do |extension|
+                        LaunchContext.from(self, extension)
+                      end]
       end
 
       # Each distinct expression is parsed once per form.
@@ -133,8 +138,8 @@ module InfernoSuiteGenerator
       # Parses and resolves every expression once, logging untraced variables and assembled-in names.
       def read_expressions = readings
 
-      # The uses of %name merged per item; the block gives a chain's paths, or nil when it is not a use.
-      def uses(name, &) = Use.merge(readings.fetch(name, []), &)
+      # [[key, label, action], chain] for every chain that starts at %name.
+      def readings_of(name) = readings.fetch(name, [])
 
       private
 

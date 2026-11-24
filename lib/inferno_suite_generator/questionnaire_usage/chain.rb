@@ -174,6 +174,9 @@ module InfernoSuiteGenerator
       # The paths a chain on a search's Bundle reads on its resources of the given type (see Entries).
       def bundle_paths_for(type) = Entries.new(steps).paths_for(type)
 
+      # Like bundle_paths_for, but only when the chain picks the type.
+      def picked_bundle_paths_for(type) = Entries.new(steps).picked_paths_for(type)
+
       protected
 
       def rebase(name, steps)

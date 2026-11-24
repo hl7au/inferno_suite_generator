@@ -3,6 +3,7 @@
 require "fhirpath"
 require_relative "questionnaire_usage/chain"
 require_relative "questionnaire_usage/query"
+require_relative "questionnaire_usage/include"
 require_relative "questionnaire_usage/scope"
 require_relative "questionnaire_usage/form"
 require_relative "questionnaire_usage/launch_context"
@@ -39,7 +40,7 @@ module InfernoSuiteGenerator
     end
 
     def self.place(source, groups, matcher)
-      matcher.fits(source, groups).map { |group| source.placement(group) }
+      matcher.fits(source, groups).map { |group| source.placement(group, groups) }
     end
 
     def self.recorded?(group)

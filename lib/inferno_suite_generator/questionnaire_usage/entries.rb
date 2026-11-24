@@ -31,10 +31,12 @@ module InfernoSuiteGenerator
         rest.take_while { |step| pick?(step) } if entry && member?(entry, "entry")
       end
 
-      # T for ofType(T).
+      # T for ofType(T) or where(resourceType = 'T').
       def self.of_type(step)
         params = step.params
-        bare(params.first["text"]) if step.function?(["ofType"]) && params.size == 1
+        return bare(params.first["text"]) if step.function?(["ofType"]) && params.size == 1
+
+        step.where["resourceType"]
       end
 
       # Observation for FHIR.Observation.
@@ -67,10 +69,10 @@ module InfernoSuiteGenerator
         @resource ? (Chain::Reading.new.paths(@read) + filtered).uniq : filtered
       end
 
-      private
+      def picked_paths_for(type) = (paths_for(type) if picked_type == type)
 
-      # The last type a where(resource is T) pick or resource.ofType(T) gives.
-      def picked_type = [*@picks.filter_map { |step| Entries.picked_type(step) }, *@of_type].last
+      # The last type a where(resource is T) pick, or resource.ofType(T) or resource.where(resourceType = 'T'), gives.
+      def picked_type = [*@picks.to_a.filter_map { |step| Entries.picked_type(step) }, *@of_type].last
     end
   end
 end

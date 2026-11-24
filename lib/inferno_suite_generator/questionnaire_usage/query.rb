@@ -114,15 +114,39 @@ module InfernoSuiteGenerator
 
       def names = @request.names
 
+      def text = @request.text
+
       def uses
-        @uses ||= form.uses(@key) { |chain| paths(chain) }
+        @uses ||= Use.merge(readings) { |chain| paths(chain) }
       end
 
-      def shown? = uses.any?
+      # Its _include sources, built once so their logs come once.
+      def includes
+        @includes ||= Include.all(self, @request.params)
+      end
+
+      # The types the chains on its results pick (see Entries#picked_type).
+      def picked_types = readings.filter_map { |_item, chain| Entries.new(chain.steps).picked_type }.uniq
+
+      # The uses of chains on its results that pick the type.
+      def picked_uses(type) = Use.merge(readings) { |chain| chain.picked_bundle_paths_for(type) }
+
+      # A query with its own _include is shown without item uses too.
+      def shown? = uses.any? || includes.any?
 
       def context = "#{form.title} query #{name}"
 
-      def details(_group) = ["Request: #{@request.text}"]
+      def details(_group) = ["Request: #{text}"]
+
+      # The line a query with no item uses gets instead of item lines.
+      def unused_lines
+        values = includes.map(&:value).uniq
+        ["No item reads its results; it fetches #{values.join(", ")} through _include"]
+      end
+
+      private
+
+      def readings = form.readings_of(@key)
     end
 
     # A query that reads one resource by id: its items read the resource directly. Matched by type only.
@@ -131,7 +155,7 @@ module InfernoSuiteGenerator
 
       def codes = nil
 
-      def placement(group)
+      def placement(group, _groups)
         Placement.new(self, group, group.find_test("read"))
       end
 
@@ -155,7 +179,7 @@ module InfernoSuiteGenerator
       end
 
       # A search without parameters has no test.
-      def placement(group)
+      def placement(group, _groups)
         Placement.new(self, group, (group.find_test("search", search_names: names) if names.any?))
       end
 

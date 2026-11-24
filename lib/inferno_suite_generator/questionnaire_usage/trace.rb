@@ -14,8 +14,14 @@ module InfernoSuiteGenerator
 
       def fitting(group) = @placements.select { |placement| placement.group.equal?(group) }
 
+      # An include fits every group of its target type, but its include test lists it once.
       def listed(group)
-        @placements.select { |placement| placement.listed_in?(group) }
+        @placements.select { |placement| placement.listed_in?(group) }.uniq(&:source)
+      end
+
+      # The placements a group's summary names: those that fit it or that its tests list.
+      def summarized(group)
+        @placements.select { |placement| placement.named_in?(group) }
       end
 
       def by_group?(group, path) = @profiles[group].checks?(path)

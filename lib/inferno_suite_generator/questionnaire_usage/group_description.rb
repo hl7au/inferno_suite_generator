@@ -14,6 +14,9 @@ module InfernoSuiteGenerator
         "read" => "These questionnaires in the IG read %<resource>s resources as this test does: by id, or as " \
                   "the resource a form is opened for. #{reads} #{not_checked}",
         "search" => "These questionnaires in the IG make this search. #{reads} #{not_checked}",
+        "include" => "These questionnaires in the IG fetch %<resource>s resources through this search's " \
+                     "_include. #{reads} Elements marked (not checked) are neither Must Support nor required by " \
+                     "any %<resource>s profile in this suite, so no test checks them.",
         "must_support" => "Items in these questionnaires read elements of %<resource>s that this group's tests " \
                           "check. #{reads}",
         group: "These questionnaires in the IG read or create %<resource>s resources. The tests that make the " \
@@ -55,6 +58,10 @@ module InfernoSuiteGenerator
 
       def self.item_lines(source, trace)
         uses = source.uses
+        uses.empty? ? source.unused_lines : capped_item_lines(source, uses, trace)
+      end
+
+      def self.capped_item_lines(source, uses, trace)
         rest = uses.size - ITEM_CAP
         lines = uses.first(ITEM_CAP).map { |use| item_line(source, use, trace) }
         [*lines, *("and #{rest} more items" if rest.positive?)]
@@ -93,11 +100,11 @@ module InfernoSuiteGenerator
         @group = group
         @trace = trace
         @fitting = trace.fitting(group)
-        @listed = trace.listed(group)
+        @summarized = trace.summarized(group)
       end
 
       def to_h
-        return {} if @fitting.empty? && @listed.empty?
+        return {} if @summarized.empty?
 
         test_sections.merge(must_support_section).merge(group: summary)
       end
@@ -106,10 +113,12 @@ module InfernoSuiteGenerator
 
       def test_sections
         test_ids = [*@group.tests].map { |test| test[:id].to_s }
-        @listed.group_by { |placement| placement.test[:id].to_s }.slice(*test_ids).transform_values do |placements|
+        listed_by_test.slice(*test_ids).transform_values do |placements|
           Markdown.section(placements.first.intro, Markdown.source_list(placements, @trace))
         end
       end
+
+      def listed_by_test = @trace.listed(@group).group_by { |placement| placement.test[:id].to_s }
 
       def must_support_test = @group.find_test("must_support")
 
@@ -134,7 +143,7 @@ module InfernoSuiteGenerator
       end
 
       def summary_lines
-        @fitting.map { |placement| placement.source.form }.uniq.map { |form| summary_line(form) }.join("\n")
+        @summarized.map(&:form).uniq.map { |form| summary_line(form) }.join("\n")
       end
 
       def not_tested = Markdown.block(:not_tested, Markdown.source_list(@fitting.reject(&:test), @trace))
@@ -150,7 +159,7 @@ module InfernoSuiteGenerator
       end
 
       def test_labels(form)
-        tested = @fitting.select { |placement| placement.test && placement.source.form.equal?(form) }
+        tested = @summarized.select { |placement| placement.test && placement.form.equal?(form) }
         must_support = must_support_reads.any? { |read| read.form.equal?(form) }
         [*tested.map(&:test_label), *("Must Support" if must_support)].uniq
       end
