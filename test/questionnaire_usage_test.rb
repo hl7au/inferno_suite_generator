@@ -27,7 +27,6 @@ module InfernoSuiteGenerator
         "extension" => extensions, "item" => children }
     end
 
-    # An item that pre-fills its answer from `fhirpath`.
     def reading(link_id, text, fhirpath)
       item(link_id, text, expression("initialExpression", fhirpath))
     end
@@ -56,13 +55,11 @@ module InfernoSuiteGenerator
       { "url" => "#{SDC}templateExtract", "extension" => parts }
     end
 
-    # A FHIRPath Patch template that adds to `path`.
     def patch_template(id, path)
       parts = [{ "name" => "type", "valueCode" => "add" }, { "name" => "path", "valueString" => path }]
       { "resourceType" => "Parameters", "id" => id, "parameter" => [{ "name" => "operation", "part" => parts }] }
     end
 
-    # A group of `resource` named `name`, with a `<name>_<kind>` test per kind in `tests`, `{ kind => details }`.
     def group(name, resource, tests = {}, **attributes)
       group = build_group_metadata(name:, resource:, title: name.capitalize, profile_name: name.capitalize,
                                    profile_url: "#{PROFILE}#{name}", **attributes)
@@ -76,13 +73,10 @@ module InfernoSuiteGenerator
       group("patient", "Patient", tests, **attributes)
     end
 
-    # A form that opens for a Patient, with these items.
     def patient_form(*items, **fields)
       questionnaire(extension: [launch_context("patient", "Patient")], item: items, **fields)
     end
 
-    # `{ group => { test id or :group => Markdown } }` for the forms over the groups. `resources` are other IG
-    # resources, like the StructureDefinition of a group's profile.
     def descriptions(forms, groups, resources: [])
       ig_resources = Generator::IGResources.new
       [*Array.wrap(forms).map { |form| FHIR::Questionnaire.new(form) }, *resources].each do |resource|
@@ -91,12 +85,10 @@ module InfernoSuiteGenerator
       QuestionnaireUsage.descriptions(ig_resources:, groups:)
     end
 
-    # The section written for one group: of its test of `kind`, or its summary.
     def section(form, group, kind = nil, **)
       descriptions(form, [group], **).dig(group, kind ? "#{group.name}_#{kind}" : :group).to_s
     end
 
-    # A profile of `type` that fixes its `code`.
     def profile_fixing(group, code, system: "http://loinc.org")
       FHIR::StructureDefinition.new(
         "resourceType" => "StructureDefinition", "url" => group.profile_url, "type" => group.resource,
@@ -172,7 +164,6 @@ module InfernoSuiteGenerator
 
     private
 
-    # A form whose item reads a search through two variables.
     def height_form
       questionnaire(
         extension: [query("ObsHeight", "Observation?code=8302-2&_sort=-date&patient={{%patient.id}}"),
@@ -182,8 +173,6 @@ module InfernoSuiteGenerator
       )
     end
 
-    # What is written for a PractitionerRole group with an include test and a Location group, by `:role` and
-    # `:location`, when a form reads the Locations a role search includes.
     def include_suite
       details = { search_names: ["practitioner"], include_targets: ["Location"] }
       role = group("role", "PractitionerRole", { include: details })
@@ -298,7 +287,6 @@ module InfernoSuiteGenerator
       section(form, group("obs", "Observation", { search: { search_names: %w[patient] } }), :search)
     end
 
-    # The section of the include test a PractitionerRole group has for its Locations.
     def include_section(form)
       role = group("role", "PractitionerRole", { include: { include_targets: ["Location"] } })
       descriptions(form, [role, group("location", "Location")]).dig(role, "role_include").to_s

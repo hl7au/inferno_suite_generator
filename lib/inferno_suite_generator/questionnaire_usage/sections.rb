@@ -4,10 +4,7 @@ require_relative "checked_elements"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Writes the "Used in questionnaires" sections: one per test that makes a source's request, one for the Must
-    # Support test and a summary for the group. Which test lists a source and which elements count as checked is
-    # answered in one place each (`test`, `shared_elements`), so the sections can't disagree. Only bold and plain text:
-    # Inferno shows tables without borders and HTML as text.
+    # Writes the "Used in questionnaires" sections.
     class Sections
       HEADING = "**Used in questionnaires**"
       NOT_CHECKED_MARK = "(not checked)"
@@ -19,8 +16,6 @@ module InfernoSuiteGenerator
       NOT_CHECKED = "The profile neither marks these elements Must Support nor requires them, so no test checks " \
                     "that the server returns them."
       UPDATE_INTRO = "These questionnaires in the IG update existing %<resource>s resources from their answers."
-      # By the kind of the test that lists the sources. An include test lists sources of other groups, which can
-      # be of several profiles, so its intro names none.
       TEST_INTROS = {
         "read" => "These questionnaires in the IG read %<resource>s resources as this test does: by id, or as " \
                   "the resource a form is opened for. #{GROUP_READS}",
@@ -35,7 +30,7 @@ module InfernoSuiteGenerator
       MAX_ITEM_LINES = 25
       MAX_ITEMS = 10
 
-      # One element path the items of a source read: its label in sections, and whether a test checks it.
+      # One element path the items of a source read.
       Element = Data.define(:label, :checked)
 
       def initialize(groups, sources)
@@ -47,8 +42,6 @@ module InfernoSuiteGenerator
         @tests = {}
       end
 
-      # `{ group => { test id or :group => Markdown } }`, for the groups a source fits and the groups whose tests
-      # list one.
       def to_h
         traced = @groups.select { |group| @sources.key?(group) }
         sections = traced.to_h { |group| [group, own_sections(group, @sources[group])] }
@@ -60,7 +53,6 @@ module InfernoSuiteGenerator
 
       private
 
-      # The group's summary and the section of its Must Support test.
       def own_sections(group, sources)
         sections = { group: summary(group, sources.select(&:shown?)) }
         test = must_support_test(group, sources)
@@ -68,9 +60,6 @@ module InfernoSuiteGenerator
         sections
       end
 
-      # `[test, group, sources]` per test that makes a request: the sources it lists, a shared one once, and the
-      # first group they were listed for. Only an `_include` test lists sources of several groups: its sources
-      # fit every group of the target type.
       def requested(traced)
         pairs = traced.flat_map { |group| @sources[group].map { |source| [source, group] } }
         pairs.select { |pair| test(*pair) }.group_by { |pair| test(*pair)[:id] }.values.map do |listed|
@@ -78,9 +67,6 @@ module InfernoSuiteGenerator
         end
       end
 
-      # The test that lists a shown source for the group: the first that makes its request, in the group or, for
-      # an `_include`, in the groups of the searched type. A Hash with its `:id`, `:kind`, the `:group` it is in
-      # and the `:label` a group summary names it by; nil when no test makes the request.
       def test(source, group)
         @tests.fetch([source, group]) do |key|
           lookups = source.shown? ? source.requesting(group, @groups).product(source.lookups(group.resource)) : []
@@ -100,21 +86,15 @@ module InfernoSuiteGenerator
         test.merge(group:, label:)
       end
 
-      # The group's Must Support test, when an item reads an element the group's own profile checks, which is
-      # all that test looks for.
       def must_support_test(group, sources)
         test = group.find_test("must_support")
         test if test && sources.any? { |source| own_elements(source, group).any? }
       end
 
-      # The elements the source's items read, answered once for all the groups it fits, so every section gives
-      # the same answer.
       def shared_elements(source)
         @shared[source] ||= read_elements(source, source.groups)
       end
 
-      # `{ path => Element }` for the paths the source's items read. A path is checked when any of the groups
-      # checks it, and labeled as that group names it, so a slice one profile defines keeps its name.
       def read_elements(source, groups)
         checked = groups.map { |group| @checked[group] }
         source.item_uses.flat_map(&:reads).uniq.to_h do |path|
@@ -123,12 +103,10 @@ module InfernoSuiteGenerator
         end
       end
 
-      # The elements the group's own profile checks, named as it names them.
       def own_elements(source, group)
         read_elements(source, [group]).select { |_path, element| element.checked }
       end
 
-      # A section with an intro and a list, or `nil` when the list is empty.
       def section(intro, list)
         "#{[HEADING, "", intro, "", list].join("\n")}\n" unless list.empty?
       end
@@ -143,8 +121,6 @@ module InfernoSuiteGenerator
                 element_list(sources) { |source| own_elements(source, group) })
       end
 
-      # The summary at the end of a group's description. The tests that make each request list the details, so
-      # it lists what is left: each form with its tests, the sources no test requests, and unchecked elements.
       def summary(group, sources)
         return if sources.empty?
 
@@ -161,7 +137,6 @@ module InfernoSuiteGenerator
           "tests that make the same requests list the form items that depend on them."
       end
 
-      # Each questionnaire with its tests: those that make a request first, then the Must Support test.
       def form_list(group, sources)
         must_support = group.find_test("must_support")
         forms(sources).map do |title, listed|
@@ -175,8 +150,6 @@ module InfernoSuiteGenerator
         end.join("\n")
       end
 
-      # `[title, sources]` per questionnaire, in the order first seen, for the shown sources. The title gets the
-      # version when another form has the same title, as an assembled modular form does.
       def forms(sources)
         by_form = sources.select(&:shown?).group_by { |source| source.form.key }.values
         titles = by_form.map { |listed| listed.first.form.label }
@@ -187,8 +160,6 @@ module InfernoSuiteGenerator
         end
       end
 
-      # The sources of each questionnaire and the items that use each; `search_check:` adds how the group's
-      # searches compare to a query. "" when no source is shown.
       def source_list(sources, group, search_check: false)
         forms(sources).flat_map do |title, listed|
           ["- **#{title}**", *listed.flat_map { |source| source_lines(source, group, search_check) }]
@@ -204,7 +175,6 @@ module InfernoSuiteGenerator
         ["  - #{source.heading(group.resource)}", *details.map { |line| "    - #{line}" }]
       end
 
-      # How the group's searches compare to a query none of its search tests makes.
       def search_line(names, group)
         tested = group.searches.to_a.map { |search| search[:names] }
         same = tested.find { |searched| searched.to_set == names.to_set }
@@ -214,8 +184,6 @@ module InfernoSuiteGenerator
         "A search by #{names.join(" + ")}#{others}"
       end
 
-      # One line per item, like `**Height**: pre-fills the answer; reads value.value`, up to `MAX_ITEM_LINES`,
-      # then one that counts the rest.
       def item_lines(uses, elements)
         items = uses.group_by(&:link_id).values
         more = items.size - MAX_ITEM_LINES
@@ -233,9 +201,6 @@ module InfernoSuiteGenerator
         "**#{uses.first.label}**#{": #{details}" unless details.empty?}"
       end
 
-      # The elements the items of each questionnaire read, each with the items that read it, like
-      # `- **birthDate**: Date of birth, Age`. The block gives the `{ path => Element }` to list for a source.
-      # "" when there are none.
       def element_list(sources)
         forms(sources).flat_map do |title, listed|
           items = listed.each_with_object({}) do |source, by_label|
@@ -250,7 +215,6 @@ module InfernoSuiteGenerator
         end.join("\n")
       end
 
-      # Up to `MAX_ITEMS` labels, then a count of the rest.
       def items_text(items)
         more = items.size - MAX_ITEMS
         [items.first(MAX_ITEMS).join(", "), ("and #{more} more" if more.positive?)].compact.join(", ")

@@ -14,8 +14,6 @@ module InfernoSuiteGenerator
         @profile_codes = {}
       end
 
-      # The groups the source links to, or `nil` when untraced or unresolved; `context` names it in logs.
-      # The only group of a type matches unless the source has a `code` or `category` its profile fixes otherwise.
       def match(resource_type, codes: {}, any_of_type: false, context: nil)
         label = context || resource_type
         candidates = @groups.select { |group| group.resource == resource_type }
@@ -32,7 +30,6 @@ module InfernoSuiteGenerator
 
       private
 
-      # The `code` and `category` values the group's profile fixes.
       def profile_codes(group)
         @profile_codes[group.profile_url] ||= Codes.from_profile(@ig_resources.profile_by_url(group.profile_url))
       end
@@ -47,7 +44,6 @@ module InfernoSuiteGenerator
         matches
       end
 
-      # Whether the codes overlap on every param both give values for; with `shared:`, at least one must.
       def agree?(profile, source, shared: false)
         params = PARAMS.select { |param| profile[param].any? && source[param].to_a.any? }
         (!shared || params.any?) && params.all? { |param| Codes.overlap?(profile[param], source[param]) }
@@ -64,12 +60,10 @@ module InfernoSuiteGenerator
 
         module_function
 
-        # A template's `code.coding` and `category[].coding`.
         def from_template(template)
           PARAMS.to_h { |param| [param, list(template[param.to_s]).flat_map { |concept| codings(concept) }] }
         end
 
-        # The codes a profile's snapshot fixes under `<Type>.code` and `<Type>.category`.
         def from_profile(profile)
           elements = snapshot_elements(profile)
           by_id = elements.to_h { |element| [element["id"], element] }
@@ -102,16 +96,12 @@ module InfernoSuiteGenerator
           values.empty? ? "(no codes)" : values.join(", ")
         end
 
-        # Codes fixed on one element: a `pattern[x]`/`fixed[x]` CodeableConcept
-        # or Coding, or `fixedCode` on a coding slice.
         def element_codes(element, by_id)
           CONCEPT_PATTERNS.flat_map { |key| codings(element[key]) } +
             CODING_PATTERNS.filter_map { |key| coding_value(element[key]) } +
             [slice_code(element, by_id)].compact
         end
 
-        # `fixedCode` on `<Type>.code.coding:Slice.code`, with the `fixedUri` of
-        # its sibling `system`.
         def slice_code(element, by_id)
           code = element["fixedCode"] || element["patternCode"]
           return unless code && element["path"].to_s.end_with?(".coding.code")

@@ -4,9 +4,7 @@ require "fhirpath"
 
 module InfernoSuiteGenerator
   module QuestionnaireUsage
-    # Where a FHIRPath value came from: `shape` is `:bundle`, `:entries` or `:resource`; `type` is the resource type
-    # a filter picked; `path` is its element path, "" at the resource and nil once it is no longer an element.
-    # `carried` is the other element paths read to get it, like a filter's: every chain from the value reads them.
+    # Where a FHIRPath value came from.
     Origin = Data.define(:shape, :type, :path, :carried) do
       def self.bundle = new(shape: :bundle, type: nil, path: "")
       def self.resource = new(shape: :resource, type: nil, path: "")
@@ -14,13 +12,11 @@ module InfernoSuiteGenerator
       def initialize(carried: [], **) = super
     end
 
-    # What one chain from a `%name` reads: the element `paths`, every resource type its filters name (`types`),
-    # and the Origin of its value, which a variable the chain defines is bound to.
+    # What one chain from a `%name` reads.
     Read = Data.define(:origin, :paths, :types)
 
-    # Reads fhirpath-rb's syntax tree: nested Hashes with "type", "text", "children" and "terminalNodeText".
+    # Reads fhirpath-rb's syntax tree.
     module Syntax
-      # The node types a condition holds for all of, and those an extension's `url` condition is also read through.
       AND_NODES = %w[AndExpression TermExpression ParenthesizedTerm].freeze
       URL_NODES = [*AND_NODES, "ParamList", "InvocationTerm"].freeze
 
@@ -30,7 +26,6 @@ module InfernoSuiteGenerator
         node["children"] || []
       end
 
-      # `%name`, `` %`vs-x` `` and `%'vs-x'` all give the bare name; nil for a node that is no `%name`.
       def constant_name(node)
         return unless node.is_a?(Hash) && node["type"] == "ExternalConstant"
 
@@ -46,8 +41,6 @@ module InfernoSuiteGenerator
         node&.dig("text").to_s[/\A'(.*)'\z/m, 1]
       end
 
-      # The steps of the chain ending at `node`, or nil. The block maps the `TermExpression` the chain starts at
-      # to its first steps, or to nil to skip the chain.
       def steps_from(node, &)
         case node["type"]
         when "InvocationExpression", "IndexerExpression"
@@ -58,8 +51,6 @@ module InfernoSuiteGenerator
         end
       end
 
-      # One step of a chain: `{ kind: :member, name: }`, `{ kind: :function, name:, args: }` or an indexer's
-      # `{ kind: :index, args: }`.
       def step(expression_type, node)
         return { kind: :index, args: [node] } if expression_type == "IndexerExpression"
 
@@ -75,8 +66,6 @@ module InfernoSuiteGenerator
         { kind: :function, name: identifier(name), args: params ? children(params) : [] }
       end
 
-      # The `X` of each `left = 'X'` in a condition, read through the node types in `through` and an unqualified
-      # `exists(...)`, which only `InvocationTerm` reaches: a qualified call is in an `InvocationExpression`.
       def literals(node, left, through)
         case node&.dig("type")
         when "EqualityExpression" then [equal_literal(node, left)].compact
@@ -103,13 +92,10 @@ module InfernoSuiteGenerator
         @chains = {}
       end
 
-      # The `%name` names the expression references, without duplicates.
       def references
         @references ||= nodes(@tree).filter_map { |node| constant_name(node) }.uniq
       end
 
-      # A Read per chain from each name in `env`, `{ name => Origin }`: the names in `env` order, and the chains
-      # of one name in the order written, a chain before the chains in its arguments.
       def reads(env)
         env.flat_map do |name, origin|
           references.include?(name) ? chains(name).map { |steps| Chain.new(origin, steps).read } : []
@@ -118,7 +104,6 @@ module InfernoSuiteGenerator
 
       private
 
-      # The tree, or `{}` for an empty expression or one that doesn't parse.
       def parse(text)
         return {} if text.to_s.strip.empty?
 
@@ -136,7 +121,6 @@ module InfernoSuiteGenerator
         found
       end
 
-      # The step lists of the longest chains from `%name`.
       def chains(name)
         @chains[name] ||= find_chains(@tree, name, [])
       end
@@ -152,27 +136,24 @@ module InfernoSuiteGenerator
       end
     end
 
-    # The steps after a `%name`, like `.entry.resource.where(status = 'final').value`, read from the name's Origin.
+    # The steps after a `%name`, read from the name's Origin.
     class Chain
       include Syntax
 
-      # Functions after which the value is no longer an element of the resource.
       STOPS = %w[ofType select resolve children descendants].freeze
-      # Functions whose argument reads elements of what they are called on.
       CRITERIA = %w[where exists all select].freeze
-      # Functions that pick some of the Bundle entries, as an indexer does.
       PICKS = %w[where first last tail skip take single].freeze
       EXTENSIONS = %w[extension modifierExtension].freeze
 
       def initialize(origin, steps)
         @origin = origin
         @steps = steps
-        @names = []      # the element path the steps follow
-        @criteria = []   # the element paths their filters read
-        @types = []      # every resource type their filters name
-        @type = nil      # the resource type they pick
-        @stopped = false # whether the value is no longer an element of the resource
-        @entries = false # whether the chain ends at Bundle entries
+        @names = []
+        @criteria = []
+        @types = []
+        @type = nil
+        @stopped = false
+        @entries = false
       end
 
       def read
@@ -186,7 +167,6 @@ module InfernoSuiteGenerator
 
       private
 
-      # A chain's own type counts only from the resource itself.
       def value_origin
         type = @origin.type || (@type if @origin.path == "")
         path = at(@names.join(".")) if @origin.path && !@stopped
@@ -211,14 +191,10 @@ module InfernoSuiteGenerator
         [prefix, path].reject(&:empty?).join(".")
       end
 
-      # A chain that never reaches a resource, like `%q.total` or `%q.entry.count()`, reads the Bundle: no element.
       def leave
         @stopped = true
       end
 
-      # The steps after `entry`: picks, then `resource`. A `where(resource is T)` pick or an `ofType(T)` right
-      # after `resource` gives the type. A chain that only picks entries ends at entries, and a variable it
-      # defines reads `resource` the same way.
       def read_entries(steps)
         picks = steps.take_while { |step| step[:kind] != :member }
         rest = steps.drop(picks.size)
@@ -252,7 +228,6 @@ module InfernoSuiteGenerator
         end
       end
 
-      # url_in_path: whether the step's `url` condition is already in the path, so it is not listed again.
       def read_function(step, url_in_path:)
         name, args = step.values_at(:name, :args)
         if CRITERIA.include?(name)
@@ -263,15 +238,11 @@ module InfernoSuiteGenerator
         read_resource_type(args.first) if name == "where" && args.one? && @names.empty?
       end
 
-      # A `where(resourceType = 'T')` on the chain's start picks resources of type `T`: the one it requires,
-      # alone or in an `and`, and every one it names in any `and` or `or` branch.
       def read_resource_type(condition)
         @type ||= literals(condition, "resourceType", AND_NODES).first
         @types.concat(literals(condition, "resourceType", [*AND_NODES, "OrExpression"]))
       end
 
-      # Folds an extension filter's url into the path, like `extension[url=X]`, and returns whether it did.
-      # A `url = 'X'` inside another chain, like `extension.where(url = 'Y')`, is about a sub-extension.
       def extension_filter(step)
         name, args = step.values_at(:name, :args)
         if name == "extension" && (url = string_literal(args.first))
@@ -282,9 +253,6 @@ module InfernoSuiteGenerator
         end
       end
 
-      # The element paths a `where`, `exists`, `all` or `select` argument reads, relative to its element.
-      # `resourceType` isn't an element. A chain starting elsewhere, like `%name` or `now()`, reads only its own
-      # start's arguments.
       def criteria_paths(node)
         return [] unless node.is_a?(Hash)
 
@@ -297,7 +265,6 @@ module InfernoSuiteGenerator
         (starts_elsewhere ? children(node).first(1) : children(node)).flat_map { |child| criteria_paths(child) }
       end
 
-      # The steps a chain from `$this` (none) or from a member starts with.
       def relative_start(term)
         start = children(term).first
         invocation = children(start).first if start&.dig("type") == "InvocationTerm"
@@ -307,7 +274,6 @@ module InfernoSuiteGenerator
         end
       end
 
-      # The `T` of `where(resource is T)` or `where(resource.is(T))`.
       def entry_filter_type(step)
         return unless function?(step, "where") && step[:args].one?
 
@@ -321,7 +287,6 @@ module InfernoSuiteGenerator
         end
       end
 
-      # The `T` of an `is(T)` call.
       def called_type(invocation)
         return unless invocation&.dig("type") == "FunctionInvocation"
 

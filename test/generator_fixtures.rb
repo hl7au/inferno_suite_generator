@@ -8,10 +8,8 @@ require "inferno_suite_generator/core/ig_metadata"
 require "inferno_suite_generator/utils/registry"
 
 module InfernoSuiteGenerator
-  # Helpers for tests that drive generators directly: build small IG metadata by hand and a config keeper from
-  # the minimum config it accepts.
+  # Helpers for tests that drive generators directly.
   module GeneratorFixtures
-    # Built fresh on every call: generators mutate group metadata (add_test) and config hashes in place.
     def default_config
       {
         "ig" => { "id" => "example.ig", "version" => "1.0.0" },
@@ -45,7 +43,6 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Each top-level section of config is merged into default_config.
     def build_config_keeper(config = {})
       merged = default_config.merge(config) { |_section, default, given| default.merge(given) }
       Dir.mktmpdir do |dir|
@@ -55,8 +52,6 @@ module InfernoSuiteGenerator
       end
     end
 
-    # Registers a config keeper built from config for the duration of the block, as helpers such as Naming read
-    # it from Registry, and yields it.
     def with_config_keeper(config = {})
       previous_config_keeper = Registry.get(:config_keeper)
       config_keeper = build_config_keeper(config)
