@@ -5,7 +5,8 @@ require "inferno_suite_generator"
 require "tmpdir"
 
 module InfernoSuiteGenerator
-  class SuiteGeneratorValidationMessageOverridesTest < Minitest::Test
+  # Builds a SuiteGenerator over fake IG metadata and config, so a test can render the suite template.
+  module SuiteGeneratorTestHelpers
     SuiteGenerator = InfernoSuiteGenerator::Generator::SuiteGenerator
     GeneratorConfigKeeper = InfernoSuiteGenerator::Generator::GeneratorConfigKeeper
 
@@ -21,16 +22,8 @@ module InfernoSuiteGenerator
     FakeConfigKeeper = Struct.new(
       :validation_message_overrides, :tx_server_url, :snomed_edition, :fhirpathlab_url, :rewrite_igs,
       :ig_name, :ig_link, :default_fhir_server, :links, :outer_groups, :extra_imports, :suite_module_name,
-      keyword_init: true
+      :fhirpathlab_serve_resources?, keyword_init: true
     )
-
-    VALID_RULE = {
-      "pattern" => "The value provided \\('(xml|json)'\\) was not found",
-      "location" => "^Bundle\\.entry",
-      "from" => ["error"],
-      "to" => "warning",
-      "comment" => "Known tx server issue"
-    }.freeze
 
     def setup
       @previous_config_keeper = Registry.get(:config_keeper)
@@ -39,6 +32,42 @@ module InfernoSuiteGenerator
     def teardown
       Registry.register(:config_keeper, @previous_config_keeper)
     end
+
+    private
+
+    def build_generator(rules, serve_resources: true)
+      Registry.register(:config_keeper, fake_config_keeper(rules, serve_resources))
+      SuiteGenerator.new(fake_ig_metadata, Dir.tmpdir)
+    end
+
+    def fake_config_keeper(rules, serve_resources)
+      FakeConfigKeeper.new(
+        fhirpathlab_serve_resources?: serve_resources,
+        validation_message_overrides: rules, tx_server_url: "http://tx.example.org", snomed_edition: "au",
+        fhirpathlab_url: "https://fhirpath-lab.com/FhirPath", rewrite_igs: nil, ig_name: "Example IG",
+        ig_link: "http://example.org/ig", default_fhir_server: "http://fhir.example.org", links: [],
+        outer_groups: [], extra_imports: [], suite_module_name: "ExampleTestKit"
+      )
+    end
+
+    def fake_ig_metadata
+      FakeIgMetadata.new(
+        ig_test_id_prefix: "example", ig_module_name_prefix: "Example", reformatted_version: "100",
+        ig_title: "Example", ig_version: "v1.0.0", ig_id: "example.ig", ordered_groups: []
+      )
+    end
+  end
+
+  class SuiteGeneratorValidationMessageOverridesTest < Minitest::Test
+    include SuiteGeneratorTestHelpers
+
+    VALID_RULE = {
+      "pattern" => "The value provided \\('(xml|json)'\\) was not found",
+      "location" => "^Bundle\\.entry",
+      "from" => ["error"],
+      "to" => "warning",
+      "comment" => "Known tx server issue"
+    }.freeze
 
     def test_config_getter_defaults_to_empty_array
       assert_equal [], config_keeper_with({ "suite" => {} }).validation_message_overrides
@@ -110,26 +139,51 @@ module InfernoSuiteGenerator
     def config_keeper_with(config)
       GeneratorConfigKeeper.allocate.tap { |keeper| keeper.instance_variable_set(:@config, config) }
     end
+  end
 
-    def build_generator(rules)
-      Registry.register(:config_keeper, fake_config_keeper(rules))
-      SuiteGenerator.new(fake_ig_metadata, Dir.tmpdir)
+  class SuiteGeneratorSessionResourceRoutesTest < Minitest::Test
+    include SuiteGeneratorTestHelpers
+
+    def test_suite_template_serves_session_resources_to_fhirpath_lab_cross_origin
+      output = build_generator([]).output
+      resource_path = "'/resources/:session_id/:resource_type/:resource_id'"
+
+      RubyVM::InstructionSequence.compile(output)
+      assert_includes output, "FHIRPATHLAB_URL = 'https://fhirpath-lab.com/FhirPath'"
+      assert_includes output, "InfernoSuiteGenerator::FhirpathLabCors.new("
+      assert_includes output, "lab_url: FHIRPATHLAB_URL"
+      assert_includes output, "suite_endpoint :get, #{resource_path}, session_resource_handler"
+      assert_includes output, "suite_endpoint :options, #{resource_path}, session_resource_handler"
     end
 
-    def fake_config_keeper(rules)
-      FakeConfigKeeper.new(
-        validation_message_overrides: rules, tx_server_url: "http://tx.example.org", snomed_edition: "au",
-        fhirpathlab_url: "https://fhirpath-lab.com/FhirPath", rewrite_igs: nil, ig_name: "Example IG",
-        ig_link: "http://example.org/ig", default_fhir_server: "http://fhir.example.org", links: [],
-        outer_groups: [], extra_imports: [], suite_module_name: "ExampleTestKit"
-      )
+    def test_suite_template_has_no_fhirpath_lab_link_or_route_when_serving_is_disabled
+      output = build_generator([], serve_resources: false).output
+
+      RubyVM::InstructionSequence.compile(output)
+      refute_includes output, "FHIRPATHLAB_URL"
+      refute_includes output, "suite_endpoint"
+      refute_includes output, "FetchResourceEndpoint"
     end
 
-    def fake_ig_metadata
-      FakeIgMetadata.new(
-        ig_test_id_prefix: "example", ig_module_name_prefix: "Example", reformatted_version: "100",
-        ig_title: "Example", ig_version: "v1.0.0", ig_id: "example.ig", ordered_groups: []
-      )
+    def test_fhirpathlab_serve_resources_is_on_unless_explicitly_false
+      assert serve_resources?({})
+      assert serve_resources?({ "fhirpathlab_serve_resources" => true })
+      refute serve_resources?({ "fhirpathlab_serve_resources" => false })
+    end
+
+    def test_suite_template_registers_no_route_that_changes_data
+      output = build_generator([]).output
+
+      refute_includes output, "suite_endpoint :delete"
+      refute_includes output, "DeleteSessionResourcesEndpoint"
+    end
+
+    private
+
+    def serve_resources?(suite_config)
+      keeper = GeneratorConfigKeeper.allocate
+      keeper.instance_variable_set(:@config, { "suite" => suite_config })
+      keeper.fhirpathlab_serve_resources?
     end
   end
 end
