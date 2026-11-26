@@ -87,7 +87,6 @@ module InfernoSuiteGenerator
 
       all_scratch_resources << resource
       register_resource_id
-      keep_resource(resource)
     end
 
     def read_and_validate_as_first(resource_to_read, patient_id)
@@ -95,7 +94,6 @@ module InfernoSuiteGenerator
 
       all_scratch_resources.push(resource).uniq!
       scratch_resources_for_patient(patient_id).push(resource).uniq!
-      keep_resource(resource)
     end
 
     def resource_id(resource)

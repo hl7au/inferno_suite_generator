@@ -22,6 +22,11 @@ module InfernoSuiteGenerator
           get("suite.fhirpathlab_url", "https://fhirpath-lab.com/FhirPath")
         end
 
+        # `get` cannot tell an explicit `false` from a missing key.
+        def fhirpathlab_serve_resources?
+          @config.dig("suite", "fhirpathlab_serve_resources") != false
+        end
+
         def snomed_edition
           get("suite.snomed_edition", "au")
         end

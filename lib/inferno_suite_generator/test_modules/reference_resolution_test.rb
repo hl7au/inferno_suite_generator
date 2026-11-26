@@ -172,8 +172,6 @@ module InfernoSuiteGenerator
 
       return false unless resolved_resource&.resourceType == reference_type && resolved_resource&.id == reference_id
 
-      keep_resource(resolved_resource)
-
       return false unless resource_is_valid_with_target_profile?(resolved_resource, target_profile, rewrite_profile_url)
 
       record_resolved_reference(reference, target_profile)

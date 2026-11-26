@@ -66,6 +66,7 @@ module InfernoSuiteGenerator
 
         def tx_server_url: () -> String
         def fhirpathlab_url: () -> String
+        def fhirpathlab_serve_resources?: () -> bool
         def snomed_edition: () -> String
         def validation_message_overrides: () -> Array[Hash[String, untyped]]
         def resources_configs: () -> Hash[String, untyped]

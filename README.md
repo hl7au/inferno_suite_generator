@@ -129,6 +129,7 @@ At a high level, a config file contains:
 - **`tx_server_url`**: Terminology server URL used by generated tests
 - **`snomed_edition`**: SNOMED CT edition the validator resolves version-less `http://snomed.info/sct` codes against, emitted as `cliContext.snomedCT`. An edition SCTID, or an alias such as `au`, `us`, `uk`, `intl`. Defaults to `au`. Must match an edition the configured `tx_server_url` actually carries: the validator otherwise fails every SNOMED lookup with "A definition for CodeSystem 'http://snomed.info/sct' version 'null' could not be found" and then reports valid codes as absent from their value sets.
 - **`fhirpathlab_url`**: Base URL of a [FHIRPath Lab](https://fhirpath-lab.com/) instance used to turn FHIRPath locations in result messages into interactive debugging links (see [Linking FHIRPath locations to FHIRPath Lab](#linking-fhirpath-locations-to-fhirpath-lab)). Defaults to `https://fhirpath-lab.com/`. Overridable per deployment via the `FHIRPATHLAB_URL` env var.
+- **`fhirpathlab_serve_resources`**: Whether the suite serves a session's fetched resources to FHIRPath Lab (see [Serving fetched resources to FHIRPath Lab](#serving-fetched-resources-to-fhirpath-lab)). Defaults to `true`. Set to `false` to generate a suite without the FHIRPath Lab integration: no resource route and no FHIRPath Lab links in result messages.
 - **`links`**: Links shown in the Inferno UI (e.g. “Report Issue”, “IG Documentation”)
 - **`outer_groups`**: Extra groups to include before/after generated groups:
     - `import_type`
@@ -227,13 +228,25 @@ See `config.example.json` and `config.example2.json` for a fully worked example.
 
 ---
 
-## Saving fetched resources (Resource Keeper)
+## Serving fetched resources to FHIRPath Lab
 
-Every generated suite automatically keeps a copy of every FHIR resource it reads (via `read`, `search`, or reference resolution), keyed by the current test session — no configuration or tester interaction required. Saving happens in-process, directly from test runtime (`KeptResourcesRepository#save`/`#save_all`, called from `basic_test.rb`), not over HTTP. Storage is in-process: resources live in two tables in the same database inferno-core already uses (`kept_resource_bodies` and `kept_fhir_resources`, created on first use — see `InfernoSuiteGenerator::KeptResourcesRepository`), and reads/deletes are exposed at `/custom/<suite_id>/resources/...` (see `InfernoSuiteGenerator::FetchResourceEndpoint`/`DeleteSessionResourcesEndpoint` in [`resource_keeper_endpoints.rb`](lib/inferno_suite_generator/utils/resource_keeper_endpoints.rb)). Saving is best‑effort and never affects test results.
+Every generated suite can serve back any FHIR resource a test session received from the server under test, so FHIRPath Lab can load it. The route is `GET /custom/<suite_id>/resources/:session_id/:resource_type/:resource_id` (see `InfernoSuiteGenerator::FetchResourceEndpoint` in [`session_resource_endpoint.rb`](lib/inferno_suite_generator/utils/session_resource_endpoint.rb)).
 
-Kept resources expire after `RESOURCE_KEEPER_EXPIRATION_MS` milliseconds (env var, default `604800000` / 7 days) — an expired resource is served as a 404, but its row is not deleted. `DELETE /custom/<suite_id>/resources/:session_id` removes a session's *references* to its resources (rows in `kept_fhir_resources`), which is enough to make them unreachable via this API; it does **not** purge the underlying resource bodies from `kept_resource_bodies` — those are content-addressed and shared across sessions (see below), so they're left in place indefinitely rather than garbage-collected. This endpoint is not a data-erasure mechanism.
+The suite stores nothing of its own. The route reads the response bodies inferno-core already logs in its `requests` table for that session (see `InfernoSuiteGenerator::SessionResourceFinder` in [`session_resource_finder.rb`](lib/inferno_suite_generator/utils/session_resource_finder.rb)):
 
-Storage is deduplicated by content hash: identical resource bodies (e.g. the same resource fetched across many sessions against a stable test server) share a single row in `kept_resource_bodies` instead of being stored once per session.
+- A resource is found whether the server returned it directly (a read or a resolved reference) or as an entry of a search Bundle. Contained resources are not served.
+- When a session received the same resource more than once, the most recent copy is served.
+- A resource returned directly is served byte for byte as the server sent it. A Bundle entry is re-serialised, so number formatting such as trailing zeros in a decimal may differ.
+- A resource becomes available once the test that fetched it has finished, because that is when inferno-core saves the test's requests.
+- Retention follows the host's handling of sessions: once a session and its requests are deleted, the route answers 404. There is no separate expiry setting.
+
+Anyone who knows the session id can read these resources, which is the same access inferno-core gives to the session's request log.
+
+To turn this off, set `suite.fhirpathlab_serve_resources` to `false` in the config file and regenerate the suite. The generated suite then defines no `FHIRPATHLAB_URL` and registers no `/resources` route, so result messages are not linked to FHIRPath Lab at all.
+
+FHIRPath Lab fetches the resource from the browser, so the `GET` route is CORS-enabled for exactly one origin: that of `fhirpathlab_url` (see `InfernoSuiteGenerator::FhirpathLabCors` in [`fhirpath_lab_cors.rb`](lib/inferno_suite_generator/utils/fhirpath_lab_cors.rb)). A request from that origin gets `Access-Control-Allow-Origin` (plus `Vary: Origin`), and the route answers the `OPTIONS` preflight allowing `GET` with the `Accept` and `Cache-Control` headers. The origin must match exactly, so `fhirpathlab_url` has to be the URL testers actually open.
+
+Earlier revisions of the generator copied every fetched resource into two tables of their own, `kept_fhir_resources` and `kept_resource_bodies`. Nothing uses them any more; a host that ran such a revision can drop both tables.
 
 ---
 
@@ -253,7 +266,7 @@ Patient/123: [Patient.name[0].given](https://fhirpath-lab.com?expression=...&eng
 
 This is a general-purpose patch: it applies to any message text passing through `add_message` (validator issues, `perform_additional_validation` results, custom test messages, etc.) — not just a specific validator code path — so long as the text matches the `<ResourceType>/<resource_id>: <path>: <detail>` pattern.
 
-The `resource=` link points at the resource's entry in the [Resource Keeper](#saving-fetched-resources-resource-keeper), so linking is only applied when `fhirpathlab_url` is configured and a resource was actually saved for the current test session — otherwise messages are left untouched.
+The `resource=` parameter points at this suite's [resource route](#serving-fetched-resources-to-fhirpath-lab). Linking is applied when the suite defines `FHIRPATHLAB_URL` and the message belongs to a test session; otherwise messages are left untouched. A suite generated with `suite.fhirpathlab_serve_resources` set to `false` does not define `FHIRPATHLAB_URL`.
 
 ---
 
