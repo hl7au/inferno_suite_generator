@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
-- `utils/resource_keeper_endpoints.rb` and `InfernoSuiteGenerator::DeleteSessionResourcesEndpoint` remain only so suites generated before the resource keeper was removed still boot without regeneration. The endpoint now answers `204` without deleting anything, since served resources disappear with the session. Both will be removed in the next minor release; regenerate suites, or switch hand-written suites to `utils/session_resource_endpoint.rb`, before then.
+- `utils/resource_keeper_endpoints.rb` and `InfernoSuiteGenerator::DeleteSessionResourcesEndpoint` remain only so suites generated before the resource keeper was removed still boot without regeneration. The endpoint now answers `204` without deleting anything, since served resources disappear with the session. `InfernoSuiteGenerator::KeptResourcesRepository` likewise remains as a no-op whose `save` and `save_all` store nothing, so test kits that call it directly (au-ps-inferno's `CompositionUtils`) keep running. All three will be removed in the next minor release; regenerate suites, or switch hand-written suites to `utils/session_resource_endpoint.rb`, before then.
 
 ### Fixed
 

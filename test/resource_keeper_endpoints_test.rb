@@ -22,6 +22,13 @@ module InfernoSuiteGenerator
       assert_equal 204, res.status
     end
 
+    def test_old_require_path_still_provides_a_no_op_resource_keeper
+      repository = KeptResourcesRepository.new
+
+      assert repository.save(session_id: "session-1", resource: FHIR::Patient.new(id: "p1"))
+      assert repository.save_all(session_id: "session-1", resources: [FHIR::Patient.new(id: "p1")])
+    end
+
     def test_delete_endpoint_skips_request_persistence
       refute DeleteSessionResourcesEndpoint.new.persist_request?
     end

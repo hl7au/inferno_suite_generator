@@ -3,6 +3,7 @@
 # Kept so suites generated before the resource keeper was removed still boot
 # without regeneration. Remove in the next minor release.
 require_relative "session_resource_endpoint"
+require_relative "kept_resources_repository"
 
 module InfernoSuiteGenerator
   # Old suites still register `DELETE /custom/<suite_id>/resources/:session_id`.
