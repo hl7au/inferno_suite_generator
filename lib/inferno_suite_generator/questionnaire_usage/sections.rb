@@ -29,6 +29,8 @@ module InfernoSuiteGenerator
       }.freeze
       MAX_ITEM_LINES = 25
       MAX_ITEMS = 10
+      SEGMENT = /(?:[^.\[]+|\[[^\]]*\])+/
+      EXTENSION = /\A((?:modifierE|e)xtension)(?::|\[)([^\]]+)\]?\z/
 
       # One element path the items of a source read.
       Element = Data.define(:label, :checked)
@@ -145,7 +147,7 @@ module InfernoSuiteGenerator
           labels.uniq!
           next "- **#{title}**: no test in this group makes its requests" if labels.empty?
 
-          tests = labels.size > 1 ? "#{labels[0...-1].join(", ")} and #{labels.last} tests" : "#{labels.first} test"
+          tests = "#{and_list(labels)} test#{"s" if labels.size > 1}"
           "- **#{title}**: see the #{tests}"
         end.join("\n")
       end
@@ -201,18 +203,72 @@ module InfernoSuiteGenerator
         "**#{uses.first.label}**#{": #{details}" unless details.empty?}"
       end
 
-      def element_list(sources)
-        forms(sources).flat_map do |title, listed|
-          items = listed.each_with_object({}) do |source, by_label|
-            listing = yield source
-            source.item_uses.each do |use|
-              listing.values_at(*use.reads).compact.each { |element| (by_label[element.label] ||= []) << use.label }
-            end
-          end
-          next [] if items.empty?
-
-          ["- **#{title}**", *items.map { |label, labels| "  - **#{label}**: #{items_text(labels.uniq)}" }]
+      def element_list(sources, &)
+        titles = form_titles(sources, &)
+        by_forms = titles.keys.group_by(&titles).sort_by.with_index { |(shared_by, _reads), at| [-shared_by.size, at] }
+        shared = by_forms.any? { |shared_by, _reads| shared_by.size > 1 }
+        by_forms.flat_map do |shared_by, reads|
+          ["- #{"Only in " if shared && shared_by.one?}#{and_list(shared_by.map { |form| "**#{form}**" })}",
+           *item_element_lines(reads)]
         end.join("\n")
+      end
+
+      def form_titles(sources, &)
+        titles = Hash.new { |by_read, read| by_read[read] = [] }
+        first = {}
+        forms(sources).each do |title, listed|
+          item_reads(listed, &).each { |item, labels| titles[first[[item, labels.sort]] ||= [item, labels]] |= [title] }
+        end
+        titles
+      end
+
+      def item_element_lines(reads)
+        reads.group_by { |_item, labels| labels.sort }.values.map do |items|
+          "  - #{items_text(items.map { |item, _labels| "**#{item}**" })}: #{grouped(items.first.last)}"
+        end
+      end
+
+      def item_reads(sources)
+        reads = Hash.new { |by_item, item| by_item[item] = [] }
+        sources.each do |source|
+          listing = yield source
+          source.item_uses.each { |use| reads[use.label] |= listing.values_at(*use.reads).compact.map(&:label) }
+        end
+        reads.transform_values { |labels| leaves(labels) }.reject { |_item, labels| labels.empty? }
+      end
+
+      def leaves(labels)
+        labels.reject { |label| labels.any? { |other| other.start_with?("#{label}.") } }
+      end
+
+      def grouped(labels)
+        paths = labels.map { |label| short(label) }.uniq
+        groups = paths.group_by(&:first).values.map { |under| prefixed(under) }
+        groups.join(groups.any? { |group| group.include?(": ") } ? "; " : ", ")
+      end
+
+      def prefixed(paths)
+        return paths.first.join(".") if paths.one?
+
+        size = (0...(paths.map(&:size).min - 1)).take_while { |at| paths.map { |path| path[at] }.uniq.one? }.size
+        return paths.map { |path| path.join(".") }.join(", ") if size.zero?
+
+        "#{paths.first.first(size).join(".")}: #{paths.map { |path| path.drop(size).join(".") }.join(", ")}"
+      end
+
+      # "extension:a.extension[b].value.code" reads as "a extension.b.code".
+      def short(label)
+        under_extension = false
+        label.scan(SEGMENT).each_with_object([]) do |segment, done|
+          kind, name = segment.match(EXTENSION)&.captures
+          done << (under_extension ? name : "#{name} #{kind}") if name
+          done << segment unless name || (under_extension && segment == "value")
+          under_extension = !name.nil?
+        end
+      end
+
+      def and_list(words)
+        words.size > 1 ? "#{words[0...-1].join(", ")} and #{words.last}" : words.first
       end
 
       def items_text(items)

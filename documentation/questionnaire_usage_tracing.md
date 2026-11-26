@@ -200,7 +200,7 @@ Items in these questionnaires read elements of Observation that this group's tes
 can pre-fill an item only if the server returns the elements the item reads.
 
 - **Health check**
-  - **status**: Height
+  - **Height**: status
 ```
 
 `:group`:
@@ -219,7 +219,7 @@ The profile neither marks these elements Must Support nor requires them, so no t
 the server returns them.
 
 - **Health check**
-  - **value.value**: Height
+  - **Height**: value.value
 ```
 
 A group no form uses has no key in the hash.
@@ -468,8 +468,8 @@ Paths are compared after normalising: slice names are dropped, a typed choice li
 | Place | Content |
 |---|---|
 | Description of a read, search, include, create, patch or update test | Questionnaires, then the sources whose request this test makes, then one line per item: what it does and which elements it reads. Up to 25 item lines per source. |
-| Description of the Must Support test | Elements the group's own profile checks that items read, each with up to 10 item names. |
-| End of the group description | Each questionnaire with the tests that list it. Then "Not tested by this group": sources with no test, with a note comparing the group's searches to the query. Then "Elements not checked". |
+| Description of the Must Support test | Items that read elements the group's own profile checks, one line per item with those elements. Items that read the same elements share a line (up to 10 names). A path is left out when the item also reads one of its children, paths with a common start are written once as `prefix: rest, rest` (when the common start is itself one of the paths, they are written in full, e.g. `race extension, race extension.value.code`), and an extension is named by its slice name or the end of its url, with the `value` under it left out (`extension:a.extension[b].value.code` reads as `a extension.b.code`). Items found in several questionnaires are listed once under all of them, the rest under "Only in" that questionnaire. |
+| End of the group description | Each questionnaire with the tests that list it. Then "Not tested by this group": sources with no test, with a note comparing the group's searches to the query. Then "Elements not checked", in the same item-by-item form as the Must Support test. |
 
 Only nested lists, bold and plain text are used, because Inferno shows tables without borders and raw HTML as text. Groups no questionnaire uses are untouched.
 

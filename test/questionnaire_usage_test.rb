@@ -115,7 +115,7 @@ module InfernoSuiteGenerator
           - **Launch context patient**: the Patient the form is opened for
             - **Date of birth**: pre-fills the answer; reads birthDate
       MARKDOWN
-      assert_includes written["patient_must_support"], "- **Form**\n  - **birthDate**: Date of birth\n"
+      assert_includes written["patient_must_support"], "- **Form**\n  - **Date of birth**: birthDate\n"
       assert_includes written[:group], "- **Form**: see the read and Must Support tests"
     end
 
@@ -399,7 +399,8 @@ module InfernoSuiteGenerator
       items = (1..11).map { |number| reading("i#{number}", "Item #{number}", "%patient.birthDate") }
       group = patient_group({ must_support: {} }, must_supports: { elements: [{ path: "birthDate" }] })
 
-      assert_includes section(patient_form(*items), group, :must_support), "Item 9, Item 10, and 1 more\n"
+      assert_includes section(patient_form(*items), group, :must_support),
+                      "**Item 9**, **Item 10**, and 1 more: birthDate\n"
     end
 
     def test_forms_with_the_same_title_show_their_version
@@ -410,6 +411,97 @@ module InfernoSuiteGenerator
       summary = section(forms, patient_group)
 
       assert_includes summary, "- **Form, version 1.0**: see the read test\n- **Form, version 2.0**: see the read test"
+    end
+  end
+
+  # How the element lists of the Must Support test and the group's "Elements not checked" read.
+  class QuestionnaireUsageElementListTest < Minitest::Test
+    include QuestionnaireUsageFixtures
+
+    PRONOUNS = "http://example.org/pronouns"
+
+    def test_each_item_is_listed_once_and_items_reading_the_same_elements_share_a_line
+      form = patient_form(reading("medicare", "Medicare number", "%patient.identifier.value"),
+                          reading("dob", "Date of birth", "%patient.birthDate | %patient.identifier.value"),
+                          reading("dva", "DVA number", "%patient.identifier.value"))
+
+      assert_includes section(form, patient_group), <<~MARKDOWN
+        - **Form**
+          - **Medicare number**, **DVA number**: identifier.value
+          - **Date of birth**: birthDate, identifier.value
+      MARKDOWN
+    end
+
+    def test_a_parent_is_dropped_for_its_children_and_paths_are_grouped_under_their_common_prefix
+      coding = "%patient.identifier.type.coding"
+      form = patient_form(reading("card", "Card", "#{coding}.system | #{coding}.code | #{coding} | %patient.gender"),
+                          reading("name", "Name", "%patient.name.given | %patient.birthDate"))
+
+      summary = section(form, patient_group)
+
+      assert_includes summary, "  - **Card**: identifier.type.coding: system, code; gender\n"
+      assert_includes summary, "  - **Name**: name.given, birthDate\n"
+    end
+
+    def test_a_slice_and_its_sub_extensions_are_named_by_their_slice_names
+      pronouns = "%patient.extension('#{PRONOUNS}')"
+      form = patient_form(reading("pronouns", "Pronouns",
+                                  "#{pronouns}.extension('value').value.coding | " \
+                                  "#{pronouns}.extension('period').value.end"))
+      group = patient_group(must_supports: { extensions: [{ id: "Patient.extension:pronouns", url: PRONOUNS }] })
+
+      assert_includes section(form, group), "  - **Pronouns**: pronouns extension: value.coding, period.end\n"
+    end
+
+    def test_any_extension_is_named_by_its_name_and_the_value_under_it_is_left_out
+      race = "%patient.extension('http://example.org/race')"
+      form = patient_form(reading("race", "Race", "#{race}.value | #{race}.extension('value').value.code"),
+                          reading("flag", "Flag", "%patient.modifierExtension.where(url = 'http://example.org/flag').value"),
+                          reading("kin", "Kin", "%patient.contact.extension('http://example.org/kin').value | " \
+                                                "%patient.contact.name"))
+
+      summary = section(form, patient_group)
+
+      assert_includes summary, "  - **Race**: race extension, race extension.value.code\n"
+      assert_includes summary, "  - **Flag**: flag modifierExtension\n"
+      assert_includes summary, "  - **Kin**: contact: kin extension, name\n"
+    end
+
+    def test_items_shared_by_forms_are_listed_once_and_the_rest_under_their_form
+      shared = reading("dob", "Date of birth", "%patient.birthDate")
+      long = [shared, reading("age", "Age", "%patient.birthDate"), reading("sex", "Sex", "%patient.gender")]
+      forms = [patient_form(shared, title: "Short"), patient_form(*long, title: "Long", url: "http://x/long")]
+
+      assert_includes section(forms, patient_group), <<~MARKDOWN
+        - **Short** and **Long**
+          - **Date of birth**: birthDate
+        - Only in **Long**
+          - **Age**: birthDate
+          - **Sex**: gender
+      MARKDOWN
+    end
+
+    def test_items_shared_by_more_forms_come_first
+      dob = reading("dob", "Date of birth", "%patient.birthDate")
+      sex = reading("sex", "Sex", "%patient.gender")
+      forms = [patient_form(dob, title: "A"), patient_form(dob, sex, title: "B", url: "http://x/b"),
+               patient_form(dob, sex, title: "C", url: "http://x/c")]
+
+      assert_includes section(forms, patient_group), <<~MARKDOWN
+        - **A**, **B** and **C**
+          - **Date of birth**: birthDate
+        - **B** and **C**
+          - **Sex**: gender
+      MARKDOWN
+    end
+
+    def test_an_item_reading_the_same_elements_in_another_order_is_still_shared
+      forms = [patient_form(reading("dob", "Date of birth", "%patient.birthDate | %patient.gender"), title: "Short"),
+               patient_form(reading("dob", "Date of birth", "%patient.gender | %patient.birthDate"),
+                            title: "Long", url: "http://x/long")]
+
+      assert_includes section(forms, patient_group),
+                      "- **Short** and **Long**\n  - **Date of birth**: birthDate, gender\n"
     end
   end
 

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added shared `bin/hot-reload` dev-tooling asset and `InfernoSuiteGenerator::DevTools::HotReloadInstaller` to install/update it in a consumer test kit, replacing the copy-pasted watcher script previously maintained separately in each kit repo.
 - Added `configs.generic.questionnaire_usage_tracing` to show questionnaires using each profile.
 - Added `GroupMetadata#find_test` to find a group's tests by kind and details.
+- Made the questionnaire element lists in group descriptions easier to read: the Must Support and "Elements not checked" lists give each item once with the elements it reads, items reading the same elements share a line, paths are grouped under a common prefix, and forms with shared items are listed together with an "Only in" line for the rest.
 
 ### Changed
 
