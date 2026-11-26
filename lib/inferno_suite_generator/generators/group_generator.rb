@@ -9,17 +9,21 @@ module InfernoSuiteGenerator
   class Generator
     class GroupGenerator < BasicTestGenerator
       class << self
-        def generate(ig_metadata, base_output_dir)
+        def generate(ig_metadata, base_output_dir, descriptions = {})
           ig_metadata.ordered_groups
                      .compact
                      .reject do |group|
                        Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
                      end
-                     .each { |group| new(group, base_output_dir, ig_metadata).generate }
+                     .each do |group|
+                       generator = new(group, base_output_dir, ig_metadata)
+                       generator.descriptions = descriptions
+                       generator.generate
+                     end
         end
       end
 
-      attr_accessor :group_metadata, :base_output_dir, :ig_metadata
+      attr_accessor :group_metadata, :base_output_dir, :ig_metadata, :descriptions
 
       self.template_type = TEMPLATE_TYPES[:GROUP]
 
@@ -27,6 +31,7 @@ module InfernoSuiteGenerator
         self.group_metadata = group_metadata
         self.base_output_dir = base_output_dir
         self.ig_metadata = ig_metadata
+        self.descriptions = {}
       end
 
       def base_metadata_file_name
@@ -100,6 +105,21 @@ module InfernoSuiteGenerator
       end
 
       def description
+        added = added_description(:group)
+        added ? "#{built_in_description}\n#{added}\n" : built_in_description
+      end
+
+      def test_description(test_id)
+        added_description(test_id.to_s)
+      end
+
+      private
+
+      def added_description(key)
+        descriptions.dig(group_metadata, key)&.gsub(/[\\()]|#[{@$]/) { |match| "\\#{match}" }
+      end
+
+      def built_in_description
         Helpers.get_group_description_text(title, resource_type, profile_name, group_metadata.version, profile_url,
                                            required_searches, search_param_name_string, search_validation_resource_type, resource_type)
       end

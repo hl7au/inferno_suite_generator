@@ -63,3 +63,5 @@ exclude_paths:
   - 'lib/inferno_suite_generator/utils/session_resource_finder.rb'
   - 'lib/inferno_suite_generator/utils/session_resource_endpoint.rb'
   - 'test/*'
+  - 'lib/inferno_suite_generator/questionnaire_usage'
+  - 'lib/inferno_suite_generator/questionnaire_usage.rb'

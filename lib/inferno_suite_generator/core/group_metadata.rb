@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../utils/generator_constants"
+
 module InfernoSuiteGenerator
   class Generator
     class GroupMetadata
@@ -78,19 +80,36 @@ module InfernoSuiteGenerator
         NON_USCDI_RESOURCES.key?(resource) && NON_USCDI_RESOURCES[resource].include?(reformatted_version)
       end
 
-      def add_test(id:, file_name:)
+      def add_test(id:, file_name:, kind: nil, **details)
         self.tests ||= []
 
-        test_metadata = {
-          id:,
-          file_name:
-        }
+        test_metadata = { id:, file_name: }
+        test_kinds[id] = { kind:, **details } if kind
 
         if delayed? && id.include?("read")
           self.tests.unshift(test_metadata)
         else
           self.tests << test_metadata
         end
+      end
+
+      def test_kind(id)
+        test_kinds.fetch(id) { {} }
+      end
+
+      def find_test(kind, **details)
+        raise ArgumentError, "Unknown test kind: #{kind}" unless GeneratorConstants::TEMPLATE_TYPES.value?(kind)
+
+        tests.to_a.each do |test|
+          recorded = test_kind(test[:id])
+          next unless recorded[:kind] == kind
+
+          same = details.all? do |key, value|
+            value.is_a?(Array) ? recorded[key].is_a?(Array) && recorded[key].sort == value.sort : recorded[key] == value
+          end
+          return { id: test[:id], **recorded } if same
+        end
+        nil
       end
 
       def to_hash
@@ -117,6 +136,12 @@ module InfernoSuiteGenerator
               resources: delayed_resources
             }
           end
+      end
+
+      private
+
+      def test_kinds
+        @test_kinds ||= {}
       end
     end
   end

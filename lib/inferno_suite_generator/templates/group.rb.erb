@@ -19,7 +19,11 @@ module <%= suite_module_name %>
         @metadata ||= InfernoSuiteGenerator::Generator::GroupMetadata.new(YAML.load_file(File.join(__dir__, '<%= profile_identifier %>', 'metadata.yml'), aliases: true))
       end
   <% test_id_list.each do |id| %>
-      test from: :<%= id %><% end %>
+      test from: :<%= id %><% if (text = test_description(id)) %> do
+        description [description, %(
+<%= text %>
+        )].compact.map(&:strip).join("\n\n")
+      end<% end %><% end %>
     end
   end
 end

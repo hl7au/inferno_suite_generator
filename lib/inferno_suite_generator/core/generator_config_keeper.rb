@@ -84,7 +84,8 @@ module InfernoSuiteGenerator
       end
 
       def prepare_config_hash
-        config_hash = Constants::EMPTY_MUTABLE_HASH
+        # @type var config_hash: Hash[untyped, untyped]
+        config_hash = {}
         @config_file_paths.each do |config_file_path|
           config_hash.deep_merge!(JSON.parse(File.read(config_file_path)))
         end

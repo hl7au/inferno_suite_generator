@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `suite.fhirpathlab_serve_resources` configuration option (default `true`). Set to `false` to generate a suite without the FHIRPath Lab integration: it defines no `FHIRPATHLAB_URL`, registers no `/custom/<suite_id>/resources/...` route and adds no FHIRPath Lab links to result messages.
 - Added `suite.groups_order` configuration option to control the order of `groups` in the generated `metadata.yml`. Profiles listed in `groups_order` are placed first in the given order, with any remaining profiles appended afterward in their existing relative order.
 - Added shared `bin/hot-reload` dev-tooling asset and `InfernoSuiteGenerator::DevTools::HotReloadInstaller` to install/update it in a consumer test kit, replacing the copy-pasted watcher script previously maintained separately in each kit repo.
+- Added `configs.generic.questionnaire_usage_tracing` to show questionnaires using each profile.
+- Added `GroupMetadata#find_test` to find a group's tests by kind and details.
+- Made the questionnaire element lists in group descriptions easier to read: the Must Support and "Elements not checked" lists give each item once with the elements it reads, items reading the same elements share a line, paths are grouped under a common prefix, and forms with shared items are listed together with an "Only in" line for the rest.
 
 ### Changed
 
@@ -31,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - FHIRPath Lab links can now load the linked resource: generated suites wrap the `GET /custom/<suite_id>/resources/:session_id/:resource_type/:resource_id` route in `InfernoSuiteGenerator::FhirpathLabCors`, which answers the browser's `OPTIONS` preflight and sets `Access-Control-Allow-Origin` (with `Vary: Origin`) for the origin of `suite.fhirpathlab_url`. Test kits must regenerate their suites to pick this up.
 - Resources served to FHIRPath Lab are no longer kept forever ([#53](https://github.com/hl7au/inferno_suite_generator/issues/53)). The route now reads them from the response bodies inferno-core already logs for the session (`InfernoSuiteGenerator::SessionResourceFinder`), so they disappear when the host deletes the session.
+- `GeneratorConfigKeeper` no longer leaks config between instances in the same process.
 
 ## [0.2.0] - 2026-07-07
 
