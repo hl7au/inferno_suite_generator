@@ -80,8 +80,6 @@ module InfernoSuiteGenerator
         NON_USCDI_RESOURCES.key?(resource) && NON_USCDI_RESOURCES[resource].include?(reformatted_version)
       end
 
-      # kind is the generator's template type, like "search" or "read", and details what tells tests of one
-      # kind apart, like search_names. Both stay in memory for find_test and are not written to metadata.yml.
       def add_test(id:, file_name:, kind: nil, **details)
         self.tests ||= []
 
@@ -95,15 +93,10 @@ module InfernoSuiteGenerator
         end
       end
 
-      # The kind and details add_test recorded for the test, {} for a test added without a kind.
       def test_kind(id)
         test_kinds.fetch(id) { {} }
       end
 
-      # The first test in group order of this kind (a GeneratorConstants::TEMPLATE_TYPES value) whose recorded
-      # details include the given ones, like find_test("search", search_names: %w[patient code]), or nil.
-      # Arrays match in any order. Returns { id:, kind:, **details }. Kinds are recorded in memory, so a test is
-      # found only in the process that generated it, after it was generated.
       def find_test(kind, **details)
         raise ArgumentError, "Unknown test kind: #{kind}" unless GeneratorConstants::TEMPLATE_TYPES.value?(kind)
 

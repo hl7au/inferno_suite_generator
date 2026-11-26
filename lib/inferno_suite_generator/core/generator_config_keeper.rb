@@ -84,7 +84,6 @@ module InfernoSuiteGenerator
       end
 
       def prepare_config_hash
-        # A fresh hash per keeper: merging into a shared one leaks one keeper's config into the next.
         # @type var config_hash: Hash[untyped, untyped]
         config_hash = {}
         @config_file_paths.each do |config_file_path|

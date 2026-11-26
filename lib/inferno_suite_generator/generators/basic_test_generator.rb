@@ -125,7 +125,6 @@ module InfernoSuiteGenerator
         )
       end
 
-      # What tells this test apart from other tests of its kind in the group, recorded by add_test.
       def test_details
         {}
       end

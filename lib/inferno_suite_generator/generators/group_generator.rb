@@ -9,7 +9,6 @@ module InfernoSuiteGenerator
   class Generator
     class GroupGenerator < BasicTestGenerator
       class << self
-        # descriptions: Markdown to append, as { group_metadata => { test id or :group => text } }.
         def generate(ig_metadata, base_output_dir, descriptions = {})
           ig_metadata.ordered_groups
                      .compact
@@ -17,7 +16,6 @@ module InfernoSuiteGenerator
                        Registry.get(:config_keeper).exclude_resource?(group.profile_url, group.resource)
                      end
                      .each do |group|
-                       # Set after new, so a kit subclass can keep a three-argument initialize.
                        generator = new(group, base_output_dir, ig_metadata)
                        generator.descriptions = descriptions
                        generator.generate
@@ -106,22 +104,17 @@ module InfernoSuiteGenerator
           .join("\n")
       end
 
-      # The built-in description, then a blank line and any text added for the group.
       def description
         added = added_description(:group)
         added ? "#{built_in_description}\n#{added}\n" : built_in_description
       end
 
-      # The Markdown added to the test, or nil. The template appends it to the test's own description in a
-      # `test from:` block, so a test without added text keeps a plain `test from:` line.
       def test_description(test_id)
         added_description(test_id.to_s)
       end
 
       private
 
-      # Added text is plain Markdown. The group template puts it inside a %( ... ) literal, where a backslash,
-      # a parenthesis or #{ would break the file, so it is escaped here.
       def added_description(key)
         descriptions.dig(group_metadata, key)&.gsub(/[\\()]|#[{@$]/) { |match| "\\#{match}" }
       end

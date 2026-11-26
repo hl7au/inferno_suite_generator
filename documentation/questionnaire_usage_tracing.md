@@ -61,7 +61,7 @@ flowchart TD
     groups --> files@{ shape: doc, label: "Group files,<br/>group metadata.yml" }
 ```
 
-The schemes in this document use the symbols of GOST 19.701-90 (ISO 5807:1985). A parallelogram is data, a rectangle with a wavy bottom is a file that gets written, a rectangle is a process, a rectangle with double sides is a process described elsewhere, a rhombus is a decision, and a rectangle with cut top corners starts or ends a loop.
+The schemes in this document use the symbols of ISO 5807:1985. A parallelogram is data, a rectangle with a wavy bottom is a file that gets written, a rectangle is a process, a rectangle with double sides is a process described elsewhere, a rhombus is a decision, and a rectangle with cut top corners starts or ends a loop.
 
 ### What each step produces
 
